@@ -3,25 +3,13 @@
 import { useEffect, useState } from "react";
 
 interface Config {
-  dias_alerta: number;
-  dias_critico: number;
-  min_videos_mes: number;
-  objetivo_videos_semana: number;
   notif_telegram: boolean;
-  agencia_nombre: string;
-  moneda: string;
   pubbler_workspace_id: string;
   pubbler_api_key: string;
 }
 
 const DEFAULTS: Config = {
-  dias_alerta: 5,
-  dias_critico: 7,
-  min_videos_mes: 4,
-  objetivo_videos_semana: 2,
   notif_telegram: true,
-  agencia_nombre: "Halo Models",
-  moneda: "EUR",
   pubbler_workspace_id: "",
   pubbler_api_key: "",
 };
@@ -112,24 +100,6 @@ export function AjustesClient() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      {/* Alertas */}
-      <div className="card space-y-4">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Alertas de contenido</h2>
-        <Range label="Días sin publicar → Alerta" value={config.dias_alerta} min={1} max={14} accent="accent-amber-400" onChange={(v) => set("dias_alerta", v)} />
-        <Range label="Días sin publicar → Crítico" value={config.dias_critico} min={1} max={21} accent="accent-red-400" onChange={(v) => set("dias_critico", v)} />
-        <Range label="Mínimo vídeos / mes" value={config.min_videos_mes} min={1} max={30} accent="accent-halo-accent" onChange={(v) => set("min_videos_mes", v)} />
-        <Range label="Objetivo vídeos / semana" value={config.objetivo_videos_semana} min={1} max={20} accent="accent-halo-accent" onChange={(v) => set("objetivo_videos_semana", v)} />
-      </div>
-
-      {/* Agencia */}
-      <div className="card space-y-4">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Agencia</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="block"><span className="mb-1.5 block text-sm text-halo-text">Nombre</span><input className="input-base" value={config.agencia_nombre} onChange={(e) => set("agencia_nombre", e.target.value)} /></label>
-          <label className="block"><span className="mb-1.5 block text-sm text-halo-text">Moneda</span><select className="input-base" value={config.moneda} onChange={(e) => set("moneda", e.target.value)}><option value="EUR">EUR €</option><option value="USD">USD $</option><option value="GBP">GBP £</option></select></label>
-        </div>
-      </div>
-
       {/* Pubbler */}
       <div className="card space-y-4">
         <div className="flex items-center justify-between">
@@ -233,17 +203,5 @@ export function AjustesClient() {
 
       <button onClick={save} className="btn-primary px-6 py-2 text-sm">{saved ? "Guardado ✓" : "Guardar ajustes"}</button>
     </div>
-  );
-}
-
-function Range({ label, value, min, max, accent, onChange }: { label: string; value: number; min: number; max: number; accent: string; onChange: (value: number) => void }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm text-halo-text">{label}</span>
-      <div className="flex items-center gap-2">
-        <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(parseInt(e.target.value, 10))} className={`flex-1 ${accent}`} />
-        <span className="w-8 text-right font-mono text-sm text-halo-accent">{value}</span>
-      </div>
-    </label>
   );
 }
