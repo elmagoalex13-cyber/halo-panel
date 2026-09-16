@@ -3,12 +3,14 @@ import { sampleModelos, sampleCuentasInstagram } from "@/lib/data";
 import { getDemoVideos } from "@/lib/demo-approvals";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { MesaClient, type VideoRow } from "./MesaClient";
+import { TrialReelsMesa } from "./TrialReelsMesa";
 import type { LibraryContent } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = {
   estado?: string;
+  tab?: string;
 };
 
 const ESTADOS_VALIDOS = ["en_aprobacion", "aprobado", "editando"] as const;
@@ -140,10 +142,12 @@ async function getModelosYCuentas() {
 
 export default async function AprobacionPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
+  const tab = params.tab === "trial" ? "trial" : "reels";
   const estado = resolveEstado(params.estado);
   const [rows, { modelos, cuentas }] = await Promise.all([getRows(estado), getModelosYCuentas()]);
-  const tabs = [
-    { href: "/aprobacion?estado=en_aprobacion", estado: "en_aprobacion", label: "En aprobacion" },
+
+  const mainTabs = [
+    { href: "/aprobacion?estado=en_aprobacion", estado: "en_aprobacion", label: "En aprobación" },
     { href: "/aprobacion?estado=aprobado", estado: "aprobado", label: "Aprobados" },
     { href: "/aprobacion?estado=editando", estado: "editando", label: "Rehacer IA" },
   ];
@@ -151,24 +155,45 @@ export default async function AprobacionPage({ searchParams }: { searchParams: P
   return (
     <PanelLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="font-display text-xl font-semibold text-halo-text">Mesa de Aprobacion</h1>
-          <div className="flex flex-wrap gap-2 text-xs">
-            {tabs.map((tab) => (
-              <a
-                key={tab.estado}
-                href={tab.href}
-                className={`rounded-md px-3 py-1.5 transition-colors ${
-                  estado === tab.estado ? "bg-halo-accent text-white" : "text-halo-subtle hover:text-halo-text"
-                }`}
-              >
-                {tab.label}
-              </a>
-            ))}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="font-display text-xl font-semibold text-halo-text">Mesa de Aprobación</h1>
+          {/* Selector de sección principal */}
+          <div className="flex gap-1 rounded-xl border border-halo-border bg-halo-muted/20 p-1">
+            <a
+              href="/aprobacion?tab=reels"
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === "reels" ? "bg-halo-accent text-white" : "text-halo-subtle hover:text-halo-text"}`}
+            >
+              Reels
+            </a>
+            <a
+              href="/aprobacion?tab=trial"
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === "trial" ? "bg-halo-accent text-white" : "text-halo-subtle hover:text-halo-text"}`}
+            >
+              Trial Reels
+            </a>
           </div>
         </div>
 
-        <MesaClient rows={rows} currentEstado={estado} modelos={modelos} cuentas={cuentas} />
+        {tab === "trial" ? (
+          <TrialReelsMesa />
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2 text-xs">
+              {mainTabs.map((t) => (
+                <a
+                  key={t.estado}
+                  href={t.href}
+                  className={`rounded-md px-3 py-1.5 transition-colors ${
+                    estado === t.estado ? "bg-halo-accent/20 text-halo-accent border border-halo-accent/30" : "text-halo-subtle hover:text-halo-text"
+                  }`}
+                >
+                  {t.label}
+                </a>
+              ))}
+            </div>
+            <MesaClient rows={rows} currentEstado={estado} modelos={modelos} cuentas={cuentas} />
+          </>
+        )}
       </div>
     </PanelLayout>
   );

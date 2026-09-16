@@ -132,7 +132,7 @@ export function AjustesClient() {
         </div>
         <div className="rounded-lg border border-halo-border/60 bg-halo-bg/50 p-2.5 text-[11px] text-halo-subtle space-y-1">
           <p>Sin API key: al aprobar un vídeo puedes descargarlo y subirlo tú manualmente.</p>
-          <p>Con API key: al aprobar, el sistema calcula el siguiente slot libre según la estrategia y lo programa en Pubbler automáticamente.</p>
+          <p>Con API key: al aprobar, el sistema calcula el siguiente slot libre y lo programa en Pubbler automáticamente.</p>
         </div>
       </div>
 
@@ -140,8 +140,12 @@ export function AjustesClient() {
       <div className="card">
         <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Notificaciones</h2>
         <label className="flex cursor-pointer items-center gap-3">
-          <button type="button" onClick={() => set("notif_telegram", !config.notif_telegram)} className={`relative h-5 w-10 rounded-full transition-colors ${config.notif_telegram ? "bg-halo-accent" : "bg-halo-muted"}`}>
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${config.notif_telegram ? "translate-x-1" : "-translate-x-4"}`} />
+          <button
+            type="button"
+            onClick={() => set("notif_telegram", !config.notif_telegram)}
+            className={`relative h-5 w-10 rounded-full transition-colors ${config.notif_telegram ? "bg-halo-accent" : "bg-halo-muted"}`}
+          >
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${config.notif_telegram ? "translate-x-5" : "translate-x-0.5"}`} />
           </button>
           <span className="text-sm text-halo-text">Notificaciones Telegram</span>
         </label>
@@ -190,7 +194,10 @@ export function AjustesClient() {
         </div>
         {importStatus && (
           <div className="rounded-lg border border-halo-border bg-halo-bg p-3 text-xs space-y-1">
-            <p className="text-halo-subtle">R2: {importStatus.total_r2} · Importados: {importStatus.already_imported} · Sin importar: <span className={importStatus.missing_count > 0 ? "text-amber-400 font-semibold" : "text-green-400"}>{importStatus.missing_count}</span></p>
+            <p className="text-halo-subtle">
+              R2: {importStatus.total_r2} · Importados: {importStatus.already_imported} · Sin importar:{" "}
+              <span className={importStatus.missing_count > 0 ? "text-amber-400 font-semibold" : "text-green-400"}>{importStatus.missing_count}</span>
+            </p>
             {importStatus.missing_keys.length > 0 && (
               <ul className="mt-2 max-h-40 overflow-y-auto space-y-0.5 font-mono text-[10px] text-halo-subtle">
                 {importStatus.missing_keys.map((key: string) => <li key={key}>{key}</li>)}
@@ -198,10 +205,16 @@ export function AjustesClient() {
             )}
           </div>
         )}
-        {importDone && <p className="text-xs text-green-400">✓ {importDone.imported} archivo{importDone.imported !== 1 ? "s" : ""} importado{importDone.imported !== 1 ? "s" : ""} correctamente.</p>}
+        {importDone && (
+          <p className="text-xs text-green-400">
+            ✓ {importDone.imported} archivo{importDone.imported !== 1 ? "s" : ""} importado{importDone.imported !== 1 ? "s" : ""} correctamente.
+          </p>
+        )}
       </div>
 
-      <button onClick={save} className="btn-primary px-6 py-2 text-sm">{saved ? "Guardado ✓" : "Guardar ajustes"}</button>
+      <button onClick={save} className="btn-primary px-6 py-2 text-sm">
+        {saved ? "Guardado ✓" : "Guardar ajustes"}
+      </button>
     </div>
   );
 }

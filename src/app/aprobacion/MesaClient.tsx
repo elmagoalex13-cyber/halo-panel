@@ -114,8 +114,10 @@ export function MesaClient({
     setCaption(row.caption);
     setCorrecciones(row.correcciones);
     setFrase(row.frase_quemada);
-    setRefOpen(false);
-    setOriginalOpen(false);
+    // Tipo 4: auto-expandir referencia y original para comparativa de 3 paneles
+    const esTipo4 = row.tipo_video === "tipo4";
+    setRefOpen(esTipo4 && Boolean(row.r2_key_referencia));
+    setOriginalOpen(esTipo4 && Boolean(row.r2_key_original));
     setActionMessage(null);
   }, []);
 
@@ -612,6 +614,11 @@ export function MesaClient({
                     {estadoLabel(selected.estado)}
                   </span>
                   <span className="badge text-[9px]">{tipoVideoLabel(selected.tipo_video ?? "sin_clasificar")}</span>
+                  {selected.tipo_video === "tipo4" && (
+                    <span className="rounded-full bg-violet-900/40 px-2 py-0.5 text-[9px] font-semibold text-violet-300 border border-violet-700/30">
+                      ◈ 3 paneles activos
+                    </span>
+                  )}
                 </div>
               </div>
 

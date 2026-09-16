@@ -1,0 +1,18 @@
+{
+  "name": "halo-runner",
+  "version": "1.0.0",
+  "description": "Runner de edición de vídeo para HALO MODELS (Ionos)",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "dev": "node --watch src/index.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@supabase/supabase-js": "^2.44.0",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
