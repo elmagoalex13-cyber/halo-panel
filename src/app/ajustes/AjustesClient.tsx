@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-
 interface Config {
   dias_alerta: number;
   dias_critico: number;
@@ -12,11 +10,6 @@ interface Config {
   notif_telegram: boolean;
   agencia_nombre: string;
   moneda: string;
-  // Instagram strategy
-  hashtags: string[];           // 5 hashtags pool (sin #)
-  posting_days: number[];       // 0=Dom..6=Sáb
-  posting_times: string[];      // ["09:00", "18:00"]
-  posts_per_day: number;
   pubbler_workspace_id: string;
   pubbler_api_key: string;
 }
@@ -29,10 +22,6 @@ const DEFAULTS: Config = {
   notif_telegram: true,
   agencia_nombre: "Halo Models",
   moneda: "EUR",
-  hashtags: ["", "", "", "", ""],
-  posting_days: [1, 3, 5],
-  posting_times: ["09:00", "18:00"],
-  posts_per_day: 1,
   pubbler_workspace_id: "",
   pubbler_api_key: "",
 };
@@ -66,25 +55,6 @@ export function AjustesClient() {
   function set<K extends keyof Config>(key: K, value: Config[K]) {
     setConfig((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
-  }
-
-  function setHashtag(index: number, value: string) {
-    const next = [...config.hashtags];
-    next[index] = value.replace(/^#/, "");
-    set("hashtags", next);
-  }
-
-  function setTime(index: number, value: string) {
-    const next = [...config.posting_times];
-    next[index] = value;
-    set("posting_times", next);
-  }
-
-  function toggleDay(day: number) {
-    const next = config.posting_days.includes(day)
-      ? config.posting_days.filter((d) => d !== day)
-      : [...config.posting_days, day].sort();
-    set("posting_days", next);
   }
 
   function save() {
@@ -140,18 +110,6 @@ export function AjustesClient() {
     } catch (e) { console.error(e); } finally { setTelegramLoading(false); }
   }
 
-  const hashtagCombinations = (() => {
-    // All C(5,3) = 10 combinations for rotation preview
-    const pool = config.hashtags.filter(Boolean);
-    if (pool.length < 3) return [];
-    const combos: string[][] = [];
-    for (let i = 0; i < pool.length - 2; i++)
-      for (let j = i + 1; j < pool.length - 1; j++)
-        for (let k = j + 1; k < pool.length; k++)
-          combos.push([pool[i], pool[j], pool[k]]);
-    return combos;
-  })();
-
   return (
     <div className="max-w-2xl space-y-6">
       {/* Alertas */}
@@ -169,101 +127,6 @@ export function AjustesClient() {
         <div className="grid grid-cols-2 gap-4">
           <label className="block"><span className="mb-1.5 block text-sm text-halo-text">Nombre</span><input className="input-base" value={config.agencia_nombre} onChange={(e) => set("agencia_nombre", e.target.value)} /></label>
           <label className="block"><span className="mb-1.5 block text-sm text-halo-text">Moneda</span><select className="input-base" value={config.moneda} onChange={(e) => set("moneda", e.target.value)}><option value="EUR">EUR €</option><option value="USD">USD $</option><option value="GBP">GBP £</option></select></label>
-        </div>
-      </div>
-
-      {/* Estrategia Instagram */}
-      <div className="card space-y-5">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Estrategia Instagram</h2>
-
-        {/* Hashtags */}
-        <div>
-          <p className="mb-2 text-xs font-medium text-halo-text">Pool de hashtags (5 fijos — se rotan 3 por vídeo)</p>
-          <div className="grid grid-cols-5 gap-2">
-            {[0,1,2,3,4].map((i) => (
-              <input
-                key={i}
-                className="input-base text-xs"
-                value={config.hashtags[i] ?? ""}
-                onChange={(e) => setHashtag(i, e.target.value)}
-                placeholder={`hashtag ${i+1}`}
-              />
-            ))}
-          </div>
-          {hashtagCombinations.length > 0 && (
-            <p className="mt-1.5 text-[10px] text-halo-subtle">
-              {hashtagCombinations.length} combinaciones disponibles · ejemplo próximo vídeo: #{hashtagCombinations[0].join(" #")}
-            </p>
-          )}
-        </div>
-
-        {/* Días de publicación */}
-        <div>
-          <p className="mb-2 text-xs font-medium text-halo-text">Días de publicación</p>
-          <div className="flex gap-2 flex-wrap">
-            {DIAS_SEMANA.map((label, day) => (
-              <button
-                key={day}
-                type="button"
-                onClick={() => toggleDay(day)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  config.posting_days.includes(day)
-                    ? "bg-halo-accent text-white"
-                    : "border border-halo-border bg-halo-surface text-halo-subtle hover:text-halo-text"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Horarios */}
-        <div>
-          <p className="mb-2 text-xs font-medium text-halo-text">Horarios de publicación</p>
-          <div className="flex gap-2 items-center flex-wrap">
-            {config.posting_times.map((t, i) => (
-              <input
-                key={i}
-                type="time"
-                value={t}
-                onChange={(e) => setTime(i, e.target.value)}
-                className="input-base w-28 text-sm"
-              />
-            ))}
-            {config.posting_times.length < 3 && (
-              <button
-                type="button"
-                onClick={() => set("posting_times", [...config.posting_times, "12:00"])}
-                className="btn-secondary px-3 py-1 text-xs"
-              >
-                + Horario
-              </button>
-            )}
-            {config.posting_times.length > 1 && (
-              <button
-                type="button"
-                onClick={() => set("posting_times", config.posting_times.slice(0, -1))}
-                className="text-xs text-red-400 hover:text-red-300"
-              >
-                − quitar último
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Posts por día */}
-        <Range
-          label="Posts por día de publicación"
-          value={config.posts_per_day}
-          min={1}
-          max={3}
-          accent="accent-halo-accent"
-          onChange={(v) => set("posts_per_day", v)}
-        />
-
-        <div className="rounded-lg border border-halo-border/60 bg-halo-bg/50 p-2.5 text-[11px] text-halo-subtle">
-          Con esta configuración: <span className="text-halo-text font-medium">{config.posting_days.length * config.posts_per_day} vídeos/semana</span> · Los horarios se asignan automáticamente al aprobar (cuando Pubbler esté activo)
         </div>
       </div>
 
