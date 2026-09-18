@@ -63,7 +63,7 @@ export function AjustesClient() {
         </p>
         <ul className="space-y-1.5 text-sm">
           {(estado?.slots ?? []).map((s) => (
-            <li key={s.hora} className="flex items-center justify-between rounded-lg border border-halo-border/60 bg-halo-bg/40 px-3 py-2">
+            <li key={`${s.hora}-${s.trial}`} className="flex items-center justify-between rounded-lg border border-halo-border/60 bg-halo-bg/40 px-3 py-2">
               <span className="font-mono text-halo-text">{s.hora}</span>
               <span className={`badge ${s.trial ? "badge-editando" : "badge-aprobado"}`}>{s.trial ? "Trial reel" : "Reel en la cuadrícula"}</span>
             </li>
