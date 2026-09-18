@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     banco_id?: string;
     url_referencia_ig?: string | null;
     instrucciones?: string | null;
+    tipo_video?: string | null;
   };
 
   if (!body.modelo_id) {
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
       .insert({
         modelo_id: body.modelo_id,
         referencia_id: body.banco_id ?? null,
+        tipo_video: body.tipo_video ?? "tipo4",
         pagina_url: body.url_referencia_ig ?? null,
         instrucciones: body.instrucciones ?? null,
         estado: "pendiente",

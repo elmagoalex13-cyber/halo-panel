@@ -20,6 +20,7 @@ export function ReferenciasTab({
   const [form, setForm] = useState({ username: "", categoria: "", notas: "" });
   const [saving, setSaving] = useState(false);
   const [scrapingAll, setScrapingAll] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [editModal, setEditModal] = useState<ReferenciaCuenta | null>(null);
   const [editForm, setEditForm] = useState({ categoria: "", notas: "" });
 
@@ -84,15 +85,19 @@ export function ReferenciasTab({
       const results = await Promise.all(
         cuentas.map(async (cuenta) => {
           const res = await fetch(`/api/referencias/${cuenta.id}/scrape`, { method: "POST" });
-          const payload = await res.json();
-          return { id: cuenta.id, ok: res.ok, ultimo_scrape_at: payload.ultimo_scrape_at };
+          return { id: cuenta.id, ok: res.ok };
         }),
       );
       setCuentas((prev) =>
         prev.map((c) => {
           const result = results.find((r) => r.id === c.id);
-          return result?.ok ? { ...c, ultimo_scrape_at: result.ultimo_scrape_at } : c;
+          return result?.ok ? { ...c, ultimo_scrape_at: null } : c;
         }),
+      );
+      setAviso(
+        results.every((r) => r.ok)
+          ? "Cuentas en cola: el runner las analiza en menos de 1 minuto. Los virales apareceran en Ideas virales."
+          : "Alguna cuenta no se pudo poner en cola.",
       );
     } finally {
       setScrapingAll(false);
@@ -145,6 +150,7 @@ export function ReferenciasTab({
               {scrapingAll ? "Scrapeando todas..." : "Scrapear todas"}
             </button>
           </div>
+          {aviso ? <p className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">{aviso}</p> : null}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {cuentas.map((cuenta) => (
             <GlassCard key={cuenta.id} className="flex flex-col p-4">
@@ -183,7 +189,7 @@ export function ReferenciasTab({
               {cuenta.categoria ? <span className="badge mt-2.5 w-fit">{cuenta.categoria}</span> : null}
 
               <p className="mt-3 text-[11px] text-white/30">
-                Ultimo scrape: {cuenta.ultimo_scrape_at ? formatDate(cuenta.ultimo_scrape_at) : "nunca"}
+                Ultimo analisis: {cuenta.ultimo_scrape_at ? formatDate(cuenta.ultimo_scrape_at) : "pendiente (en cola)"}
               </p>
 
               <a

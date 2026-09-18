@@ -1,0 +1,17 @@
+/** Lanza el scraper una vez, ahora, sin esperar a las 24h:  node src/scraper-cli.mjs */
+import { createClient } from "@supabase/supabase-js";
+import { config, faltanVariables } from "./config.mjs";
+import { cicloScraper } from "./scraper.mjs";
+
+const falta = faltanVariables();
+if (falta.length) {
+  console.error("Faltan variables en .env:", falta.join(", "));
+  process.exit(1);
+}
+if (!config.apifyToken) {
+  console.error("Falta APIFY_TOKEN en el .env (https://console.apify.com/account/integrations)");
+  process.exit(1);
+}
+const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
+await cicloScraper(supabase, { forzar: true });
+console.log("Listo. Revisa Instagram > Ideas virales en el panel.");

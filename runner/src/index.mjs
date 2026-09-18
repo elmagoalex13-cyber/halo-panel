@@ -10,6 +10,7 @@ import { config, faltanVariables } from "./config.mjs";
 import { publicUrl } from "./r2.mjs";
 import { procesarTipo } from "./tipos.mjs";
 import { asignarFrase } from "./frases.mjs";
+import { cicloScraper } from "./scraper.mjs";
 
 const falta = faltanVariables();
 if (falta.length) {
@@ -110,3 +111,12 @@ async function ciclo() {
 console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta`);
 await ciclo();
 setInterval(ciclo, config.pollMs);
+
+// Scraper de referencias: solo si hay APIFY_TOKEN. Revisa cada minuto solicitudes del panel y cuentas vencidas (24h)
+if (config.apifyToken) {
+  console.log(`Scraper de referencias activo (cuentas cada ${config.scraperHoras}h, umbral viral x${config.scraperFactor} la mediana)`);
+  setTimeout(() => cicloScraper(supabase), 10000);
+  setInterval(() => cicloScraper(supabase), 60000);
+} else {
+  console.log("Scraper de referencias desactivado (falta APIFY_TOKEN en el .env)");
+}

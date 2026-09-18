@@ -31,7 +31,14 @@ function isRecent(iso: string | null | undefined, hours: number) {
   return Date.now() - new Date(iso).getTime() <= hours * 3600000;
 }
 
-export function IdeasViralesTab({ videos: initialVideos }: { videos: ReferenciaVideo[] }) {
+const TIPOS_ENVIO = [
+  { tipo: 1, label: "1 Hablando" },
+  { tipo: 2, label: "2 Caption / Gesto" },
+  { tipo: 3, label: "3 Reto" },
+  { tipo: 4, label: "4 Con referencia" },
+];
+
+export function IdeasViralesTab({ videos: initialVideos, modelos }: { videos: ReferenciaVideo[]; modelos: { id: string; nombre: string }[] }) {
   const [videos, setVideos] = useState(initialVideos);
   const [only7d, setOnly7d] = useState(false);
   const [index, setIndex] = useState(0);
@@ -40,6 +47,10 @@ export function IdeasViralesTab({ videos: initialVideos }: { videos: ReferenciaV
   const [view, setView] = useState<"triaje" | "confirmados">("triaje");
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [preview, setPreview] = useState<ReferenciaVideo | null>(null);
+  const [envioModelo, setEnvioModelo] = useState("");
+  const [envioTipo, setEnvioTipo] = useState(4);
+  const [envioNota, setEnvioNota] = useState("");
+  const [envioMsg, setEnvioMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => setNowTick(Date.now()), 60000);
@@ -91,6 +102,37 @@ export function IdeasViralesTab({ videos: initialVideos }: { videos: ReferenciaV
     persist(current, { formato_confirmado: selectedFormato, estado_triaje: "confirmado", confirmado_at: new Date().toISOString() });
   }
 
+  async function enviarAModelo() {
+    if (!current) return;
+    if (!envioModelo) {
+      setEnvioMsg({ ok: false, texto: "Elige a que modelo se lo envias" });
+      return;
+    }
+    setSaving(true);
+    setEnvioMsg(null);
+    try {
+      const res = await fetch(`/api/referencias/videos/${current.id}/asignar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelo_id: envioModelo, tipo: envioTipo, instrucciones: envioNota }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string; confirmado_at?: string };
+      if (!res.ok) throw new Error(j.error ?? "No se pudo enviar");
+      const nombre = modelos.find((m) => m.id === envioModelo)?.nombre ?? "la modelo";
+      setVideos((prev) =>
+        prev.map((v) =>
+          v.id === current.id ? ({ ...v, estado_triaje: "confirmado", confirmado_at: j.confirmado_at ?? new Date().toISOString() } as ReferenciaVideo) : v,
+        ),
+      );
+      setEnvioNota("");
+      setEnvioMsg({ ok: true, texto: `Enviado a ${nombre} como tipo ${envioTipo}. Ya lo ve en su portal.` });
+    } catch (e) {
+      setEnvioMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function saltar() {
     setIndex((i) => (pendientes.length ? (i + 1) % pendientes.length : 0));
   }
@@ -103,6 +145,8 @@ export function IdeasViralesTab({ videos: initialVideos }: { videos: ReferenciaV
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (view !== "triaje" || !current) return;
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
       if (event.key >= "1" && event.key <= "7") {
         const num = Number(event.key);
         const option = FORMATO_GROUPS.flatMap((g) => g.options).find((o) => o.num === num);
@@ -266,6 +310,40 @@ export function IdeasViralesTab({ videos: initialVideos }: { videos: ReferenciaV
                       </div>
                     ))}
                   </div>
+                </div>
+
+                <div className="rounded-xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.05] p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#A78BFA]">Aprobar y enviar a una modelo</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TIPOS_ENVIO.map((t) => (
+                      <button
+                        key={t.tipo}
+                        onClick={() => setEnvioTipo(t.tipo)}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs transition ${
+                          envioTipo === t.tipo
+                            ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/20 text-white"
+                            : "border-white/[0.08] bg-white/[0.03] text-white/60 hover:border-white/20"
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <select value={envioModelo} onChange={(e) => setEnvioModelo(e.target.value)} className="input-base py-1.5 text-sm">
+                      <option value="">Elige modelo...</option>
+                      {modelos.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <input value={envioNota} onChange={(e) => setEnvioNota(e.target.value)} placeholder="Instrucciones (opcional)" className="input-base py-1.5 text-sm" />
+                  </div>
+                  <button onClick={enviarAModelo} disabled={saving} className="btn-primary mt-2 px-4 py-2 text-sm disabled:opacity-40">
+                    Aprobar y enviar
+                  </button>
+                  {envioMsg ? <p className={`mt-2 text-xs ${envioMsg.ok ? "text-emerald-300" : "text-red-300"}`}>{envioMsg.texto}</p> : null}
                 </div>
 
                 <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">

@@ -145,7 +145,7 @@ export default async function InstagramPage({
       ) : activeTab === "referencias" ? (
         <ReferenciasTab cuentas={referenciasCuentas} bancoVideos={bancoReferencias} modelos={modelosActivos} />
       ) : (
-        <IdeasViralesTab videos={referenciasVideos} />
+        <IdeasViralesTab videos={referenciasVideos} modelos={modelosActivos.map((m) => ({ id: m.id, nombre: m.nombre }))} />
       )}
     </PanelLayout>
   );

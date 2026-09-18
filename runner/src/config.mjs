@@ -15,6 +15,11 @@ export const config = {
   tmpDir: process.env.TMP_DIR ?? "/tmp/halo-runner",
   ffmpeg: process.env.FFMPEG_BIN ?? "ffmpeg",
   ffprobe: process.env.FFPROBE_BIN ?? "ffprobe",
+  apifyToken: process.env.APIFY_TOKEN,
+  scraperActor: process.env.SCRAPER_ACTOR ?? "apify~instagram-reel-scraper",
+  scraperHoras: parseFloat(process.env.SCRAPER_HORAS ?? "24"),
+  scraperMaxReels: parseInt(process.env.SCRAPER_MAX_REELS ?? "30", 10),
+  scraperFactor: parseFloat(process.env.SCRAPER_FACTOR ?? "1.5"),
   whisperBin: process.env.WHISPER_BIN,
   whisperModel: process.env.WHISPER_MODEL,
 };
