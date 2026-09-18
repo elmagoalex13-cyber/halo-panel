@@ -1,5 +1,6 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { BibliotecaClient } from "./BibliotecaClient";
 import { BibliotecaUploadBar } from "./BibliotecaUploadBar";
 
@@ -30,7 +31,7 @@ async function loadData(estado: string, modeloId: string, tipo: string) {
     let query = supabase
       .from("library_content")
       .select(`
-        id, titulo, tipo_video, estado, recibido_at, r2_key, r2_key_original,
+        id, titulo, tipo_video, tipo, estado, recibido_at, r2_key, r2_key_original,
         size_bytes, filename_original, clasificacion_confianza, clasificacion_razon,
         modelo:modelos(id, nombre),
         cuenta:cuentas_instagram(username)
@@ -40,7 +41,8 @@ async function loadData(estado: string, modeloId: string, tipo: string) {
       .limit(100);
 
     if (modeloId && modeloId !== "all") query = query.eq("modelo_id", modeloId);
-    if (tipo && tipo !== "all") query = query.eq("tipo_video", tipo);
+    if (tipo === "tipo4") query = query.eq("tipo", 4);
+    else if (tipo && tipo !== "all") query = query.eq("tipo_video", tipo);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -55,6 +57,7 @@ async function loadData(estado: string, modeloId: string, tipo: string) {
     return {
       videos: ((data ?? []) as unknown as Array<BibliotecaVideo & { clasificacion_confianza?: number | null; clasificacion_razon?: string | null }>).map((v) => ({
         ...v,
+        tipo_video: tipoVideoEfectivo(v.tipo_video, (v as { tipo?: number | null }).tipo),
         clasificacion_ia:
           v.clasificacion_confianza != null || v.clasificacion_razon
             ? { tipo: v.tipo_video ?? undefined, confianza: v.clasificacion_confianza ?? undefined, razon: v.clasificacion_razon ?? undefined }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { FILTRO_ETIQUETADO } from "@/lib/tipoVideo";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +18,7 @@ export async function POST() {
       .from("library_content")
       .select("id, modelo_id, cuenta_id, tipo_video")
       .eq("estado", "clasificando")
-      .not("tipo_video", "is", null)
-      .neq("tipo_video", "sin_clasificar")
+      .or(FILTRO_ETIQUETADO)
       .limit(200);
 
     if (pErr) throw pErr;

@@ -1,5 +1,6 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { MesaClient, type VideoRow } from "./MesaClient";
 import { TrialReelsMesa } from "./TrialReelsMesa";
 
@@ -17,6 +18,7 @@ type SupabaseApprovalRow = {
   id: string;
   titulo: string | null;
   tipo_video: string | null;
+  tipo?: number | null;
   estado: string;
   recibido_at: string;
   publicado_at: string | null;
@@ -45,7 +47,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
     const primary = await supabase
       .from("library_content")
       .select(`
-        id, titulo, tipo_video, estado, recibido_at, publicado_at,
+        id, titulo, tipo_video, tipo, estado, recibido_at, publicado_at,
         r2_key, r2_key_referencia, r2_key_original, video_procesado_url, estado_procesamiento, error_mensaje,
         caption, frase_quemada, correcciones,
         modelo:modelos(nombre),
@@ -63,7 +65,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
     return ((data ?? []) as unknown as SupabaseApprovalRow[]).map((row) => ({
       id: row.id,
       titulo: row.titulo,
-      tipo_video: row.tipo_video,
+      tipo_video: tipoVideoEfectivo(row.tipo_video, row.tipo),
       estado: row.estado,
       recibido_at: row.recibido_at,
       r2_key: row.r2_key ?? null,

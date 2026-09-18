@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { canUseSupabase, createAdminClient } from '@/lib/supabase/server';
+import { FILTRO_ETIQUETADO, tipoNumero } from '@/lib/tipoVideo';
 
 export const dynamic = 'force-dynamic';
-
-// tipo_video en BD es texto ('tipo1'..'tipo4'); el runner trabaja con el numero 1-4.
-function tipoVideoANumero(tipoVideo: string | null): number {
-  if (!tipoVideo) return 4;
-  const s = tipoVideo.toLowerCase();
-  if (s.includes('1')) return 1;
-  if (s.includes('2')) return 2;
-  if (s.includes('3')) return 3;
-  return 4;
-}
 
 export async function POST(req: NextRequest) {
   if (!canUseSupabase()) {
@@ -24,10 +15,9 @@ export async function POST(req: NextRequest) {
 
   let query = supabase
     .from('library_content')
-    .select('id, tipo_video')
+    .select('id, tipo_video, tipo')
     .eq('estado', 'en_reparto')
-    .not('tipo_video', 'is', null)
-    .neq('tipo_video', 'sin_clasificar');
+    .or(FILTRO_ETIQUETADO);
 
   if (ids?.length) query = query.in('id', ids);
 
@@ -49,7 +39,7 @@ export async function POST(req: NextRequest) {
         estado: 'editando',
         estado_procesamiento: 'pendiente',
         error_mensaje: null,
-        tipo: tipoVideoANumero(pieza.tipo_video as string | null),
+        tipo: tipoNumero(pieza.tipo_video as string | null, pieza.tipo as number | null),
         updated_at: new Date().toISOString(),
       })
       .eq('id', pieza.id);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { columnasTipo } from "@/lib/tipoVideo";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (body.tipo_video) {
-      update.tipo_video = body.tipo_video;
+      Object.assign(update, columnasTipo(body.tipo_video));
       update.clasificado_at = new Date().toISOString();
     }
     if (body.estado) {

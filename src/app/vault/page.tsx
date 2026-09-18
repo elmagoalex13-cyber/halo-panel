@@ -12,6 +12,7 @@ async function loadVaultEntries() {
     const { data } = await supabase
       .from("vault_panel")
       .select("id,nombre,categoria,descripcion,modelo_id,created_at")
+      .not("nombre", "like", "portal:%")
       .order("categoria")
       .order("nombre");
 

@@ -1,5 +1,6 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { FILTRO_ETIQUETADO, tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { RepartoClient } from "./RepartoClient";
 
 export const dynamic = "force-dynamic";
@@ -13,17 +14,20 @@ async function loadData() {
     const [aRes, mRes, cRes, pRes] = await Promise.all([
       supabase
         .from("library_content")
-        .select(`id, titulo, tipo_video, estado, recibido_at, r2_key, filename_original,
+        .select(`id, titulo, tipo_video, tipo, estado, recibido_at, r2_key, filename_original,
           reparto_at, modelo:modelos(nombre), cuenta:cuentas_instagram(username)`)
         .in("estado", ["en_reparto", "editando", "en_aprobacion", "aprobado"])
         .order("reparto_at", { ascending: false, nullsFirst: false })
         .limit(80),
       supabase.from("modelos").select("id, nombre").eq("activa", true).order("nombre"),
       supabase.from("cuentas_instagram").select("id, username, modelo_id, activa").order("username"),
-      supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "clasificando").not("tipo_video", "is", null).neq("tipo_video", "sin_clasificar"),
+      supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "clasificando").or(FILTRO_ETIQUETADO),
     ]);
     return {
-      asignaciones: (aRes.data ?? []) as unknown as RepartoRow[],
+      asignaciones: ((aRes.data ?? []) as unknown as Array<RepartoRow & { tipo?: number | null }>).map((r) => ({
+        ...r,
+        tipo_video: tipoVideoEfectivo(r.tipo_video, r.tipo),
+      })),
       modelos: (mRes.data ?? []) as { id: string; nombre: string }[],
       cuentas: (cRes.data ?? []) as { id: string; username: string; modelo_id: string; activa: boolean }[],
       pendientes: pRes.count ?? 0,

@@ -7,6 +7,7 @@ import { Badge } from "@/components/Badge";
 import { GlassCard } from "@/components/GlassCard";
 import { CreatorConfigSummary } from "./CreatorConfigSummary";
 import { CreatorConfigWizard } from "./CreatorConfigWizard";
+import { PortalAccesoButton } from "./PortalAccesoButton";
 import { emptyCreatorConfig } from "@/lib/creatorConfig";
 import type { CreatorConfig, CuentaInstagram, MetricoolEstado, Modelo } from "@/types";
 
@@ -265,6 +266,7 @@ export function ModelosClient({
                     <button onClick={() => setWizardModeloId(modelo.id)} className="btn-secondary px-2.5 py-1 text-xs">
                       {config ? "Editar" : "Configurar"}
                     </button>
+                    <PortalAccesoButton modeloId={modelo.id} nombre={modelo.nombre} />
                   </div>
                 </div>
 
