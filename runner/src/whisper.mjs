@@ -3,11 +3,41 @@ import { promisify } from "util";
 import { mkdir, readFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { config } from "./config.mjs";
 
 const execFileAsync = promisify(execFile);
 
-const WHISPER_BIN = process.env.WHISPER_BIN ?? "whisper-cpp";
-const WHISPER_MODEL = process.env.WHISPER_MODEL ?? "/opt/whisper/ggml-small.bin";
+const BIN_CANDIDATES = ["whisper-cpp", "whisper-cli", "whisper", "main"];
+const MODEL_CANDIDATES = [
+  "/opt/whisper/ggml-small.bin",
+  "/opt/whisper/ggml-base.bin",
+  "/opt/whisper/ggml-medium.bin",
+  "/opt/whisper.cpp/models/ggml-small.bin",
+  "/opt/whisper.cpp/models/ggml-base.bin",
+];
+
+async function enPath(bin) {
+  try {
+    const { stdout } = await execFileAsync("which", [bin]);
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Devuelve { bin, model } o null si whisper no esta instalado. */
+export async function resolverWhisper() {
+  let bin = config.whisperBin && existsSync(config.whisperBin) ? config.whisperBin : null;
+  if (!bin && config.whisperBin) bin = await enPath(config.whisperBin);
+  if (!bin) {
+    for (const c of BIN_CANDIDATES) {
+      bin = (await enPath(c)) ?? (existsSync(`/usr/local/bin/${c}`) ? `/usr/local/bin/${c}` : null);
+      if (bin) break;
+    }
+  }
+  const model = [config.whisperModel, ...MODEL_CANDIDATES].find((m) => m && existsSync(m)) ?? null;
+  return bin && model ? { bin, model } : null;
+}
 
 /**
  * Extrae el audio de un vídeo con ffmpeg (WAV 16kHz mono para Whisper).
@@ -18,7 +48,7 @@ const WHISPER_MODEL = process.env.WHISPER_MODEL ?? "/opt/whisper/ggml-small.bin"
 export async function extractAudio(videoPath, outputDir) {
   await mkdir(outputDir, { recursive: true });
   const wavPath = path.join(outputDir, "audio.wav");
-  const ffmpeg = process.env.FFMPEG_BIN ?? "ffmpeg";
+  const ffmpeg = config.ffmpeg;
   await execFileAsync(ffmpeg, [
     "-y",
     "-i", videoPath,
@@ -39,9 +69,12 @@ export async function extractAudio(videoPath, outputDir) {
 export async function transcribeWithWhisper(wavPath, outputDir) {
   await mkdir(outputDir, { recursive: true });
 
+  const whisper = await resolverWhisper();
+  if (!whisper) return [];
+
   const baseName = path.join(outputDir, "subs");
-  await execFileAsync(WHISPER_BIN, [
-    "-m", WHISPER_MODEL,
+  await execFileAsync(whisper.bin, [
+    "-m", whisper.model,
     "-f", wavPath,
     "-osrt",         // output SRT
     "-of", baseName, // output file prefix

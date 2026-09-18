@@ -1,167 +1,112 @@
 /**
- * HALO MODELS — Runner de edición para Ionos
- * ==========================================
- * Proceso PM2 que corre indefinidamente, polling Supabase cada POLL_INTERVAL_MS.
- *
- * Ciclo principal:
- * 1. Busca piezas en library_content con estado = 'editando'
- * 2. Para cada pieza: descarga bruto de R2, procesa (tipo 1/2/3/4), sube editado a R2
- * 3. Actualiza estado a 'en_aprobacion' en Supabase
- * 4. Notifica al admin por Telegram
- * 5. También busca trial_reels con estado = 'pendiente_spoofer' y ejecuta el spoofer
+ * HALO Runner (VPS)
+ * Cola: library_content con estado='editando' y estado_procesamiento='pendiente'.
+ * Por cada pieza: reclama (procesando) -> descarga bruto de R2 -> procesa segun tipo -> sube a
+ * procesadas/<modelo>/<id>-tipoN.mp4 -> estado='en_aprobacion', estado_procesamiento='listo',
+ * video_procesado_url. Si falla: estado_procesamiento='error' + error_mensaje (Rehacer lo reintenta).
  */
-
-import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { procesarTipo1, procesarTipo2, procesarTipo3, procesarTipo4 } from "./tipos.mjs";
-import { procesarTrialsPendientes } from "./spoofer.mjs";
-import { notificarPiezaLista, notificarError, sendTelegram } from "./telegram.mjs";
+import { config, faltanVariables } from "./config.mjs";
+import { publicUrl } from "./r2.mjs";
+import { procesarTipo } from "./tipos.mjs";
+import { asignarFrase } from "./frases.mjs";
 
-// ─── Configuración ────────────────────────────────────────────────────────────
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS ?? "60000", 10);
-const MAX_INTENTOS = parseInt(process.env.MAX_INTENTOS ?? "3", 10);
-const MAX_PIEZAS_POR_VUELTA = parseInt(process.env.MAX_PIEZAS_POR_VUELTA ?? "3", 10);
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env");
+const falta = faltanVariables();
+if (falta.length) {
+  console.error("Faltan variables en .env:", falta.join(", "));
   process.exit(1);
 }
 
-if (!process.env.R2_ENDPOINT || !process.env.R2_ACCESS_KEY_ID) {
-  console.error("❌ Faltan variables de Cloudflare R2 en .env");
-  process.exit(1);
+const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
+
+function tipoNumero(pieza) {
+  if (Number.isInteger(pieza.tipo) && pieza.tipo >= 1 && pieza.tipo <= 4) return pieza.tipo;
+  const m = String(pieza.tipo_video ?? "").match(/[1-4]/);
+  return m ? Number(m[0]) : 1;
 }
 
-// ─── Cliente Supabase ─────────────────────────────────────────────────────────
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false },
-});
-
-// ─── Ciclo principal ──────────────────────────────────────────────────────────
-async function procesarPiezasPendientes() {
-  const { data: piezas, error } = await supabase
+async function liberarAtascadas() {
+  // Piezas que quedaron en 'procesando' (crash/reinicio) hace mas de 20 min vuelven a la cola
+  const limite = new Date(Date.now() - 20 * 60000).toISOString();
+  await supabase
     .from("library_content")
-    .select(`
-      id, titulo, tipo_video, r2_key, r2_key_referencia,
-      frase_quemada, correcciones, intentos_edicion,
-      tiene_locucion,
-      modelo:modelos(nombre)
-    `)
+    .update({ estado_procesamiento: "pendiente" })
     .eq("estado", "editando")
-    .order("recibido_at", { ascending: true })
-    .limit(MAX_PIEZAS_POR_VUELTA);
+    .eq("estado_procesamiento", "procesando")
+    .lt("updated_at", limite);
+}
 
-  if (error) {
-    console.error("[runner] Error al consultar Supabase:", error.message);
-    return;
-  }
-
-  if (!piezas || piezas.length === 0) return;
-
-  console.log(`[runner] ${piezas.length} pieza(s) pendiente(s) de edición`);
-
-  for (const pieza of piezas) {
-    await procesarPieza(pieza);
-  }
+async function reclamar(id) {
+  const { data } = await supabase
+    .from("library_content")
+    .update({ estado_procesamiento: "procesando", error_mensaje: null, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("estado_procesamiento", "pendiente")
+    .select("id");
+  return (data?.length ?? 0) > 0;
 }
 
 async function procesarPieza(pieza) {
-  const intentos = pieza.intentos_edicion ?? 0;
-  if (intentos >= MAX_INTENTOS) {
-    console.warn(`[runner] Pieza ${pieza.id} alcanzó MAX_INTENTOS — marcando como error`);
+  const tipo = tipoNumero(pieza);
+  console.log(`[runner] pieza ${pieza.id} tipo ${tipo}`);
+  try {
+    if (tipo === 2 && !pieza.frase_quemada) {
+      pieza.frase_quemada = (await asignarFrase(supabase, pieza)) ?? "";
+    }
+    const { outKey, rawKey } = await procesarTipo(tipo, pieza);
+    const ahora = new Date().toISOString();
+    const { error } = await supabase
+      .from("library_content")
+      .update({
+        estado: "en_aprobacion",
+        estado_procesamiento: "listo",
+        video_procesado_url: publicUrl(outKey),
+        r2_key_original: pieza.r2_key_original ?? rawKey,
+        error_mensaje: null,
+        procesado_en: ahora,
+        edicion_at: ahora,
+        updated_at: ahora,
+      })
+      .eq("id", pieza.id);
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    console.log(`[runner] OK ${pieza.id} -> ${outKey}`);
+  } catch (err) {
+    console.error(`[runner] ERROR ${pieza.id}:`, err.message);
     await supabase
       .from("library_content")
-      .update({ estado: "error_edicion" })
+      .update({ estado_procesamiento: "error", error_mensaje: String(err.message).slice(0, 500), updated_at: new Date().toISOString() })
       .eq("id", pieza.id);
-    await notificarError(`Pieza ${pieza.id} (${pieza.titulo ?? "sin título"})`, new Error("Máximo de intentos alcanzado"));
-    return;
-  }
-
-  // Incrementar contador de intentos antes de empezar
-  await supabase
-    .from("library_content")
-    .update({ intentos_edicion: intentos + 1 })
-    .eq("id", pieza.id);
-
-  const tipo = pieza.tipo_video;
-  const modeloNombre = pieza.modelo?.nombre ?? "—";
-  console.log(`[runner] Procesando pieza ${pieza.id} — tipo: ${tipo} — modelo: ${modeloNombre}`);
-
-  try {
-    switch (tipo) {
-      case "tipo1":
-        await procesarTipo1(pieza, supabase);
-        break;
-      case "tipo2":
-        await procesarTipo2(pieza, supabase);
-        break;
-      case "tipo3":
-        await procesarTipo3(pieza, supabase);
-        break;
-      case "tipo4":
-        await procesarTipo4(pieza, supabase);
-        break;
-      default:
-        console.warn(`[runner] Tipo de vídeo desconocido: ${tipo} — pieza ${pieza.id}`);
-        await supabase
-          .from("library_content")
-          .update({ estado: "error_edicion" })
-          .eq("id", pieza.id);
-        return;
-    }
-
-    console.log(`[runner] ✅ Pieza ${pieza.id} procesada correctamente`);
-    await notificarPiezaLista({
-      titulo: pieza.titulo ?? "Sin título",
-      tipo,
-      modelo: modeloNombre,
-    });
-  } catch (err) {
-    console.error(`[runner] Error procesando pieza ${pieza.id}:`, err.message);
-
-    // Si quedan más intentos, dejar en 'editando' para reintentar en el próximo ciclo
-    if (intentos + 1 < MAX_INTENTOS) {
-      console.log(`[runner] Se reintentará en el próximo ciclo (intento ${intentos + 1}/${MAX_INTENTOS})`);
-    } else {
-      await supabase
-        .from("library_content")
-        .update({ estado: "error_edicion" })
-        .eq("id", pieza.id);
-      await notificarError(`Pieza ${pieza.id} (${pieza.titulo ?? "sin título"})`, err);
-    }
   }
 }
 
-// ─── Loop principal ───────────────────────────────────────────────────────────
+let ocupado = false;
 async function ciclo() {
+  if (ocupado) return;
+  ocupado = true;
   try {
-    await procesarPiezasPendientes();
-    await procesarTrialsPendientes(supabase);
+    await liberarAtascadas();
+    const { data: piezas, error } = await supabase
+      .from("library_content")
+      .select("id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada")
+      .eq("estado", "editando")
+      .eq("estado_procesamiento", "pendiente")
+      .order("recibido_at", { ascending: true })
+      .limit(config.maxPiezas);
+
+    if (error) {
+      console.error("[runner] error consultando la cola:", error.message);
+      return;
+    }
+    for (const pieza of piezas ?? []) {
+      if (await reclamar(pieza.id)) await procesarPieza(pieza);
+    }
   } catch (err) {
-    console.error("[runner] Error inesperado en el ciclo:", err.message);
-    await notificarError("Ciclo principal del runner", err);
+    console.error("[runner] error inesperado en el ciclo:", err.message);
+  } finally {
+    ocupado = false;
   }
 }
 
-async function main() {
-  console.log("🎬 HALO Runner iniciado");
-  console.log(`   Polling cada ${POLL_INTERVAL_MS / 1000}s`);
-  console.log(`   Máximo ${MAX_PIEZAS_POR_VUELTA} piezas por vuelta`);
-  console.log(`   Máximo ${MAX_INTENTOS} intentos por pieza`);
-  console.log(`   Supabase: ${SUPABASE_URL}`);
-
-  await sendTelegram("🟢 *HALO Runner iniciado* — el sistema de edición está activo.");
-
-  // Primer ciclo inmediato
-  await ciclo();
-
-  // Ciclos periódicos
-  setInterval(ciclo, POLL_INTERVAL_MS);
-}
-
-main().catch((err) => {
-  console.error("❌ Error fatal en el runner:", err);
-  process.exit(1);
-});
+console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta`);
+await ciclo();
+setInterval(ciclo, config.pollMs);

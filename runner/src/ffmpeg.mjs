@@ -5,8 +5,10 @@ import path from "path";
 
 const execFileAsync = promisify(execFile);
 
-const FFMPEG = process.env.FFMPEG_BIN ?? "ffmpeg";
-const FFPROBE = process.env.FFPROBE_BIN ?? "ffprobe";
+import { config } from "./config.mjs";
+
+const FFMPEG = config.ffmpeg;
+const FFPROBE = config.ffprobe;
 
 /**
  * Obtiene la duración en segundos de un vídeo.
@@ -46,10 +48,7 @@ function buildVideoFilter({ zoom = false, zoomFactor = 1.03 } = {}) {
  */
 export async function renderTipo1(inputPath, assPath, outputPath) {
   await mkdir(path.dirname(outputPath), { recursive: true });
-  const vf = [
-    buildVideoFilter(),
-    `ass='${assPath.replace(/'/g, "\\'")}'`,
-  ].join(",");
+  const vf = [buildVideoFilter(), assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null].filter(Boolean).join(",");
 
   await execFileAsync(FFMPEG, [
     "-y",
@@ -133,10 +132,7 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
   const concatList = outputPath.replace(".mp4", "_concat.txt");
   await writeFile(concatList, `file '${inputPath}'\nfile '${tmpFreeze}'\n`);
 
-  const vf = [
-    buildVideoFilter(),
-    `ass='${assPath.replace(/'/g, "\\'")}'`,
-  ].join(",");
+  const vf = [buildVideoFilter(), assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null].filter(Boolean).join(",");
 
   await execFileAsync(FFMPEG, [
     "-y",
@@ -181,63 +177,6 @@ export async function renderTipo4(inputPath, refPath, outputPath, assPath = null
     "-c:a", "aac", "-b:a", "128k",
     "-movflags", "+faststart",
     "-pix_fmt", "yuv420p",
-    outputPath,
-  ]);
-}
-
-/**
- * Spoofer: variaciones técnicas ligeras para trial reels.
- * @param {string} inputPath
- * @param {string} outputPath
- * @param {object} params - Parámetros del spoofer
- * @param {number} [params.trim_start=1] - Segundos a cortar al inicio
- * @param {number} [params.trim_end=1] - Segundos a cortar al final
- * @param {number} [params.zoom=1.03] - Factor de zoom
- * @param {number} [params.brightness=1.0] - Ajuste de brillo (eq)
- * @param {number} [params.contrast=1.0] - Ajuste de contraste (eq)
- * @param {number} [params.saturation=1.0] - Ajuste de saturación (eq)
- */
-export async function renderSpoofer(inputPath, outputPath, params = {}) {
-  await mkdir(path.dirname(outputPath), { recursive: true });
-
-  const {
-    trim_start = 1,
-    trim_end = 1,
-    zoom = 1.03,
-    brightness = 1.0,
-    contrast = 1.0,
-    saturation = 1.0,
-  } = params;
-
-  const duration = await getDuration(inputPath);
-  const trimmedEnd = Math.max(0, duration - trim_end);
-
-  // eq filter: brightness va de -1 a 1 (0=neutro), contrast de 0 a 2 (1=neutro)
-  // Mapeamos nuestro factor (1.0=neutro) → eq escala
-  const eqBrightness = brightness - 1.0; // ej: 1.02 → 0.02
-  const eqContrast = contrast;           // eq acepta 0-2 directamente
-  const eqSaturation = saturation;       // idem
-
-  const vf = [
-    `trim=start=${trim_start}:end=${trimmedEnd},setpts=PTS-STARTPTS`,
-    `scale=iw*${zoom}:ih*${zoom}`,
-    `crop=1080:1920`,
-    `eq=brightness=${eqBrightness.toFixed(3)}:contrast=${eqContrast.toFixed(3)}:saturation=${eqSaturation.toFixed(3)}`,
-  ].join(",");
-
-  const af = `atrim=start=${trim_start}:end=${trimmedEnd},asetpts=PTS-STARTPTS`;
-
-  await execFileAsync(FFMPEG, [
-    "-y",
-    "-i", inputPath,
-    "-vf", vf,
-    "-af", af,
-    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-    "-c:a", "aac", "-b:a", "128k",
-    "-movflags", "+faststart",
-    "-pix_fmt", "yuv420p",
-    // Borrar metadatos para el spoofer
-    "-map_metadata", "-1",
     outputPath,
   ]);
 }

@@ -1,18 +1,16 @@
 {
   "name": "halo-runner",
-  "version": "1.0.0",
-  "description": "Runner de edición de vídeo para HALO MODELS (Ionos)",
+  "version": "2.0.0",
+  "description": "Runner de edicion de video para HALO MODELS (VPS)",
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
-    "dev": "node --watch src/index.mjs"
+    "diagnostico": "node src/diagnostico.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
     "@supabase/supabase-js": "^2.44.0",
-    "node-fetch": "^3.3.2"
+    "dotenv": "^16.4.5"
   },
-  "engines": {
-    "node": ">=20"
-  }
+  "engines": { "node": ">=20" }
 }

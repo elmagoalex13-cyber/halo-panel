@@ -1,77 +1,68 @@
-# HALO Runner — Editor de vídeo en Ionos
+# HALO Runner (VPS 94.143.143.73)
 
-Runner Node.js que procesa piezas de vídeo con ffmpeg + Whisper.
-Se despliega en el servidor Ionos mediante PM2.
+Procesa los vídeos que llegan al panel. Sin Telegram.
 
-## Requisitos en el servidor
+**Cola:** `library_content` con `estado='editando'` y `estado_procesamiento='pendiente'`.
+**Resultado:** sube a R2 `procesadas/<modelo_id>/<id>-tipoN.mp4` y deja la pieza en
+`estado='en_aprobacion'`, `estado_procesamiento='listo'`, `video_procesado_url=...`.
+Si falla: `estado_procesamiento='error'` + `error_mensaje` (en el panel, "Rehacer" la reintenta).
 
-- Node.js ≥ 20
-- PM2 (`npm install -g pm2`)
-- ffmpeg + ffprobe instalados y en PATH
-- whisper.cpp compilado (`whisper-cpp` o la ruta que definas en `.env`)
-- Modelo Whisper: `ggml-small.bin` en `/opt/whisper/`
+## Por qué "no procesaba" el vídeo de prueba
+El `.env` del VPS tiene `POLL_INTERVAL_MS=600000` = **10 minutos** entre revisiones de la cola
+(el vídeo `1f1195aa…` sí se procesó, tras esperar). Además el código antiguo del repo consultaba
+columnas que no existen (`intentos_edicion`, `tiene_locucion`) y fallaba en silencio.
 
-## Instalación
+## 1) Diagnóstico (pegar en el VPS)
 
 ```bash
-# 1. Copiar la carpeta runner al servidor
-scp -r runner/ usuario@ionos-server:/opt/halo-runner
+ssh root@94.143.143.73
+pm2 status
+pm2 logs halo-runner --lines 60 --nostream
+grep -E "POLL_INTERVAL_MS|MAX_PIEZAS" /opt/halo-runner/.env
+ffmpeg -version | head -1; ffprobe -version | head -1
+which whisper-cpp whisper-cli main; ls /opt/whisper 2>/dev/null
+```
 
-# 2. En el servidor
+## 2) Desplegar esta versión (desde tu PC, en la carpeta del proyecto)
+
+```bash
+scp -r runner/src runner/package.json root@94.143.143.73:/opt/halo-runner/
+ssh root@94.143.143.73 'bash -s' <<'EOF'
+set -e
 cd /opt/halo-runner
-cp .env.example .env
-nano .env  # Rellenar todos los valores
-
-# 3. Instalar dependencias
-npm install
-
-# 4. Aplicar migración SQL en Supabase
-# (pegar el contenido de migrations/001_runner_fields.sql en el SQL Editor)
-
-# 5. Crear directorio de logs
-mkdir -p /var/log/halo-runner
-
-# 6. Iniciar con PM2
-pm2 start ecosystem.config.cjs
+cp -r /opt/halo-runner /opt/halo-runner.bak-$(date +%F-%H%M) 2>/dev/null || true
+npm install --omit=dev
+rm -f src/telegram.mjs src/spoofer.mjs
+sed -i 's/^POLL_INTERVAL_MS=.*/POLL_INTERVAL_MS=15000/' .env
+grep -q '^MAX_PIEZAS=' .env || echo 'MAX_PIEZAS=3' >> .env
+pm2 restart halo-runner --update-env || pm2 start ecosystem.config.cjs
 pm2 save
-pm2 startup  # Seguir las instrucciones para auto-arranque
+node src/diagnostico.mjs
+pm2 logs halo-runner --lines 30 --nostream
+EOF
 ```
 
-## Comandos útiles
+Rollback: `rm -rf /opt/halo-runner && mv /opt/halo-runner.bak-<fecha> /opt/halo-runner && pm2 restart halo-runner`.
+
+## 3) Instalar Whisper (solo si el diagnóstico dice "whisper no encontrado")
+Sin Whisper los tipos 1/3/4 salen **sin subtítulos** (no fallan).
 
 ```bash
-pm2 status               # Ver estado del proceso
-pm2 logs halo-runner     # Ver logs en tiempo real
-pm2 restart halo-runner  # Reiniciar
-pm2 stop halo-runner     # Parar
+apt-get update && apt-get install -y build-essential cmake git ffmpeg
+cd /opt && git clone https://github.com/ggerganov/whisper.cpp && cd whisper.cpp
+cmake -B build && cmake --build build -j --config Release
+bash ./models/download-ggml-model.sh small
+mkdir -p /opt/whisper && cp models/ggml-small.bin /opt/whisper/
+ln -sf /opt/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cpp
+node /opt/halo-runner/src/diagnostico.mjs
 ```
 
-## Flujo de procesado
+## Variables (`/opt/halo-runner/.env`)
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+`R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` (sin barra final y con un solo `https://`),
+`POLL_INTERVAL_MS` (15000), `MAX_PIEZAS` (3). Opcionales: `WHISPER_BIN`, `WHISPER_MODEL`, `TMP_DIR`.
 
-```
-Supabase (estado='editando')
-  → Descarga bruto de R2
-  → [Tipo 1/3] Whisper: extrae audio WAV → transcribe → genera .ass
-  → [Tipo 2]   ffmpeg: reencuadra + quema frase + audio referencia
-  → [Tipo 4]   ffmpeg: replica estructura del vídeo referencia
-  → Sube editado a R2 (carpeta editado/)
-  → Actualiza estado → 'en_aprobacion'
-  → Telegram: notificación al admin
-
-Supabase (trial_reels.estado='pendiente_spoofer')
-  → Descarga original de R2
-  → ffmpeg: recorte + zoom + eq (brillo/contraste/saturación)
-  → Elimina metadatos
-  → Sube a R2 (carpeta trial/)
-  → Actualiza estado → 'pendiente_aprobacion'
-  → Telegram: notificación al admin
-```
-
-## Tipos de vídeo
-
-| Tipo | Descripción | Herramientas |
-|------|-------------|--------------|
-| tipo1 | Hablando a cámara | Whisper (subtítulos) + ffmpeg |
-| tipo2 | Caption/Frase | ffmpeg (drawtext) + audio referencia opcional |
-| tipo3 | Reto | Whisper (subtítulos) + ffmpeg (freeze frame final) |
-| tipo4 | Con vídeo referencia | ffmpeg (replica duración y estructura) |
+## Tipos
+1 hablando (subtítulos) · 2 caption (frase del banco quemada; si la pieza no trae `frase_quemada`,
+el runner coge la menos usada de `banco_frases_canciones`) · 3 reto (subtítulos + freeze) ·
+4 con referencia (recorta a la duración de `r2_key_referencia`).
