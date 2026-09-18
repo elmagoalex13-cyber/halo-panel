@@ -10,7 +10,6 @@ export type Referencia = {
   instagram: string | null;
   descripcion: string | null;
 };
-export type ReferenciaBanco = Referencia;
 export type Pendiente = {
   id: string;
   tipo: number;
@@ -30,9 +29,9 @@ export type Entrega = {
 const TIPOS = [
   { tipo: 1, titulo: "Hablando", desc: "Grabate hablando a camara. Le pondremos los subtitulos." },
   { tipo: 2, titulo: "Caption / Gesto", desc: "Un gesto o escena corta. Nosotros anadimos la frase." },
-  { tipo: 3, titulo: "Reto", desc: "Graba tu version de un reto o tendencia." },
+  { tipo: 3, titulo: "Parar imagen", desc: "El reto de parar la imagen: nosotros congelamos el momento del trigger." },
 ];
-const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Reto", 4: "Con referencia" };
+const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Parar imagen", 4: "Con referencia" };
 
 function estadoEntrega(e: Entrega) {
   if (e.estado === "aprobado" || e.estado === "publicado") return { texto: "Aprobado", cls: "bg-emerald-500/15 text-emerald-300" };
@@ -84,13 +83,11 @@ function Seccion({ titulo, sub, children }: { titulo: string; sub?: string; chil
 export function PortalClient({
   nombre,
   pendientes,
-  banco,
   entregas,
 }: {
   nombre: string;
   slug: string;
   pendientes: Pendiente[];
-  banco: ReferenciaBanco[];
   entregas: Entrega[];
 }) {
   const router = useRouter();
@@ -138,7 +135,7 @@ export function PortalClient({
         )}
       </Seccion>
 
-      <Seccion titulo="Subir un video" sub="Elige el tipo de video que has grabado.">
+      <Seccion titulo="Subir un video libre" sub="Elige el tipo de video que has grabado. Los videos con referencia estan arriba, en tus pendientes.">
         {TIPOS.map((t) => (
           <article key={t.tipo} className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
             <div>
@@ -150,22 +147,6 @@ export function PortalClient({
             <SubirBoton tipo={t.tipo} />
           </article>
         ))}
-      </Seccion>
-
-      <Seccion titulo="4. Con referencia" sub="Elige un video del banco, imitalo y sube el tuyo debajo.">
-        {banco.length === 0 ? (
-          <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/40">
-            Aun no hay referencias disponibles.
-          </p>
-        ) : (
-          banco.map((r) => (
-            <article key={r.id} className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
-              <VideoReferencia r={r} />
-              {r.descripcion ? <p className="text-sm text-white/60">&quot;{r.descripcion}&quot;</p> : null}
-              <SubirBoton tipo={4} referenciaId={r.id} etiqueta="Subir mi imitacion" />
-            </article>
-          ))
-        )}
       </Seccion>
 
       {entregas.length > 0 ? (

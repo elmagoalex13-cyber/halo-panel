@@ -8,10 +8,7 @@ if (falta.length) {
   console.error("Faltan variables en .env:", falta.join(", "));
   process.exit(1);
 }
-if (!config.apifyToken) {
-  console.error("Falta APIFY_TOKEN en el .env (https://console.apify.com/account/integrations)");
-  process.exit(1);
-}
+if (!config.igSessionId) console.warn("Aviso: sin IG_SESSIONID Instagram suele responder 429. Ponla en el .env (cookie sessionid de una cuenta dedicada).");
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
 await cicloScraper(supabase, { forzar: true });
 console.log("Listo. Revisa Instagram > Ideas virales en el panel.");

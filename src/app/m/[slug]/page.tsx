@@ -3,7 +3,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { urlR2 } from "@/lib/media";
 import { LoginForm } from "./LoginForm";
-import { PortalClient, type Pendiente, type Entrega, type ReferenciaBanco } from "./PortalClient";
+import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mi portal" };
@@ -44,21 +44,13 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
   const sesion = await sesionActual(slug);
   if (!sesion || sesion.modeloId !== modelo.id) return <LoginForm slug={slug} nombre={modelo.nombre} />;
 
-  const [encargosRes, bancoRes, entregasRes] = await Promise.all([
+  const [encargosRes, entregasRes] = await Promise.all([
     supabase
       .from("encargos")
       .select("id, tipo_video, estado, instrucciones, fecha_limite, created_at, referencia:referencias(id, url_original, url_r2, thumbnail_url, descripcion, tipo_video)")
       .eq("modelo_id", modelo.id)
       .in("estado", ["pendiente", "en_curso"])
       .order("created_at", { ascending: false }),
-    supabase
-      .from("referencias")
-      .select("id, url_original, url_r2, thumbnail_url, descripcion, tipo_video")
-      .eq("activa", true)
-      .eq("tipo_video", "tipo4")
-      .not("url_r2", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(40),
     supabase
       .from("library_content")
       .select("id, titulo, tipo, estado, estado_procesamiento, recibido_at")
@@ -82,8 +74,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
     referencia: refVista(e.referencia),
   }));
 
-  const banco: ReferenciaBanco[] = ((bancoRes.data ?? []) as RefRow[]).map((r) => refVista(r)!);
   const entregas = (entregasRes.data ?? []) as Entrega[];
 
-  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} banco={banco} entregas={entregas} />;
+  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} />;
 }

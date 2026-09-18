@@ -8,9 +8,10 @@ export const dynamic = "force-dynamic";
 // como "video pendiente" con la referencia y el boton de subir su version.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = (await req.json().catch(() => ({}))) as { modelo_id?: string; tipo?: number; instrucciones?: string | null };
+  const body = (await req.json().catch(() => ({}))) as { modelo_id?: string; modelo_ids?: string[]; tipo?: number; instrucciones?: string | null };
+  const modelos = Array.from(new Set(body.modelo_ids?.length ? body.modelo_ids : body.modelo_id ? [body.modelo_id] : []));
   const tipo = Number(body.tipo);
-  if (!body.modelo_id) return NextResponse.json({ error: "Elige una modelo" }, { status: 400 });
+  if (!modelos.length) return NextResponse.json({ error: "Elige al menos una modelo" }, { status: 400 });
   if (![1, 2, 3, 4].includes(tipo)) return NextResponse.json({ error: "Elige un tipo de video (1-4)" }, { status: 400 });
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
@@ -64,20 +65,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       referenciaId = ref.id;
     }
 
-    // encargo para la modelo (si ya tiene uno pendiente con esta referencia, no se duplica)
-    const { data: previo } = await supabase
-      .from("encargos")
-      .select("id")
-      .eq("modelo_id", body.modelo_id)
-      .eq("referencia_id", referenciaId)
-      .neq("estado", "entregado")
-      .maybeSingle();
-    let encargoId = previo?.id ?? null;
-    if (!encargoId) {
+    // un encargo por modelo (si ya tiene uno pendiente con esta referencia, no se duplica)
+    const encargoIds: string[] = [];
+    for (const modeloId of modelos) {
+      const { data: previo } = await supabase
+        .from("encargos")
+        .select("id")
+        .eq("modelo_id", modeloId)
+        .eq("referencia_id", referenciaId)
+        .neq("estado", "entregado")
+        .maybeSingle();
+      if (previo) {
+        encargoIds.push(previo.id);
+        continue;
+      }
       const { data: enc, error: eErr } = await supabase
         .from("encargos")
         .insert({
-          modelo_id: body.modelo_id,
+          modelo_id: modeloId,
           referencia_id: referenciaId,
           tipo_video: tipoVideo,
           estado: "pendiente",
@@ -86,16 +91,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         .select("id")
         .single();
       if (eErr || !enc) throw eErr ?? new Error("No se pudo crear el encargo");
-      encargoId = enc.id;
+      encargoIds.push(enc.id);
     }
 
     const ahora = new Date().toISOString();
-    const upd = { estado_triaje: "confirmado", confirmado_at: ahora };
+    const upd = { estado_triaje: "confirmado", formato_confirmado: tipoVideo, confirmado_at: ahora };
     let { error } = await supabase.from("referencias_videos").update(upd).eq("id", id);
-    if (error && /confirmado_at/.test(error.message)) ({ error } = await supabase.from("referencias_videos").update({ estado_triaje: "confirmado" }).eq("id", id));
+    if (error && /confirmado_at/.test(error.message)) ({ error } = await supabase.from("referencias_videos").update({ estado_triaje: "confirmado", formato_confirmado: tipoVideo }).eq("id", id));
     if (error) throw error;
 
-    return NextResponse.json({ ok: true, referencia_id: referenciaId, encargo_id: encargoId, confirmado_at: ahora });
+    return NextResponse.json({ ok: true, referencia_id: referenciaId, encargo_ids: encargoIds, confirmado_at: ahora });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : (e as { message?: string })?.message ?? "Error interno" }, { status: 500 });
   }

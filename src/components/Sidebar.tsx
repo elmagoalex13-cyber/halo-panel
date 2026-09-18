@@ -6,10 +6,7 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
-  { href: "/biblioteca", label: "Biblioteca", icon: "◫" },
-  { href: "/reparto", label: "Reparto", icon: "⇄" },
-  { href: "/calendario", label: "Calendario", icon: "▦" },
-  { href: "/metricas", label: "Métricas", icon: "◑" },
+  { href: "/asignar", label: "Asignar vídeos", icon: "⇪" },
   { href: "/instagram", label: "Instagram", icon: "◎" },
   { href: "/modelos", label: "Modelos", icon: "◉" },
   { href: "/frases", label: "Frases", icon: "✦" },

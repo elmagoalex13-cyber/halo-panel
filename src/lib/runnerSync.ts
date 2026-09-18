@@ -1,3 +1,4 @@
+import { marcarPublicadas } from "@/lib/publer";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 // El runner marca estado_procesamiento='listo' al terminar. El panel usa `estado` para el pipeline,
@@ -16,6 +17,7 @@ export async function syncRunnerResultados(): Promise<number> {
       .eq("estado", "editando")
       .eq("estado_procesamiento", "listo")
       .select("id");
+    await marcarPublicadas(supabase);
     if (error) return 0;
     return data?.length ?? 0;
   } catch {

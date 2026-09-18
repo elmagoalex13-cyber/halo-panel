@@ -11,6 +11,7 @@ import { publicUrl } from "./r2.mjs";
 import { procesarTipo } from "./tipos.mjs";
 import { asignarFrase } from "./frases.mjs";
 import { cicloScraper } from "./scraper.mjs";
+import { descargarReferenciasPendientes } from "./referencias.mjs";
 
 const falta = faltanVariables();
 if (falta.length) {
@@ -112,11 +113,11 @@ console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${
 await ciclo();
 setInterval(ciclo, config.pollMs);
 
-// Scraper de referencias: solo si hay APIFY_TOKEN. Revisa cada minuto solicitudes del panel y cuentas vencidas (24h)
-if (config.apifyToken) {
-  console.log(`Scraper de referencias activo (cuentas cada ${config.scraperHoras}h, umbral viral x${config.scraperFactor} la mediana)`);
-  setTimeout(() => cicloScraper(supabase), 10000);
-  setInterval(() => cicloScraper(supabase), 60000);
-} else {
-  console.log("Scraper de referencias desactivado (falta APIFY_TOKEN en el .env)");
-}
+// Referencias asignadas por URL: se descargan a R2 para que la modelo (y el editor) las vean
+setTimeout(() => descargarReferenciasPendientes(supabase), 5000);
+setInterval(() => descargarReferenciasPendientes(supabase), 60000);
+
+// Scraper propio de cuentas de referencia (cada SCRAPER_HORAS; sin sesion de Instagram suele fallar)
+console.log(`Scraper de referencias activo (cuentas cada ${config.scraperHoras}h, umbral viral x${config.scraperFactor} la mediana, sesion IG: ${config.igSessionId ? "si" : "NO"})`);
+setTimeout(() => cicloScraper(supabase), 10000);
+setInterval(() => cicloScraper(supabase), 60000);

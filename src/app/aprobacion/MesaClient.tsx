@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
 import { estadoLabel, formatDate, tipoVideoLabel } from "@/lib/utils";
 import { urlR2, videoBruto, videoEditado } from "@/lib/media";
 
@@ -23,6 +22,7 @@ export interface VideoRow {
   correcciones: string;
   modelo_nombre: string;
   cuenta_username: string | null;
+  programado_at?: string | null;
 }
 
 const ESTADO_BADGE: Record<string, string> = {
@@ -35,24 +35,29 @@ const ESTADO_BADGE: Record<string, string> = {
 
 const videoUrl = urlR2;
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+type Programacion =
+  | { ok: true; programado_at: string; trial: boolean; cuenta: string }
+  | { ok: false; motivo: string; mensaje: string };
+
+function mensajeAprobado(p?: Programacion) {
+  if (!p) return "Video aprobado.";
+  if (p.ok) {
+    const cuando = new Date(p.programado_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid", weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    return `Aprobado y programado en Publer: @${p.cuenta}, ${cuando}${p.trial ? " (trial reel)" : " (reel)"}.`;
+  }
+  return p.motivo === "publer_inactivo"
+    ? "Aprobado. Publer no esta activo: descargalo desde la pestana Aprobados y subelo tu; se programara solo cuando actives Publer."
+    : `Aprobado, pero no se pudo programar: ${p.mensaje}`;
 }
 
 export function MesaClient({
   rows: initialRows,
   currentEstado,
-  modelos = [],
-  cuentas = [],
 }: {
   rows: VideoRow[];
   currentEstado: string;
-  modelos?: { id: string; nombre: string }[];
-  cuentas?: { id: string; username: string; modelo_id: string }[];
 }) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const changeFileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState(initialRows);
   const [selected, setSelected] = useState<VideoRow | null>(null);
@@ -64,19 +69,10 @@ export function MesaClient({
   const [originalOpen, setOriginalOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [modeloFiltro, setModeloFiltro] = useState("todos");
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ modelo_id: "", cuenta_id: "", titulo: "", tipo_video: "reels", drive_url: "", notas_editor: "" });
-  const [addLoading, setAddLoading] = useState(false);
-  const [uploadMode, setUploadMode] = useState<"file" | "url">("file");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [changeLoading, setChangeLoading] = useState(false);
   const [changeVideoError, setChangeVideoError] = useState<string | null>(null);
   const [captionLoading, setCaptionLoading] = useState(false);
   const [captionError, setCaptionError] = useState<string | null>(null);
-  const [pubblerLoading, setPubblerLoading] = useState(false);
-  const [pubblerDone, setPubblerDone] = useState<string | null>(null); // scheduled datetime
 
   useEffect(() => {
     setRows(initialRows);
@@ -132,7 +128,7 @@ export function MesaClient({
         });
 
         if (res.ok) {
-          const payload = (await res.json()) as { estado?: string };
+          const payload = (await res.json()) as { estado?: string; programacion?: Programacion };
           const nuevoEstado = payload.estado ?? (accion === "aprobar" ? "aprobado" : accion === "rehacer" ? "editando" : "rechazado");
           setRows((prev) =>
             nuevoEstado === currentEstado
@@ -143,7 +139,7 @@ export function MesaClient({
           );
           setActionMessage(
             accion === "aprobar"
-              ? "Video aprobado. Ya esta en la seccion Aprobados para la programacion de Metricool."
+              ? mensajeAprobado(payload.programacion)
               : accion === "rehacer"
                 ? "Video enviado a Rehacer IA."
                 : "Video descartado.",
@@ -203,118 +199,6 @@ export function MesaClient({
       setCaptionLoading(false);
     }
   }
-  async function programarEnPubler() {
-    if (!selected) return;
-    setPubblerLoading(true);
-    setPubblerDone(null);
-    try {
-      let cfg: Record<string, unknown> = {};
-      try { cfg = JSON.parse(localStorage.getItem("halo-config") ?? "{}"); } catch {}
-      const videoPublicUrl = videoEditado(selected);
-      const res = await fetch("/api/pubbler/schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          video_url: videoPublicUrl,
-          caption: caption || undefined,
-
-          days_of_week: (cfg.posting_days as number[]) ?? [1, 3, 5],
-          times: (cfg.posting_times as string[]) ?? ["18:00"],
-          posts_per_day: (cfg.posts_per_day as number) ?? 1,
-          workspace_id: (cfg.pubbler_workspace_id as string) ?? undefined,
-        }),
-      });
-      const data = await res.json() as { demo?: boolean; scheduled_at?: string; error?: string };
-      if (data.demo) setPubblerDone("demo — agrega PUBBLER_API_KEY para activar");
-      else if (data.scheduled_at) setPubblerDone(`Programado: ${data.scheduled_at}`);
-      else setPubblerDone(data.error ?? "Error desconocido");
-    } catch (e) {
-      setPubblerDone(String(e));
-    } finally {
-      setPubblerLoading(false);
-    }
-  }
-
-  function resetAddForm() {
-    setAddForm({ modelo_id: "", cuenta_id: "", titulo: "", tipo_video: "reels", drive_url: "", notas_editor: "" });
-    setSelectedFile(null);
-    setUploadProgress(null);
-    setUploadError(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
-
-  async function addVideo(e: React.FormEvent) {
-    e.preventDefault();
-    if (!addForm.modelo_id) return;
-    setUploadError(null);
-    setAddLoading(true);
-
-    try {
-      if (uploadMode === "file" && selectedFile) {
-        // Upload file to R2 via /api/upload
-        setUploadProgress(0);
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-        formData.append("modelo_id", addForm.modelo_id);
-        if (addForm.cuenta_id) formData.append("cuenta_id", addForm.cuenta_id);
-        formData.append("tipo_video", addForm.tipo_video);
-        formData.append("titulo", addForm.titulo || selectedFile.name);
-
-        // Use XMLHttpRequest for progress tracking
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.upload.addEventListener("progress", (ev) => {
-            if (ev.lengthComputable) {
-              setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
-            }
-          });
-          xhr.addEventListener("load", () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve();
-            } else {
-              try {
-                const body = JSON.parse(xhr.responseText) as { error?: string };
-                reject(new Error(body.error ?? `Error ${xhr.status}`));
-              } catch {
-                reject(new Error(`Error ${xhr.status}`));
-              }
-            }
-          });
-          xhr.addEventListener("error", () => reject(new Error("Error de red al subir")));
-          xhr.open("POST", "/api/upload");
-          xhr.send(formData);
-        });
-
-        setUploadProgress(100);
-        setShowAddForm(false);
-        resetAddForm();
-        router.refresh();
-      } else {
-        // Drive URL mode
-        const res = await fetch("/api/aprobacion", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(addForm),
-        });
-        if (res.ok) {
-          setShowAddForm(false);
-          resetAddForm();
-          router.refresh();
-        } else {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          setUploadError(body?.error ?? "No se pudo añadir el vídeo.");
-        }
-      }
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Error inesperado");
-      setUploadProgress(null);
-    } finally {
-      setAddLoading(false);
-    }
-  }
-
-  const cuentasFiltradas = cuentas.filter((c) => c.modelo_id === addForm.modelo_id);
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3">
@@ -338,163 +222,8 @@ export function MesaClient({
               </option>
             ))}
           </select>
-          <button onClick={() => { resetAddForm(); setShowAddForm(true); }} className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs">
-            <Plus className="h-3.5 w-3.5" /> Añadir
-          </button>
         </div>
       </div>
-
-      {showAddForm ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#08080d] p-6 shadow-xl">
-            <h3 className="text-base font-semibold text-white mb-4">Añadir vídeo a revisión</h3>
-
-            {/* Mode toggle */}
-            <div className="mb-4 flex rounded-xl border border-white/[0.08] bg-white/[0.03] p-1">
-              <button
-                type="button"
-                onClick={() => setUploadMode("file")}
-                className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-all ${uploadMode === "file" ? "bg-[#8B5CF6] text-white shadow" : "text-white/40 hover:text-white/60"}`}
-              >
-                ↑ Subir archivo
-              </button>
-              <button
-                type="button"
-                onClick={() => setUploadMode("url")}
-                className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-all ${uploadMode === "url" ? "bg-[#8B5CF6] text-white shadow" : "text-white/40 hover:text-white/60"}`}
-              >
-                Drive URL
-              </button>
-            </div>
-
-            <form onSubmit={addVideo} className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs text-white/50">Modelo *</label>
-                <select
-                  className="input-base w-full"
-                  value={addForm.modelo_id}
-                  onChange={(e) => setAddForm((f) => ({ ...f, modelo_id: e.target.value, cuenta_id: "" }))}
-                  required
-                >
-                  <option value="">Seleccionar modelo</option>
-                  {modelos.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                </select>
-              </div>
-              {cuentasFiltradas.length > 0 && (
-                <div>
-                  <label className="mb-1 block text-xs text-white/50">Cuenta Instagram</label>
-                  <select
-                    className="input-base w-full"
-                    value={addForm.cuenta_id}
-                    onChange={(e) => setAddForm((f) => ({ ...f, cuenta_id: e.target.value }))}
-                  >
-                    <option value="">Sin cuenta específica</option>
-                    {cuentasFiltradas.map((c) => <option key={c.id} value={c.id}>@{c.username}</option>)}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="mb-1 block text-xs text-white/50">Título</label>
-                <input type="text" className="input-base w-full" value={addForm.titulo} onChange={(e) => setAddForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Ej: Video baile semana 37" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-white/50">Tipo</label>
-                <select className="input-base w-full" value={addForm.tipo_video} onChange={(e) => setAddForm((f) => ({ ...f, tipo_video: e.target.value }))}>
-                  <option value="reels">Reels</option>
-                  <option value="historia">Historia</option>
-                  <option value="carrusel">Carrusel</option>
-                  <option value="sin_clasificar">Sin clasificar</option>
-                </select>
-              </div>
-
-              {uploadMode === "file" ? (
-                <div>
-                  <label className="mb-1 block text-xs text-white/50">Archivo de vídeo *</label>
-                  <div
-                    className={`relative flex min-h-[80px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed transition-all ${selectedFile ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/5" : "border-white/[0.1] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"}`}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="video/*"
-                      className="sr-only"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0] ?? null;
-                        setSelectedFile(f);
-                        setUploadError(null);
-                        if (f && !addForm.titulo) {
-                          setAddForm((prev) => ({ ...prev, titulo: f.name.replace(/\.[^.]+$/, "") }));
-                        }
-                      }}
-                    />
-                    {selectedFile ? (
-                      <div className="flex flex-col items-center gap-1 px-4 py-2">
-                        <span className="text-2xl">🎬</span>
-                        <p className="text-center text-xs font-medium text-white/80 break-all">{selectedFile.name}</p>
-                        <p className="text-[10px] text-white/35">{formatBytes(selectedFile.size)}</p>
-                        <button
-                          type="button"
-                          onClick={(ev) => { ev.stopPropagation(); setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                          className="mt-1 text-[10px] text-red-400/70 hover:text-red-400"
-                        >
-                          Quitar
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-1 px-4 py-3">
-                        <span className="text-xl text-white/30">↑</span>
-                        <p className="text-xs text-white/40">Haz clic para seleccionar un vídeo</p>
-                        <p className="text-[10px] text-white/25">MP4, MOV, etc.</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {uploadProgress !== null && (
-                    <div className="mt-2">
-                      <div className="flex justify-between text-[10px] text-white/40 mb-1">
-                        <span>Subiendo a R2...</span>
-                        <span>{uploadProgress}%</span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
-                        <div
-                          className="h-full rounded-full bg-[#8B5CF6] transition-all duration-200"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <label className="mb-1 block text-xs text-white/50">URL Drive / vídeo</label>
-                  <input type="url" className="input-base w-full" value={addForm.drive_url} onChange={(e) => setAddForm((f) => ({ ...f, drive_url: e.target.value }))} placeholder="https://drive.google.com/..." />
-                </div>
-              )}
-
-              <div>
-                <label className="mb-1 block text-xs text-white/50">Notas para el editor</label>
-                <input type="text" className="input-base w-full" value={addForm.notas_editor} onChange={(e) => setAddForm((f) => ({ ...f, notas_editor: e.target.value }))} placeholder="Opcional" />
-              </div>
-
-              {uploadError && (
-                <p className="rounded-lg border border-red-500/20 bg-red-950/30 px-3 py-2 text-xs text-red-400">{uploadError}</p>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => { setShowAddForm(false); resetAddForm(); }} className="btn-secondary px-4 py-2 text-sm" disabled={addLoading}>Cancelar</button>
-                <button
-                  type="submit"
-                  disabled={addLoading || !addForm.modelo_id || (uploadMode === "file" && !selectedFile)}
-                  className="btn-primary px-4 py-2 text-sm disabled:opacity-40"
-                >
-                  {addLoading ? (uploadProgress !== null ? `Subiendo ${uploadProgress}%` : "Procesando...") : uploadMode === "file" ? "Subir vídeo" : "Añadir a cola"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
 
       {filteredRows.length === 0 ? (
         <div className="grid min-h-[55vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] text-sm text-white/35">
@@ -555,8 +284,13 @@ export function MesaClient({
 
                 <div className="hidden min-w-32 self-center text-right sm:block">
                   <span className={`badge px-2.5 py-1 text-[9px] ${ESTADO_BADGE[row.estado] ?? "badge"}`}>
-                    {estadoLabel(row.estado)}
+                    {row.estado === "aprobado" ? (row.programado_at ? "Programado" : "Sin programar") : estadoLabel(row.estado)}
                   </span>
+                  {row.estado === "aprobado" && row.programado_at ? (
+                    <p className="mt-1 text-[10px] text-white/40">
+                      {new Date(row.programado_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  ) : null}
                   <p className="mt-3 text-xs font-semibold text-[#8B5CF6] opacity-75 transition-opacity group-hover:opacity-100">
                     Revisar
                   </p>
@@ -840,13 +574,6 @@ export function MesaClient({
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all hover:bg-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] disabled:opacity-40"
                 >
                   ✓ Aprobar <kbd className="rounded bg-emerald-900/60 px-1.5 text-[9px] font-normal">A</kbd>
-                </button>
-                <button
-                  onClick={programarEnPubler}
-                  disabled={pubblerLoading || !selected}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 py-2.5 text-sm font-semibold text-[#A78BFA] transition-all hover:border-[#8B5CF6]/60 hover:bg-[#8B5CF6]/20 disabled:opacity-40"
-                >
-                  {pubblerLoading ? "Programando..." : pubblerDone ? `✅ ${pubblerDone}` : "📅 Programar en Pubbler"}
                 </button>
                 <button
                   onClick={() => saveAndAct("rehacer")}

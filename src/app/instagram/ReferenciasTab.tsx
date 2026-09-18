@@ -3,18 +3,13 @@
 import { useState } from "react";
 import { ExternalLink, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
-import { BancoReferenciasSection } from "./BancoReferenciasSection";
 import { formatDate } from "@/lib/utils";
-import type { BancoReferenciaVideo, Modelo, ReferenciaCuenta } from "@/types";
+import type { ReferenciaCuenta } from "@/types";
 
 export function ReferenciasTab({
   cuentas: initialCuentas,
-  bancoVideos,
-  modelos,
 }: {
   cuentas: ReferenciaCuenta[];
-  bancoVideos: BancoReferenciaVideo[];
-  modelos: Modelo[];
 }) {
   const [cuentas, setCuentas] = useState(initialCuentas);
   const [form, setForm] = useState({ username: "", categoria: "", notas: "" });
@@ -207,7 +202,6 @@ export function ReferenciasTab({
       )}
 
       <div className="border-t border-white/[0.08] pt-5">
-        <BancoReferenciasSection videos={bancoVideos} modelos={modelos} />
       </div>
 
       {editModal ? (

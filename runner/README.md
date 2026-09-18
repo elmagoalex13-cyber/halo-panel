@@ -61,31 +61,35 @@ node /opt/halo-runner/src/diagnostico.mjs
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
 `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` (sin barra final y con un solo `https://`),
 `POLL_INTERVAL_MS` (15000), `MAX_PIEZAS` (3). Opcionales: `WHISPER_BIN`, `WHISPER_MODEL`, `TMP_DIR`,
-`APIFY_TOKEN` (activa el scraper de referencias), `SCRAPER_HORAS` (24), `SCRAPER_MAX_REELS` (30),
-`SCRAPER_FACTOR` (1.5), `SCRAPER_ACTOR` (`apify~instagram-reel-scraper`).
+`IG_SESSIONID` (scraper y descarga de referencias), `SCRAPER_HORAS` (24), `SCRAPER_DIAS` (14),
+`SCRAPER_MAX_REELS` (30), `SCRAPER_FACTOR` (1.5).
 
 ## Tipos
 1 hablando (subtítulos) · 2 caption (frase del banco quemada; si la pieza no trae `frase_quemada`,
 el runner coge la menos usada de `banco_frases_canciones`) · 3 reto (subtítulos + freeze) ·
 4 con referencia (recorta a la duración de `r2_key_referencia`).
 
-## Scraper de referencias virales (Apify)
-Con `APIFY_TOKEN` en el `.env`, el mismo proceso del runner analiza las cuentas activas de
-**Instagram → Referencias** (`referencias_cuentas`, espejadas en `cuentas_referencia`):
+## Scraper propio de referencias virales (sin Apify)
+El runner lee Instagram directamente (`src/instagram.mjs`) y analiza las cuentas activas de
+**Instagram → Cuentas de referencia** (`referencias_cuentas`, espejadas en `cuentas_referencia`):
 
-1. pide los últimos reels de cada cuenta a Apify,
+1. lee los últimos reels de cada cuenta,
 2. calcula la **mediana de vistas** y el umbral viral (**mediana × 1,5**),
-3. los reels que superan el umbral se descargan a R2 (`referencias/<cuenta>/<código>.mp4`) y se guardan en
-   `referencias_videos` (`estado_triaje='pendiente'`), sin duplicados,
-4. actualiza `mediana_vistas`, `umbral_viral`, `total_procesados`, `total_extraidos` en `cuentas_referencia`.
+3. los reels de los últimos `SCRAPER_DIAS` (14) días que superan el umbral se descargan a R2
+   (`referencias/<cuenta>/<código>.mp4`) y se guardan en `referencias_videos` con sus métricas
+   (vistas, likes, comentarios, compartidos), sin duplicados,
+4. actualiza `mediana_vistas`, `umbral_viral`, `total_procesados`, `total_extraidos`.
 
-En el panel (**Instagram → Ideas virales**) revisas cada viral y pulsas **Aprobar y enviar**: eliges tipo (1-4) y modelo →
-se crea la `referencia` en el banco y un `encargo` que la modelo ve en su portal (“Tus vídeos pendientes”).
+**Necesita la cookie `sessionid` de una cuenta de Instagram dedicada** (`IG_SESSIONID`): sin sesión Instagram
+suele responder 429 a las IPs de servidor. Cómo sacarla: entra con esa cuenta en instagram.com desde Chrome →
+F12 → Application → Cookies → `sessionid`.
 
-Cada cuenta se analiza cada 24 h; “Scrapear todas” en el panel (o poner `ultimo_scrape_at = null`) la pone en cola
-y el runner la coge en menos de 1 minuto. Para lanzarlo ya desde el VPS:
+También descarga a R2 los vídeos que asignas por URL desde **Asignar vídeos** (`src/referencias.mjs`):
+enlaces de reels de Instagram (con la misma sesión) o URLs directas `.mp4`.
+
+Cada cuenta se analiza cada `SCRAPER_HORAS` (24) h; «Scrapear todas» en el panel la pone en cola y el
+runner la coge en menos de 1 minuto. Para lanzarlo ya desde el VPS:
 
 ```bash
-ssh root@94.143.143.73 'cd /opt/halo-runner && grep -q "^APIFY_TOKEN=" .env || echo "APIFY_TOKEN=apify_api_XXXX" >> .env; pm2 restart halo-runner --update-env && node src/scraper-cli.mjs'
+ssh root@94.143.143.73 'cd /opt/halo-runner && grep -q "^IG_SESSIONID=" .env || echo "IG_SESSIONID=PEGA_AQUI_TU_SESSIONID" >> .env; pm2 restart halo-runner --update-env && node src/scraper-cli.mjs'
 ```
-(sustituye `apify_api_XXXX` por tu token de https://console.apify.com/account/integrations)

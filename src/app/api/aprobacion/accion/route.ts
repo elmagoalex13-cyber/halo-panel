@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { programarPieza } from "@/lib/publer";
 import type { VideoEstado } from "@/types";
 
 const ESTADO_MAP: Record<string, string> = {
@@ -57,7 +58,9 @@ export async function PATCH(req: NextRequest) {
       })
       .then(() => undefined, () => undefined);
 
-    return NextResponse.json({ ok: true, estado: nuevoEstado });
+    // Aprobado => el agente lo programa en Publer segun las reglas de horario
+    const programacion = accion === "aprobar" ? await programarPieza(supabase, id) : undefined;
+    return NextResponse.json({ ok: true, estado: nuevoEstado, programacion });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
   }

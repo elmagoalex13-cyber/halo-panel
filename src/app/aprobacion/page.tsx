@@ -2,7 +2,6 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { MesaClient, type VideoRow } from "./MesaClient";
-import { TrialReelsMesa } from "./TrialReelsMesa";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +73,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       video_procesado_url: row.video_procesado_url ?? null,
       estado_procesamiento: row.estado_procesamiento ?? null,
       error_mensaje: row.error_mensaje ?? null,
+      programado_at: row.estado === "aprobado" ? row.publicado_at : null,
       caption: row.caption ?? "",
       frase_quemada: row.frase_quemada ?? "",
       correcciones: row.correcciones ?? "",
@@ -85,32 +85,14 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
   }
 }
 
-async function getModelosYCuentas() {
-  if (!canUseSupabase()) return { modelos: [], cuentas: [] };
-  try {
-    const supabase = createAdminClient();
-    const [{ data: modelos }, { data: cuentas }] = await Promise.all([
-      supabase.from("modelos").select("id, nombre").eq("activa", true).order("nombre"),
-      supabase.from("cuentas_instagram").select("id, username, modelo_id").order("username"),
-    ]);
-    return {
-      modelos: (modelos ?? []) as { id: string; nombre: string }[],
-      cuentas: (cuentas ?? []) as { id: string; username: string; modelo_id: string }[],
-    };
-  } catch {
-    return { modelos: [], cuentas: [] };
-  }
-}
-
 export default async function AprobacionPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
-  const tab = params.tab === "trial" ? "trial" : "reels";
   const estado = resolveEstado(params.estado);
-  const [rows, { modelos, cuentas }] = await Promise.all([getRows(estado), getModelosYCuentas()]);
+  const rows = await getRows(estado);
 
   const mainTabs = [
     { href: "/aprobacion?estado=en_aprobacion", estado: "en_aprobacion", label: "En aprobación" },
-    { href: "/aprobacion?estado=aprobado", estado: "aprobado", label: "Aprobados" },
+    { href: "/aprobacion?estado=aprobado", estado: "aprobado", label: "Aprobados (programados / para descargar)" },
     { href: "/aprobacion?estado=editando", estado: "editando", label: "Rehacer IA" },
   ];
 
@@ -119,27 +101,9 @@ export default async function AprobacionPage({ searchParams }: { searchParams: P
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="font-display text-xl font-semibold text-halo-text">Mesa de Aprobación</h1>
-          {/* Selector de sección principal */}
-          <div className="flex gap-1 rounded-xl border border-halo-border bg-halo-muted/20 p-1">
-            <a
-              href="/aprobacion?tab=reels"
-              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === "reels" ? "bg-halo-accent text-white" : "text-halo-subtle hover:text-halo-text"}`}
-            >
-              Reels
-            </a>
-            <a
-              href="/aprobacion?tab=trial"
-              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === "trial" ? "bg-halo-accent text-white" : "text-halo-subtle hover:text-halo-text"}`}
-            >
-              Trial Reels
-            </a>
-          </div>
         </div>
 
-        {tab === "trial" ? (
-          <TrialReelsMesa />
-        ) : (
-          <>
+        <>
             <div className="flex flex-wrap gap-2 text-xs">
               {mainTabs.map((t) => (
                 <a
@@ -153,9 +117,8 @@ export default async function AprobacionPage({ searchParams }: { searchParams: P
                 </a>
               ))}
             </div>
-            <MesaClient rows={rows} currentEstado={estado} modelos={modelos} cuentas={cuentas} />
-          </>
-        )}
+            <MesaClient rows={rows} currentEstado={estado} />
+        </>
       </div>
     </PanelLayout>
   );

@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { programarPendientes, publerActivo } from "@/lib/publer";
 import { Sidebar } from "@/components/Sidebar";
 import { syncRunnerResultados } from "@/lib/runnerSync";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
@@ -19,6 +21,8 @@ async function getApprovalCount() {
 
 export async function PanelLayout({ children }: { children: React.ReactNode }) {
   const approvalCount = await getApprovalCount();
+  // Aprobadas sin programar (p. ej. de antes de activar Publer): se programan en segundo plano
+  if (publerActivo() && canUseSupabase()) after(() => programarPendientes(createAdminClient()));
 
   return (
     <div className="min-h-screen pb-20 md:pb-0">

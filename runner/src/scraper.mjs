@@ -1,13 +1,13 @@
 /**
- * Scraper de referencias virales.
+ * Scraper propio de referencias virales (sin Apify).
  * Para cada cuenta activa de referencias (referencias_cuentas, espejada en cuentas_referencia):
- *   1. pide a Apify los ultimos reels de la cuenta,
+ *   1. lee los ultimos reels de la cuenta directamente de Instagram (instagram.mjs, cookie IG_SESSIONID),
  *   2. calcula la mediana de vistas y el umbral viral (mediana x factor, 1.5 por defecto),
- *   3. de los reels que superan el umbral, descarga el video y la miniatura a R2
- *      (referencias/<cuenta>/<codigo>.mp4|jpg) y los guarda en referencias_videos
- *      (estado_triaje='pendiente') para que se revisen en el panel (Instagram > Ideas virales),
+ *   3. de los reels de los ultimos SCRAPER_DIAS dias que superan el umbral, descarga el video y la
+ *      miniatura a R2 (referencias/<cuenta>/<codigo>.mp4|jpg) y los guarda en referencias_videos
+ *      (estado_triaje='pendiente') con sus metricas (vistas, likes, comentarios, compartidos),
  *   4. actualiza las estadisticas de la cuenta (mediana, umbral, procesados, extraidos).
- * Sin Telegram. Necesita APIFY_TOKEN en el .env del runner.
+ * Sin Telegram. Necesita IG_SESSIONID en el .env del runner.
  */
 import { mkdir, rm } from "fs/promises";
 import { createWriteStream } from "fs";
@@ -16,6 +16,7 @@ import { Readable } from "stream";
 import path from "path";
 import { config } from "./config.mjs";
 import { publicUrl, uploadToR2 } from "./r2.mjs";
+import { reelsDeCuenta } from "./instagram.mjs";
 
 export function mediana(valores) {
   if (!valores.length) return 0;
@@ -24,44 +25,21 @@ export function mediana(valores) {
   return orden.length % 2 ? orden[mitad] : Math.round((orden[mitad - 1] + orden[mitad]) / 2);
 }
 
-/** Normaliza un item de Apify (los actores nombran los campos distinto). */
-export function normalizarItem(it) {
-  const codigo = it.shortCode ?? it.shortcode ?? it.code ?? String(it.url ?? "").match(/\/(?:reel|p)\/([^/?]+)/)?.[1] ?? null;
-  const vistas = Number(it.videoPlayCount ?? it.playsCount ?? it.videoViewCount ?? it.viewsCount ?? it.views ?? 0) || 0;
-  return {
-    codigo,
-    vistas,
-    likes: Math.max(0, Number(it.likesCount ?? it.likes ?? 0) || 0),
-    videoUrl: it.videoUrl ?? it.video_url ?? null,
-    miniatura: it.displayUrl ?? it.thumbnailUrl ?? it.thumbnail ?? null,
-    descripcion: it.caption ?? it.text ?? null,
-    fecha: it.timestamp ?? it.takenAt ?? null,
-    esVideo: Boolean(it.videoUrl ?? it.video_url) || String(it.type ?? "").toLowerCase() === "video",
-  };
-}
-
 /** Devuelve { mediana, umbral, virales } de una lista de reels ya normalizados. */
 export function analizar(reels, factor = config.scraperFactor) {
   const validos = reels.filter((r) => r.codigo && r.vistas > 0);
   const med = mediana(validos.map((r) => r.vistas));
   const umbral = Math.round(med * factor);
-  const virales = validos.filter((r) => r.vistas > umbral && r.esVideo && r.videoUrl).sort((a, b) => b.vistas - a.vistas);
+  const desde = Date.now() - config.scraperDias * 86400000;
+  const virales = validos
+    .filter((r) => r.vistas > umbral && r.esVideo && r.videoUrl && (!r.fecha || new Date(r.fecha).getTime() >= desde))
+    .sort((a, b) => b.vistas - a.vistas);
   return { mediana: med, umbral, analizados: validos.length, virales };
 }
 
-async function pedirReels(username) {
-  if (!config.apifyToken) throw new Error("Falta APIFY_TOKEN en el .env del runner");
-  const url = `https://api.apify.com/v2/acts/${config.scraperActor}/run-sync-get-dataset-items?token=${config.apifyToken}&timeout=240`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: [username], resultsLimit: config.scraperMaxReels }),
-    signal: AbortSignal.timeout(280000),
-  });
-  if (!res.ok) throw new Error(`Apify ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const items = await res.json();
-  if (!Array.isArray(items)) throw new Error("Respuesta inesperada de Apify");
-  return items.map(normalizarItem);
+/** Metricas extra que la tabla no tiene como columna: se guardan en tags como "m:clave=valor". */
+export function tagsMetricas(reel) {
+  return [`m:codigo=${reel.codigo}`, `m:comentarios=${reel.comentarios ?? 0}`, `m:compartidos=${reel.compartidos ?? 0}`];
 }
 
 async function descargar(url, destino) {
@@ -98,12 +76,12 @@ async function subirReel(username, reel) {
 }
 
 /**
- * Analiza una cuenta. `reels` se puede inyectar (pruebas); si no, se piden a Apify.
+ * Analiza una cuenta. `reels` se puede inyectar (pruebas); si no, se leen de Instagram.
  * Devuelve un resumen { username, analizados, mediana, umbral, nuevos }.
  */
 export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
   const username = cuenta.username.replace(/^@/, "");
-  const reels = reelsInyectados ?? (await pedirReels(username));
+  const reels = reelsInyectados ?? (await reelsDeCuenta(username, config.scraperMaxReels));
   const { mediana: med, umbral, analizados, virales } = analizar(reels);
 
   const { data: existentes } = await supabase.from("referencias_videos").select("video_url").eq("cuenta_id", cuenta.id);
@@ -121,6 +99,7 @@ export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
         descripcion: reel.descripcion ? String(reel.descripcion).slice(0, 1000) : null,
         visitas: reel.vistas,
         likes: reel.likes,
+        tags: tagsMetricas(reel),
         fecha_publicacion: reel.fecha ? new Date(reel.fecha).toISOString() : null,
         estado_triaje: "pendiente",
       });
@@ -190,7 +169,7 @@ let corriendo = false;
  * panel basta con poner referencias_cuentas.ultimo_scrape_at = null.
  */
 export async function cicloScraper(supabase, { forzar = false } = {}) {
-  if (corriendo || !config.apifyToken) return;
+  if (corriendo) return;
   corriendo = true;
   try {
     const limite = Date.now() - config.scraperHoras * 3600000;

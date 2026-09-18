@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { AtSign, CheckCircle2, Clapperboard, Clock3, TrendingUp, UserCheck, Users, Wallet } from "lucide-react";
+import { publerActivo } from "@/lib/publer";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { GlassCard } from "@/components/GlassCard";
@@ -83,22 +84,23 @@ export default async function DashboardPage({
   }).length;
   const deltaReelsPct = reelsMesPasado ? Math.round(((reelsEsteMes - reelsMesPasado) / reelsMesPasado) * 100) : undefined;
 
-  type Pieza = LibraryContent & { estado_procesamiento?: string | null };
+  type Pieza = LibraryContent & { estado_procesamiento?: string | null; publicado_at?: string | null };
   const piezas = videos as Pieza[];
   const modelosActivas = modelos.filter((m) => m.activa).length;
   const aprobadosSemana = piezas.filter(
     (v) => (v.estado === "aprobado" || v.estado === "publicado") && v.aprobado_at && new Date(v.aprobado_at).getTime() >= weekAgo,
   ).length;
   const publicados = piezas.filter((v) => v.estado === "publicado").length;
+  const ahoraMs = Date.now();
+  const programadas = piezas.filter((v) => v.estado === "aprobado" && v.publicado_at && new Date(v.publicado_at).getTime() > ahoraMs).length;
+  const sinProgramar = piezas.filter((v) => v.estado === "aprobado" && !(v.publicado_at && new Date(v.publicado_at).getTime() > ahoraMs)).length;
   const etapas = [
-    { estado: "recibido", label: "Recibidos", href: "/biblioteca", desc: "por etiquetar" },
-    { estado: "clasificando", label: "Etiquetados", href: "/reparto", desc: "por repartir" },
-    { estado: "en_reparto", label: "En reparto", href: "/reparto", desc: "por confirmar" },
-    { estado: "editando", label: "Editando", href: "/aprobacion", desc: "en el runner" },
-    { estado: "en_aprobacion", label: "En aprobación", href: "/aprobacion", desc: "por revisar" },
-    { estado: "aprobado", label: "Aprobados", href: "/calendario", desc: "por publicar" },
-    { estado: "publicado", label: "Publicados", href: "/calendario", desc: "en redes" },
-  ].map((e) => ({ ...e, total: piezas.filter((v) => v.estado === e.estado).length }));
+    { label: "Editando", href: "/aprobacion?estado=editando", desc: "el editor IA los procesa", total: piezas.filter((v) => v.estado === "editando").length },
+    { label: "En aprobación", href: "/aprobacion", desc: "esperan tu decisión", total: piezas.filter((v) => v.estado === "en_aprobacion").length },
+    { label: "Sin programar", href: "/aprobacion?estado=aprobado", desc: "aprobados, para descargar", total: sinProgramar },
+    { label: "Programados", href: "/aprobacion?estado=aprobado", desc: "en Publer", total: programadas },
+    { label: "Publicados", href: "/aprobacion?estado=aprobado", desc: "ya en Instagram", total: piezas.filter((v) => v.estado === "publicado").length },
+  ].map((e) => ({ ...e, estado: e.label }));
   const maxEtapa = Math.max(1, ...etapas.map((e) => e.total));
   const rechazados = piezas.filter((v) => v.estado === "rechazado").length;
   const runnerPendiente = piezas.filter((v) => v.estado === "editando" && v.estado_procesamiento === "pendiente").length;
@@ -138,6 +140,9 @@ export default async function DashboardPage({
       : []),
     ...(modelosSinMaterial.length > 0
       ? [{ nivel: "amarillo" as NotifNivel, texto: `Sin material nuevo en 7+ días: ${modelosSinMaterial.map((m) => m.nombre).join(", ")}` }]
+      : []),
+    ...(sinProgramar > 0
+      ? [{ nivel: "amarillo" as NotifNivel, texto: publerActivo() ? `${sinProgramar} vídeo${sinProgramar > 1 ? "s" : ""} aprobado${sinProgramar > 1 ? "s" : ""} pendiente${sinProgramar > 1 ? "s" : ""} de programar en Publer` : `${sinProgramar} vídeo${sinProgramar > 1 ? "s" : ""} aprobado${sinProgramar > 1 ? "s" : ""} sin programar: Publer no está activo, descárgalo${sinProgramar > 1 ? "s" : ""} y súbelo${sinProgramar > 1 ? "s" : ""} tú`, href: "/aprobacion?estado=aprobado" }]
       : []),
     ...(runnerError > 0
       ? [{ nivel: "rojo" as NotifNivel, texto: `${runnerError} vídeo${runnerError > 1 ? "s" : ""} con error en el runner de edición`, href: "/aprobacion" }]
@@ -219,7 +224,7 @@ export default async function DashboardPage({
             <span className="badge">{rechazados} rechazados</span>
           </div>
         </div>
-        <ol className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
+        <ol className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {etapas.map((e, i) => (
             <li key={e.estado}>
               <Link
