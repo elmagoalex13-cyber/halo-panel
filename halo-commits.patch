@@ -1,0 +1,2254 @@
+From 3630a0e3c94b18b2f5cbb9997896c14a5193343e Mon Sep 17 00:00:00 2001
+From: Alex <alexyrebeca13@gmail.com>
+Date: Wed, 16 Sep 2026 16:03:07 +0000
+Subject: [PATCH 1/2] =?UTF-8?q?refactor:=20simplificar=20CRM=20=E2=80=94?=
+ =?UTF-8?q?=20solo=20flujo=20de=20aprobaci=C3=B3n?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Sidebar: eliminar Biblioteca, Reparto, Calendario y Métricas
+- Ajustes: eliminar sección Estrategia Instagram (pasa al bot)
+- Flujo queda: Modelos → Aprobación → Pubbler publica
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QC1K4FRTUnsjMs6ajTFr3D
+---
+ src/app/ajustes/AjustesClient.tsx | 137 ------------------------------
+ src/components/Sidebar.tsx        |  10 +--
+ 2 files changed, 3 insertions(+), 144 deletions(-)
+
+diff --git a/src/app/ajustes/AjustesClient.tsx b/src/app/ajustes/AjustesClient.tsx
+index 4d43008..5cce9cb 100644
+--- a/src/app/ajustes/AjustesClient.tsx
++++ b/src/app/ajustes/AjustesClient.tsx
+@@ -2,8 +2,6 @@
+ 
+ import { useEffect, useState } from "react";
+ 
+-const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+-
+ interface Config {
+   dias_alerta: number;
+   dias_critico: number;
+@@ -12,11 +10,6 @@ interface Config {
+   notif_telegram: boolean;
+   agencia_nombre: string;
+   moneda: string;
+-  // Instagram strategy
+-  hashtags: string[];           // 5 hashtags pool (sin #)
+-  posting_days: number[];       // 0=Dom..6=Sáb
+-  posting_times: string[];      // ["09:00", "18:00"]
+-  posts_per_day: number;
+   pubbler_workspace_id: string;
+   pubbler_api_key: string;
+ }
+@@ -29,10 +22,6 @@ const DEFAULTS: Config = {
+   notif_telegram: true,
+   agencia_nombre: "Halo Models",
+   moneda: "EUR",
+-  hashtags: ["", "", "", "", ""],
+-  posting_days: [1, 3, 5],
+-  posting_times: ["09:00", "18:00"],
+-  posts_per_day: 1,
+   pubbler_workspace_id: "",
+   pubbler_api_key: "",
+ };
+@@ -68,25 +57,6 @@ export function AjustesClient() {
+     setSaved(false);
+   }
+ 
+-  function setHashtag(index: number, value: string) {
+-    const next = [...config.hashtags];
+-    next[index] = value.replace(/^#/, "");
+-    set("hashtags", next);
+-  }
+-
+-  function setTime(index: number, value: string) {
+-    const next = [...config.posting_times];
+-    next[index] = value;
+-    set("posting_times", next);
+-  }
+-
+-  function toggleDay(day: number) {
+-    const next = config.posting_days.includes(day)
+-      ? config.posting_days.filter((d) => d !== day)
+-      : [...config.posting_days, day].sort();
+-    set("posting_days", next);
+-  }
+-
+   function save() {
+     try {
+       localStorage.setItem("halo-config", JSON.stringify(config));
+@@ -140,18 +110,6 @@ export function AjustesClient() {
+     } catch (e) { console.error(e); } finally { setTelegramLoading(false); }
+   }
+ 
+-  const hashtagCombinations = (() => {
+-    // All C(5,3) = 10 combinations for rotation preview
+-    const pool = config.hashtags.filter(Boolean);
+-    if (pool.length < 3) return [];
+-    const combos: string[][] = [];
+-    for (let i = 0; i < pool.length - 2; i++)
+-      for (let j = i + 1; j < pool.length - 1; j++)
+-        for (let k = j + 1; k < pool.length; k++)
+-          combos.push([pool[i], pool[j], pool[k]]);
+-    return combos;
+-  })();
+-
+   return (
+     <div className="max-w-2xl space-y-6">
+       {/* Alertas */}
+@@ -172,101 +130,6 @@ export function AjustesClient() {
+         </div>
+       </div>
+ 
+-      {/* Estrategia Instagram */}
+-      <div className="card space-y-5">
+-        <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Estrategia Instagram</h2>
+-
+-        {/* Hashtags */}
+-        <div>
+-          <p className="mb-2 text-xs font-medium text-halo-text">Pool de hashtags (5 fijos — se rotan 3 por vídeo)</p>
+-          <div className="grid grid-cols-5 gap-2">
+-            {[0,1,2,3,4].map((i) => (
+-              <input
+-                key={i}
+-                className="input-base text-xs"
+-                value={config.hashtags[i] ?? ""}
+-                onChange={(e) => setHashtag(i, e.target.value)}
+-                placeholder={`hashtag ${i+1}`}
+-              />
+-            ))}
+-          </div>
+-          {hashtagCombinations.length > 0 && (
+-            <p className="mt-1.5 text-[10px] text-halo-subtle">
+-              {hashtagCombinations.length} combinaciones disponibles · ejemplo próximo vídeo: #{hashtagCombinations[0].join(" #")}
+-            </p>
+-          )}
+-        </div>
+-
+-        {/* Días de publicación */}
+-        <div>
+-          <p className="mb-2 text-xs font-medium text-halo-text">Días de publicación</p>
+-          <div className="flex gap-2 flex-wrap">
+-            {DIAS_SEMANA.map((label, day) => (
+-              <button
+-                key={day}
+-                type="button"
+-                onClick={() => toggleDay(day)}
+-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+-                  config.posting_days.includes(day)
+-                    ? "bg-halo-accent text-white"
+-                    : "border border-halo-border bg-halo-surface text-halo-subtle hover:text-halo-text"
+-                }`}
+-              >
+-                {label}
+-              </button>
+-            ))}
+-          </div>
+-        </div>
+-
+-        {/* Horarios */}
+-        <div>
+-          <p className="mb-2 text-xs font-medium text-halo-text">Horarios de publicación</p>
+-          <div className="flex gap-2 items-center flex-wrap">
+-            {config.posting_times.map((t, i) => (
+-              <input
+-                key={i}
+-                type="time"
+-                value={t}
+-                onChange={(e) => setTime(i, e.target.value)}
+-                className="input-base w-28 text-sm"
+-              />
+-            ))}
+-            {config.posting_times.length < 3 && (
+-              <button
+-                type="button"
+-                onClick={() => set("posting_times", [...config.posting_times, "12:00"])}
+-                className="btn-secondary px-3 py-1 text-xs"
+-              >
+-                + Horario
+-              </button>
+-            )}
+-            {config.posting_times.length > 1 && (
+-              <button
+-                type="button"
+-                onClick={() => set("posting_times", config.posting_times.slice(0, -1))}
+-                className="text-xs text-red-400 hover:text-red-300"
+-              >
+-                − quitar último
+-              </button>
+-            )}
+-          </div>
+-        </div>
+-
+-        {/* Posts por día */}
+-        <Range
+-          label="Posts por día de publicación"
+-          value={config.posts_per_day}
+-          min={1}
+-          max={3}
+-          accent="accent-halo-accent"
+-          onChange={(v) => set("posts_per_day", v)}
+-        />
+-
+-        <div className="rounded-lg border border-halo-border/60 bg-halo-bg/50 p-2.5 text-[11px] text-halo-subtle">
+-          Con esta configuración: <span className="text-halo-text font-medium">{config.posting_days.length * config.posts_per_day} vídeos/semana</span> · Los horarios se asignan automáticamente al aprobar (cuando Pubbler esté activo)
+-        </div>
+-      </div>
+-
+       {/* Pubbler */}
+       <div className="card space-y-4">
+         <div className="flex items-center justify-between">
+diff --git a/src/components/Sidebar.tsx b/src/components/Sidebar.tsx
+index 83fa08a..ca9205d 100644
+--- a/src/components/Sidebar.tsx
++++ b/src/components/Sidebar.tsx
+@@ -5,15 +5,11 @@ import { usePathname } from "next/navigation";
+ 
+ const NAV = [
+   { href: "/dashboard", label: "Dashboard", icon: "◈" },
+-  { href: "/aprobacion", label: "Mesa Aprobacion", icon: "⏳", badge: true },
+-  { href: "/biblioteca", label: "Biblioteca", icon: "◫" },
+-  { href: "/reparto", label: "Reparto", icon: "⇄" },
+-  { href: "/calendario", label: "Calendario", icon: "▦" },
+-  { href: "/metricas", label: "Métricas", icon: "◑" },
++  { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
+   { href: "/instagram", label: "Instagram", icon: "◎" },
+   { href: "/modelos", label: "Modelos", icon: "◉" },
+-  { href: "/frases", label: "Frases", icon: "✦" },
+-  { href: "/facturacion", label: "Facturacion", icon: "◎" },
++  { href: "/frases", label: "Frases IA", icon: "✦" },
++  { href: "/facturacion", label: "Facturación", icon: "◎" },
+   { href: "/logs", label: "Actividad", icon: "◌" },
+   { href: "/vault", label: "Vault", icon: "◆" },
+   { href: "/ajustes", label: "Ajustes", icon: "⚙" },
+-- 
+2.43.0
+
+
+From 5892539c4f3a5a68a12dd3a408c99044a8211f1b Mon Sep 17 00:00:00 2001
+From: Alex <alexyrebeca13@gmail.com>
+Date: Wed, 16 Sep 2026 17:13:04 +0000
+Subject: [PATCH 2/2] feat: runner Ionos completo + Trial Reels + Tipo 4 +
+ Ajustes simplificados
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Panel (Next.js):
+- Mesa Aprobación: añade pestaña Trial Reels con TrialReelsMesa.tsx
+  - Grid de cards con stats del vídeo original (views, likes, usos, riesgo)
+  - Modal con vídeo original + spoofeado lado a lado, SpooferBadge, aprobar/rechazar
+- MesaClient: Tipo 4 auto-expande paneles referencia y original (vista 3 paneles)
+- API /api/trial-reels: GET lista pendientes, PATCH aprobar/rechazar
+- Ajustes: simplificados (solo Pubbler, Telegram, R2 admin)
+
+Runner Ionos (runner/):
+- index.mjs: loop PM2, polling Supabase cada POLL_INTERVAL_MS
+- tipos.mjs: handlers procesarTipo1/2/3/4
+- spoofer.mjs: agente spoofer para trial reels pendientes
+- ffmpeg.mjs: renderTipo1/2/3/4 + renderSpoofer (recorte+zoom+eq+sin metadatos)
+- whisper.mjs: extractAudio, transcribeWithWhisper, generateASS
+- r2.mjs: downloadFromR2, uploadToR2, deleteFromR2, publicUrl
+- telegram.mjs: sendTelegram, notificarPiezaLista, notificarTrialListo, notificarError
+- ecosystem.config.cjs: configuración PM2 con reinicio exponencial
+- migrations/001_runner_fields.sql: campos intentos_edicion, tiene_locucion, etc.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01QC1K4FRTUnsjMs6ajTFr3D
+---
+ runner/README.md                        |  77 +++++++
+ runner/ecosystem.config.cjs             |  34 +++
+ runner/migrations/001_runner_fields.sql |  39 ++++
+ runner/package.json                     |  18 ++
+ runner/src/ffmpeg.mjs                   | 243 ++++++++++++++++++++++
+ runner/src/index.mjs                    | 167 +++++++++++++++
+ runner/src/r2.mjs                       |  68 ++++++
+ runner/src/spoofer.mjs                  | 157 ++++++++++++++
+ runner/src/telegram.mjs                 |  75 +++++++
+ runner/src/tipos.mjs                    | 223 ++++++++++++++++++++
+ runner/src/whisper.mjs                  | 124 +++++++++++
+ src/app/ajustes/AjustesClient.tsx       |  67 ++----
+ src/app/api/trial-reels/route.ts        | 147 +++++++++++++
+ src/app/aprobacion/MesaClient.tsx       |  11 +-
+ src/app/aprobacion/TrialReelsMesa.tsx   | 263 ++++++++++++++++++++++++
+ src/app/aprobacion/page.tsx             |  59 ++++--
+ 16 files changed, 1705 insertions(+), 67 deletions(-)
+ create mode 100644 runner/README.md
+ create mode 100644 runner/ecosystem.config.cjs
+ create mode 100644 runner/migrations/001_runner_fields.sql
+ create mode 100644 runner/package.json
+ create mode 100644 runner/src/ffmpeg.mjs
+ create mode 100644 runner/src/index.mjs
+ create mode 100644 runner/src/r2.mjs
+ create mode 100644 runner/src/spoofer.mjs
+ create mode 100644 runner/src/telegram.mjs
+ create mode 100644 runner/src/tipos.mjs
+ create mode 100644 runner/src/whisper.mjs
+ create mode 100644 src/app/api/trial-reels/route.ts
+ create mode 100644 src/app/aprobacion/TrialReelsMesa.tsx
+
+diff --git a/runner/README.md b/runner/README.md
+new file mode 100644
+index 0000000..3c51995
+--- /dev/null
++++ b/runner/README.md
+@@ -0,0 +1,77 @@
++# HALO Runner — Editor de vídeo en Ionos
++
++Runner Node.js que procesa piezas de vídeo con ffmpeg + Whisper.
++Se despliega en el servidor Ionos mediante PM2.
++
++## Requisitos en el servidor
++
++- Node.js ≥ 20
++- PM2 (`npm install -g pm2`)
++- ffmpeg + ffprobe instalados y en PATH
++- whisper.cpp compilado (`whisper-cpp` o la ruta que definas en `.env`)
++- Modelo Whisper: `ggml-small.bin` en `/opt/whisper/`
++
++## Instalación
++
++```bash
++# 1. Copiar la carpeta runner al servidor
++scp -r runner/ usuario@ionos-server:/opt/halo-runner
++
++# 2. En el servidor
++cd /opt/halo-runner
++cp .env.example .env
++nano .env  # Rellenar todos los valores
++
++# 3. Instalar dependencias
++npm install
++
++# 4. Aplicar migración SQL en Supabase
++# (pegar el contenido de migrations/001_runner_fields.sql en el SQL Editor)
++
++# 5. Crear directorio de logs
++mkdir -p /var/log/halo-runner
++
++# 6. Iniciar con PM2
++pm2 start ecosystem.config.cjs
++pm2 save
++pm2 startup  # Seguir las instrucciones para auto-arranque
++```
++
++## Comandos útiles
++
++```bash
++pm2 status               # Ver estado del proceso
++pm2 logs halo-runner     # Ver logs en tiempo real
++pm2 restart halo-runner  # Reiniciar
++pm2 stop halo-runner     # Parar
++```
++
++## Flujo de procesado
++
++```
++Supabase (estado='editando')
++  → Descarga bruto de R2
++  → [Tipo 1/3] Whisper: extrae audio WAV → transcribe → genera .ass
++  → [Tipo 2]   ffmpeg: reencuadra + quema frase + audio referencia
++  → [Tipo 4]   ffmpeg: replica estructura del vídeo referencia
++  → Sube editado a R2 (carpeta editado/)
++  → Actualiza estado → 'en_aprobacion'
++  → Telegram: notificación al admin
++
++Supabase (trial_reels.estado='pendiente_spoofer')
++  → Descarga original de R2
++  → ffmpeg: recorte + zoom + eq (brillo/contraste/saturación)
++  → Elimina metadatos
++  → Sube a R2 (carpeta trial/)
++  → Actualiza estado → 'pendiente_aprobacion'
++  → Telegram: notificación al admin
++```
++
++## Tipos de vídeo
++
++| Tipo | Descripción | Herramientas |
++|------|-------------|--------------|
++| tipo1 | Hablando a cámara | Whisper (subtítulos) + ffmpeg |
++| tipo2 | Caption/Frase | ffmpeg (drawtext) + audio referencia opcional |
++| tipo3 | Reto | Whisper (subtítulos) + ffmpeg (freeze frame final) |
++| tipo4 | Con vídeo referencia | ffmpeg (replica duración y estructura) |
+diff --git a/runner/ecosystem.config.cjs b/runner/ecosystem.config.cjs
+new file mode 100644
+index 0000000..2aa2024
+--- /dev/null
++++ b/runner/ecosystem.config.cjs
+@@ -0,0 +1,34 @@
++/**
++ * PM2 Ecosystem — HALO Runner
++ *
++ * Despliegue en Ionos:
++ *   cd /opt/halo-runner
++ *   cp .env.example .env   # rellenar valores reales
++ *   npm install
++ *   pm2 start ecosystem.config.cjs
++ *   pm2 save
++ *   pm2 startup
++ */
++module.exports = {
++  apps: [
++    {
++      name: "halo-runner",
++      script: "src/index.mjs",
++      cwd: __dirname,
++      instances: 1,
++      autorestart: true,
++      watch: false,
++      max_memory_restart: "512M",
++      env: {
++        NODE_ENV: "production",
++      },
++      // Logs
++      out_file: "/var/log/halo-runner/out.log",
++      error_file: "/var/log/halo-runner/err.log",
++      merge_logs: true,
++      log_date_format: "YYYY-MM-DD HH:mm:ss",
++      // Reinicio exponencial en errores: 1s → 2s → 4s … hasta 30s
++      exp_backoff_restart_delay: 1000,
++    },
++  ],
++};
+diff --git a/runner/migrations/001_runner_fields.sql b/runner/migrations/001_runner_fields.sql
+new file mode 100644
+index 0000000..b5fa771
+--- /dev/null
++++ b/runner/migrations/001_runner_fields.sql
+@@ -0,0 +1,39 @@
++-- Migración: campos requeridos por el runner en Ionos
++-- Aplicar en Supabase SQL Editor
++
++-- Campos para el control de reintentos de edición
++ALTER TABLE library_content
++  ADD COLUMN IF NOT EXISTS intentos_edicion smallint DEFAULT 0,
++  ADD COLUMN IF NOT EXISTS tiene_locucion boolean DEFAULT false,
++  ADD COLUMN IF NOT EXISTS error_detalle text,
++  ADD COLUMN IF NOT EXISTS editado_en timestamptz;
++
++-- Campos en trial_reels para el spoofer
++ALTER TABLE trial_reels
++  ADD COLUMN IF NOT EXISTS spoofeado_at timestamptz,
++  ADD COLUMN IF NOT EXISTS pieza_origen_r2_key text,  -- r2_key de la pieza original
++  ADD COLUMN IF NOT EXISTS pieza_origen_tipo text;    -- tipo_video de la pieza original
++
++-- Índices de rendimiento para el polling del runner
++CREATE INDEX IF NOT EXISTS idx_library_content_estado
++  ON library_content(estado)
++  WHERE estado IN ('editando', 'en_aprobacion');
++
++CREATE INDEX IF NOT EXISTS idx_trial_reels_estado
++  ON trial_reels(estado)
++  WHERE estado IN ('pendiente_spoofer', 'pendiente_aprobacion');
++
++-- Vista útil para debug del runner
++CREATE OR REPLACE VIEW v_runner_queue AS
++SELECT
++  id,
++  titulo,
++  tipo_video,
++  estado,
++  intentos_edicion,
++  recibido_at,
++  editado_en,
++  error_detalle
++FROM library_content
++WHERE estado IN ('editando', 'error_edicion')
++ORDER BY recibido_at ASC;
+diff --git a/runner/package.json b/runner/package.json
+new file mode 100644
+index 0000000..14d4813
+--- /dev/null
++++ b/runner/package.json
+@@ -0,0 +1,18 @@
++{
++  "name": "halo-runner",
++  "version": "1.0.0",
++  "description": "Runner de edición de vídeo para HALO MODELS (Ionos)",
++  "type": "module",
++  "scripts": {
++    "start": "node src/index.mjs",
++    "dev": "node --watch src/index.mjs"
++  },
++  "dependencies": {
++    "@aws-sdk/client-s3": "^3.600.0",
++    "@supabase/supabase-js": "^2.44.0",
++    "node-fetch": "^3.3.2"
++  },
++  "engines": {
++    "node": ">=20"
++  }
++}
+diff --git a/runner/src/ffmpeg.mjs b/runner/src/ffmpeg.mjs
+new file mode 100644
+index 0000000..f6d0c91
+--- /dev/null
++++ b/runner/src/ffmpeg.mjs
+@@ -0,0 +1,243 @@
++import { execFile } from "child_process";
++import { promisify } from "util";
++import { mkdir, writeFile } from "fs/promises";
++import path from "path";
++
++const execFileAsync = promisify(execFile);
++
++const FFMPEG = process.env.FFMPEG_BIN ?? "ffmpeg";
++const FFPROBE = process.env.FFPROBE_BIN ?? "ffprobe";
++
++/**
++ * Obtiene la duración en segundos de un vídeo.
++ * @param {string} videoPath
++ * @returns {number}
++ */
++export async function getDuration(videoPath) {
++  const { stdout } = await execFileAsync(FFPROBE, [
++    "-v", "quiet",
++    "-print_format", "json",
++    "-show_streams",
++    videoPath,
++  ]);
++  const info = JSON.parse(stdout);
++  const stream = info.streams?.find((s) => s.codec_type === "video");
++  return parseFloat(stream?.duration ?? info.format?.duration ?? "0");
++}
++
++/**
++ * Base de filtros comunes: reframe a 9:16 centrado, escalar a 1080×1920.
++ * @param {object} opts
++ * @param {boolean} [opts.zoom] - Si aplicar zoom suave (spoofer)
++ * @param {number} [opts.zoomFactor] - Factor de zoom (default 1.03)
++ */
++function buildVideoFilter({ zoom = false, zoomFactor = 1.03 } = {}) {
++  const scale = zoom
++    ? `scale=iw*${zoomFactor}:ih*${zoomFactor},crop=1080:1920`
++    : `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920`;
++  return scale;
++}
++
++/**
++ * Tipo 1: hablando a cámara → subtítulos Whisper quemados.
++ * @param {string} inputPath
++ * @param {string} assPath - Ruta del archivo .ass generado
++ * @param {string} outputPath
++ */
++export async function renderTipo1(inputPath, assPath, outputPath) {
++  await mkdir(path.dirname(outputPath), { recursive: true });
++  const vf = [
++    buildVideoFilter(),
++    `ass='${assPath.replace(/'/g, "\\'")}'`,
++  ].join(",");
++
++  await execFileAsync(FFMPEG, [
++    "-y",
++    "-i", inputPath,
++    "-vf", vf,
++    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
++    "-c:a", "aac", "-b:a", "128k",
++    "-movflags", "+faststart",
++    "-pix_fmt", "yuv420p",
++    outputPath,
++  ]);
++}
++
++/**
++ * Tipo 2: caption/frase superpuesta (drawtext) + audio de referencia opcional.
++ * @param {string} inputPath
++ * @param {string} outputPath
++ * @param {object} opts
++ * @param {string} [opts.frase] - Texto a quemar en el vídeo
++ * @param {string} [opts.audioRefPath] - Ruta del audio de referencia (si existe)
++ */
++export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath } = {}) {
++  await mkdir(path.dirname(outputPath), { recursive: true });
++
++  const textFilter = frase
++    ? `,drawtext=text='${frase.replace(/'/g, "\\'").replace(/:/g, "\\:")}':` +
++      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:` +
++      `fontsize=72:fontcolor=white:borderw=4:bordercolor=black:` +
++      `x=(w-text_w)/2:y=h-text_h-120:` +
++      `enable='between(t,0,duration)'`
++    : "";
++
++  const vf = buildVideoFilter() + textFilter;
++
++  const args = ["-y", "-i", inputPath];
++  if (audioRefPath) {
++    args.push("-i", audioRefPath, "-map", "0:v", "-map", "1:a");
++  }
++  args.push(
++    "-vf", vf,
++    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
++    "-c:a", "aac", "-b:a", "128k",
++    "-movflags", "+faststart",
++    "-pix_fmt", "yuv420p",
++    "-shortest",
++    outputPath
++  );
++
++  await execFileAsync(FFMPEG, args);
++}
++
++/**
++ * Tipo 3: reto → subtítulos Whisper + freeze frame final.
++ * @param {string} inputPath
++ * @param {string} assPath
++ * @param {string} outputPath
++ * @param {number} freezeDuration - Segundos de freeze al final (default 2)
++ */
++export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration = 2) {
++  await mkdir(path.dirname(outputPath), { recursive: true });
++
++  const duration = await getDuration(inputPath);
++  const freezeStart = Math.max(0, duration - 0.05);
++  const tmpFreeze = outputPath.replace(".mp4", "_freeze.mp4");
++
++  // 1. Congelar último frame
++  await execFileAsync(FFMPEG, [
++    "-y",
++    "-i", inputPath,
++    "-vf", `trim=start=${freezeStart},setpts=PTS-STARTPTS,` +
++           `tpad=stop_mode=clone:stop_duration=${freezeDuration}`,
++    "-af", `atrim=start=${freezeStart},asetpts=PTS-STARTPTS,` +
++           `apad=pad_dur=${freezeDuration}`,
++    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
++    "-c:a", "aac", "-b:a", "128k",
++    "-pix_fmt", "yuv420p",
++    tmpFreeze,
++  ]);
++
++  // 2. Concatenar original + freeze, reframe, quemar subtítulos
++  const concatList = outputPath.replace(".mp4", "_concat.txt");
++  await writeFile(concatList, `file '${inputPath}'\nfile '${tmpFreeze}'\n`);
++
++  const vf = [
++    buildVideoFilter(),
++    `ass='${assPath.replace(/'/g, "\\'")}'`,
++  ].join(",");
++
++  await execFileAsync(FFMPEG, [
++    "-y",
++    "-f", "concat", "-safe", "0",
++    "-i", concatList,
++    "-vf", vf,
++    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
++    "-c:a", "aac", "-b:a", "128k",
++    "-movflags", "+faststart",
++    "-pix_fmt", "yuv420p",
++    outputPath,
++  ]);
++}
++
++/**
++ * Tipo 4: copia exacta de estructura del vídeo de referencia.
++ * Aplica los mismos filtros de color/crop que el referencia, detectados por ffprobe.
++ * En la práctica: reframe + subtítulos si los hay + mismo aspect ratio.
++ * @param {string} inputPath - Vídeo bruto original
++ * @param {string} refPath - Vídeo de referencia ya editado
++ * @param {string} outputPath
++ * @param {string|null} assPath - Subtítulos si aplica
++ */
++export async function renderTipo4(inputPath, refPath, outputPath, assPath = null) {
++  await mkdir(path.dirname(outputPath), { recursive: true });
++
++  const refDuration = await getDuration(refPath);
++
++  // Recortar el bruto a la duración de referencia y aplicar mismo tratamiento
++  const vfParts = [buildVideoFilter()];
++  if (assPath) {
++    vfParts.push(`ass='${assPath.replace(/'/g, "\\'")}'`);
++  }
++  const vf = vfParts.join(",");
++
++  await execFileAsync(FFMPEG, [
++    "-y",
++    "-i", inputPath,
++    "-t", String(refDuration),
++    "-vf", vf,
++    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
++    "-c:a", "aac", "-b:a", "128k",
++    "-movflags", "+faststart",
++    "-pix_fmt", "yuv420p",
++    outputPath,
++  ]);
++}
++
++/**
++ * Spoofer: variaciones técnicas ligeras para trial reels.
++ * @param {string} inputPath
++ * @param {string} outputPath
++ * @param {object} params - Parámetros del spoofer
++ * @param {number} [params.trim_start=1] - Segundos a cortar al inicio
++ * @param {number} [params.trim_end=1] - Segundos a cortar al final
++ * @param {number} [params.zoom=1.03] - Factor de zoom
++ * @param {number} [params.brightness=1.0] - Ajuste de brillo (eq)
++ * @param {number} [params.contrast=1.0] - Ajuste de contraste (eq)
++ * @param {number} [params.saturation=1.0] - Ajuste de saturación (eq)
++ */
++export async function renderSpoofer(inputPath, outputPath, params = {}) {
++  await mkdir(path.dirname(outputPath), { recursive: true });
++
++  const {
++    trim_start = 1,
++    trim_end = 1,
++    zoom = 1.03,
++    brightness = 1.0,
++    contrast = 1.0,
++    saturation = 1.0,
++  } = params;
++
++  const duration = await getDuration(inputPath);
++  const trimmedEnd = Math.max(0, duration - trim_end);
++
++  // eq filter: brightness va de -1 a 1 (0=neutro), contrast de 0 a 2 (1=neutro)
++  // Mapeamos nuestro factor (1.0=neutro) → eq escala
++  const eqBrightness = brightness - 1.0; // ej: 1.02 → 0.02
++  const eqContrast = contrast;           // eq acepta 0-2 directamente
++  const eqSaturation = saturation;       // idem
++
++  const vf = [
++    `trim=start=${trim_start}:end=${trimmedEnd},setpts=PTS-STARTPTS`,
++    `scale=iw*${zoom}:ih*${zoom}`,
++    `crop=1080:1920`,
++    `eq=brightness=${eqBrightness.toFixed(3)}:contrast=${eqContrast.toFixed(3)}:saturation=${eqSaturation.toFixed(3)}`,
++  ].join(",");
++
++  const af = `atrim=start=${trim_start}:end=${trimmedEnd},asetpts=PTS-STARTPTS`;
++
++  await execFileAsync(FFMPEG, [
++    "-y",
++    "-i", inputPath,
++    "-vf", vf,
++    "-af", af,
++    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
++    "-c:a", "aac", "-b:a", "128k",
++    "-movflags", "+faststart",
++    "-pix_fmt", "yuv420p",
++    // Borrar metadatos para el spoofer
++    "-map_metadata", "-1",
++    outputPath,
++  ]);
++}
+diff --git a/runner/src/index.mjs b/runner/src/index.mjs
+new file mode 100644
+index 0000000..ac37c21
+--- /dev/null
++++ b/runner/src/index.mjs
+@@ -0,0 +1,167 @@
++/**
++ * HALO MODELS — Runner de edición para Ionos
++ * ==========================================
++ * Proceso PM2 que corre indefinidamente, polling Supabase cada POLL_INTERVAL_MS.
++ *
++ * Ciclo principal:
++ * 1. Busca piezas en library_content con estado = 'editando'
++ * 2. Para cada pieza: descarga bruto de R2, procesa (tipo 1/2/3/4), sube editado a R2
++ * 3. Actualiza estado a 'en_aprobacion' en Supabase
++ * 4. Notifica al admin por Telegram
++ * 5. También busca trial_reels con estado = 'pendiente_spoofer' y ejecuta el spoofer
++ */
++
++import "dotenv/config";
++import { createClient } from "@supabase/supabase-js";
++import { procesarTipo1, procesarTipo2, procesarTipo3, procesarTipo4 } from "./tipos.mjs";
++import { procesarTrialsPendientes } from "./spoofer.mjs";
++import { notificarPiezaLista, notificarError, sendTelegram } from "./telegram.mjs";
++
++// ─── Configuración ────────────────────────────────────────────────────────────
++const SUPABASE_URL = process.env.SUPABASE_URL;
++const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
++const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS ?? "60000", 10);
++const MAX_INTENTOS = parseInt(process.env.MAX_INTENTOS ?? "3", 10);
++const MAX_PIEZAS_POR_VUELTA = parseInt(process.env.MAX_PIEZAS_POR_VUELTA ?? "3", 10);
++
++if (!SUPABASE_URL || !SUPABASE_KEY) {
++  console.error("❌ Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env");
++  process.exit(1);
++}
++
++if (!process.env.R2_ENDPOINT || !process.env.R2_ACCESS_KEY_ID) {
++  console.error("❌ Faltan variables de Cloudflare R2 en .env");
++  process.exit(1);
++}
++
++// ─── Cliente Supabase ─────────────────────────────────────────────────────────
++const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
++  auth: { persistSession: false },
++});
++
++// ─── Ciclo principal ──────────────────────────────────────────────────────────
++async function procesarPiezasPendientes() {
++  const { data: piezas, error } = await supabase
++    .from("library_content")
++    .select(`
++      id, titulo, tipo_video, r2_key, r2_key_referencia,
++      frase_quemada, correcciones, intentos_edicion,
++      tiene_locucion,
++      modelo:modelos(nombre)
++    `)
++    .eq("estado", "editando")
++    .order("recibido_at", { ascending: true })
++    .limit(MAX_PIEZAS_POR_VUELTA);
++
++  if (error) {
++    console.error("[runner] Error al consultar Supabase:", error.message);
++    return;
++  }
++
++  if (!piezas || piezas.length === 0) return;
++
++  console.log(`[runner] ${piezas.length} pieza(s) pendiente(s) de edición`);
++
++  for (const pieza of piezas) {
++    await procesarPieza(pieza);
++  }
++}
++
++async function procesarPieza(pieza) {
++  const intentos = pieza.intentos_edicion ?? 0;
++  if (intentos >= MAX_INTENTOS) {
++    console.warn(`[runner] Pieza ${pieza.id} alcanzó MAX_INTENTOS — marcando como error`);
++    await supabase
++      .from("library_content")
++      .update({ estado: "error_edicion" })
++      .eq("id", pieza.id);
++    await notificarError(`Pieza ${pieza.id} (${pieza.titulo ?? "sin título"})`, new Error("Máximo de intentos alcanzado"));
++    return;
++  }
++
++  // Incrementar contador de intentos antes de empezar
++  await supabase
++    .from("library_content")
++    .update({ intentos_edicion: intentos + 1 })
++    .eq("id", pieza.id);
++
++  const tipo = pieza.tipo_video;
++  const modeloNombre = pieza.modelo?.nombre ?? "—";
++  console.log(`[runner] Procesando pieza ${pieza.id} — tipo: ${tipo} — modelo: ${modeloNombre}`);
++
++  try {
++    switch (tipo) {
++      case "tipo1":
++        await procesarTipo1(pieza, supabase);
++        break;
++      case "tipo2":
++        await procesarTipo2(pieza, supabase);
++        break;
++      case "tipo3":
++        await procesarTipo3(pieza, supabase);
++        break;
++      case "tipo4":
++        await procesarTipo4(pieza, supabase);
++        break;
++      default:
++        console.warn(`[runner] Tipo de vídeo desconocido: ${tipo} — pieza ${pieza.id}`);
++        await supabase
++          .from("library_content")
++          .update({ estado: "error_edicion" })
++          .eq("id", pieza.id);
++        return;
++    }
++
++    console.log(`[runner] ✅ Pieza ${pieza.id} procesada correctamente`);
++    await notificarPiezaLista({
++      titulo: pieza.titulo ?? "Sin título",
++      tipo,
++      modelo: modeloNombre,
++    });
++  } catch (err) {
++    console.error(`[runner] Error procesando pieza ${pieza.id}:`, err.message);
++
++    // Si quedan más intentos, dejar en 'editando' para reintentar en el próximo ciclo
++    if (intentos + 1 < MAX_INTENTOS) {
++      console.log(`[runner] Se reintentará en el próximo ciclo (intento ${intentos + 1}/${MAX_INTENTOS})`);
++    } else {
++      await supabase
++        .from("library_content")
++        .update({ estado: "error_edicion" })
++        .eq("id", pieza.id);
++      await notificarError(`Pieza ${pieza.id} (${pieza.titulo ?? "sin título"})`, err);
++    }
++  }
++}
++
++// ─── Loop principal ───────────────────────────────────────────────────────────
++async function ciclo() {
++  try {
++    await procesarPiezasPendientes();
++    await procesarTrialsPendientes(supabase);
++  } catch (err) {
++    console.error("[runner] Error inesperado en el ciclo:", err.message);
++    await notificarError("Ciclo principal del runner", err);
++  }
++}
++
++async function main() {
++  console.log("🎬 HALO Runner iniciado");
++  console.log(`   Polling cada ${POLL_INTERVAL_MS / 1000}s`);
++  console.log(`   Máximo ${MAX_PIEZAS_POR_VUELTA} piezas por vuelta`);
++  console.log(`   Máximo ${MAX_INTENTOS} intentos por pieza`);
++  console.log(`   Supabase: ${SUPABASE_URL}`);
++
++  await sendTelegram("🟢 *HALO Runner iniciado* — el sistema de edición está activo.");
++
++  // Primer ciclo inmediato
++  await ciclo();
++
++  // Ciclos periódicos
++  setInterval(ciclo, POLL_INTERVAL_MS);
++}
++
++main().catch((err) => {
++  console.error("❌ Error fatal en el runner:", err);
++  process.exit(1);
++});
+diff --git a/runner/src/r2.mjs b/runner/src/r2.mjs
+new file mode 100644
+index 0000000..bb44b94
+--- /dev/null
++++ b/runner/src/r2.mjs
+@@ -0,0 +1,68 @@
++import {
++  S3Client,
++  GetObjectCommand,
++  PutObjectCommand,
++  DeleteObjectCommand,
++} from "@aws-sdk/client-s3";
++import { createWriteStream, createReadStream } from "fs";
++import { pipeline } from "stream/promises";
++import { mkdir } from "fs/promises";
++import path from "path";
++
++const s3 = new S3Client({
++  region: "auto",
++  endpoint: process.env.R2_ENDPOINT,
++  credentials: {
++    accessKeyId: process.env.R2_ACCESS_KEY_ID,
++    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
++  },
++});
++
++const BUCKET = process.env.R2_BUCKET;
++
++/**
++ * Descarga un objeto de R2 a un archivo local.
++ * @param {string} key - Clave en R2 (ej: "bruto/uuid.mp4")
++ * @param {string} destPath - Ruta local donde guardar el archivo
++ */
++export async function downloadFromR2(key, destPath) {
++  await mkdir(path.dirname(destPath), { recursive: true });
++  const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
++  const { Body } = await s3.send(cmd);
++  await pipeline(Body, createWriteStream(destPath));
++}
++
++/**
++ * Sube un archivo local a R2.
++ * @param {string} localPath - Ruta local del archivo
++ * @param {string} key - Clave destino en R2
++ * @param {string} contentType - MIME type del archivo
++ */
++export async function uploadToR2(localPath, key, contentType = "video/mp4") {
++  const body = createReadStream(localPath);
++  const cmd = new PutObjectCommand({
++    Bucket: BUCKET,
++    Key: key,
++    Body: body,
++    ContentType: contentType,
++  });
++  await s3.send(cmd);
++}
++
++/**
++ * Borra un objeto de R2.
++ * @param {string} key
++ */
++export async function deleteFromR2(key) {
++  const cmd = new DeleteObjectCommand({ Bucket: BUCKET, Key: key });
++  await s3.send(cmd);
++}
++
++/**
++ * Devuelve la URL pública de un objeto en R2.
++ * @param {string} key
++ */
++export function publicUrl(key) {
++  const base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
++  return `${base}/${key.replace(/^\//, "")}`;
++}
+diff --git a/runner/src/spoofer.mjs b/runner/src/spoofer.mjs
+new file mode 100644
+index 0000000..543b6a7
+--- /dev/null
++++ b/runner/src/spoofer.mjs
+@@ -0,0 +1,157 @@
++/**
++ * Agente Spoofer: procesa trial reels pendientes.
++ * - Consulta trial_reels con estado = 'pendiente_spoofer'
++ * - Descarga la pieza original de R2
++ * - Aplica variaciones técnicas (recorte, zoom, eq de color)
++ * - Sube el resultado spoofeado a R2
++ * - Actualiza el estado a 'pendiente_aprobacion'
++ * - Notifica al admin por Telegram
++ */
++
++import path from "path";
++import { rm, mkdir } from "fs/promises";
++import { createHash } from "crypto";
++import { createReadStream } from "fs";
++import { pipeline } from "stream/promises";
++
++import { downloadFromR2, uploadToR2, publicUrl } from "./r2.mjs";
++import { renderSpoofer } from "./ffmpeg.mjs";
++import { notificarTrialListo, notificarError } from "./telegram.mjs";
++
++const TMP_DIR = process.env.TMP_DIR ?? "/tmp/halo-runner";
++
++/**
++ * Genera parámetros de spoofer dentro de los rangos permitidos.
++ * Usamos variaciones aleatorias pequeñas para que cada versión sea técnicamente diferente.
++ * @returns {object} Parámetros del spoofer
++ */
++function generarParamsSpoofer() {
++  const rand = (min, max, decimals = 2) =>
++    parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
++
++  return {
++    trim_start: rand(0.8, 1.5, 1),
++    trim_end: rand(0.8, 1.5, 1),
++    zoom: rand(1.02, 1.05, 3),
++    brightness: rand(0.98, 1.03, 3),
++    contrast: rand(0.97, 1.04, 3),
++    saturation: rand(0.96, 1.05, 3),
++  };
++}
++
++/**
++ * Calcula el SHA-256 de un archivo.
++ * @param {string} filePath
++ * @returns {string} Hash hexadecimal
++ */
++async function sha256File(filePath) {
++  return new Promise((resolve, reject) => {
++    const hash = createHash("sha256");
++    const stream = createReadStream(filePath);
++    stream.on("data", (chunk) => hash.update(chunk));
++    stream.on("end", () => resolve(hash.digest("hex")));
++    stream.on("error", reject);
++  });
++}
++
++/**
++ * Procesa todos los trial reels pendientes de spoofer.
++ * @param {object} supabase - Cliente Supabase admin
++ */
++export async function procesarTrialsPendientes(supabase) {
++  const { data: pendientes, error } = await supabase
++    .from("trial_reels")
++    .select(`
++      id, cuenta_id, pieza_origen_r2_key, pieza_origen_tipo,
++      spoofer_params,
++      cuenta:cuentas_instagram(username, modelo_id),
++      modelo:modelos(nombre)
++    `)
++    .eq("estado", "pendiente_spoofer")
++    .limit(3);
++
++  if (error) {
++    console.error("[spoofer] Error al consultar trial_reels:", error.message);
++    return;
++  }
++
++  if (!pendientes || pendientes.length === 0) return;
++
++  console.log(`[spoofer] ${pendientes.length} trial reel(s) pendientes de spoofer`);
++
++  for (const trial of pendientes) {
++    await procesarUnTrialReel(trial, supabase);
++  }
++}
++
++/**
++ * Procesa un trial reel individual.
++ * @param {object} trial - Fila de trial_reels
++ * @param {object} supabase
++ */
++async function procesarUnTrialReel(trial, supabase) {
++  const workDir = path.join(TMP_DIR, `trial_${trial.id}`);
++  await mkdir(workDir, { recursive: true });
++
++  const cuentaUsername = trial.cuenta?.username ?? trial.cuenta_id;
++  const modeloNombre = trial.modelo?.nombre ?? "—";
++
++  try {
++    console.log(`[spoofer] Procesando trial ${trial.id} — @${cuentaUsername}`);
++
++    const rawPath = path.join(workDir, "original.mp4");
++    const outPath = path.join(workDir, "spoofeado.mp4");
++
++    // 1. Descargar original
++    if (!trial.pieza_origen_r2_key) {
++      throw new Error(`Trial ${trial.id} sin pieza_origen_r2_key`);
++    }
++    await downloadFromR2(trial.pieza_origen_r2_key, rawPath);
++
++    // 2. Calcular SHA-256 del original
++    const sha256 = await sha256File(rawPath);
++
++    // 3. Generar parámetros del spoofer (o usar los ya asignados)
++    const params = trial.spoofer_params ?? generarParamsSpoofer();
++
++    // 4. Renderizar
++    await renderSpoofer(rawPath, outPath, params);
++
++    // 5. Subir spoofeado a R2
++    const outKey = `trial/${trial.id}_spoofeado.mp4`;
++    await uploadToR2(outPath, outKey);
++
++    // 6. Actualizar trial en Supabase
++    await supabase
++      .from("trial_reels")
++      .update({
++        estado: "pendiente_aprobacion",
++        storage_path_spoofeado: outKey,
++        sha256_original: sha256,
++        spoofer_params: params,
++        spoofeado_at: new Date().toISOString(),
++      })
++      .eq("id", trial.id);
++
++    console.log(`[spoofer] Trial ${trial.id} listo → ${outKey}`);
++
++    // 7. Notificar al admin
++    await notificarTrialListo({
++      cuenta: cuentaUsername,
++      modelo: modeloNombre,
++      usos: 0, // el contador de usos se actualiza al aprobar
++    });
++  } catch (err) {
++    console.error(`[spoofer] Error en trial ${trial.id}:`, err.message);
++
++    // Marcar como error en Supabase
++    await supabase
++      .from("trial_reels")
++      .update({ estado: "error_spoofer" })
++      .eq("id", trial.id);
++
++    await notificarError(`Spoofer trial ${trial.id}`, err);
++  } finally {
++    await rm(workDir, { recursive: true, force: true });
++  }
++}
+diff --git a/runner/src/telegram.mjs b/runner/src/telegram.mjs
+new file mode 100644
+index 0000000..cadde11
+--- /dev/null
++++ b/runner/src/telegram.mjs
+@@ -0,0 +1,75 @@
++/**
++ * Envía un mensaje de Telegram al chat del admin.
++ * @param {string} text - Mensaje en formato Markdown
++ */
++export async function sendTelegram(text) {
++  const token = process.env.TELEGRAM_BOT_TOKEN;
++  const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
++  if (!token || !chatId) {
++    console.warn("[telegram] TELEGRAM_BOT_TOKEN o TELEGRAM_ADMIN_CHAT_ID no configurados — notificación omitida");
++    return;
++  }
++  try {
++    const url = `https://api.telegram.org/bot${token}/sendMessage`;
++    const res = await fetch(url, {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({
++        chat_id: chatId,
++        text,
++        parse_mode: "Markdown",
++      }),
++    });
++    if (!res.ok) {
++      const body = await res.text();
++      console.error("[telegram] Error al enviar mensaje:", body);
++    }
++  } catch (err) {
++    console.error("[telegram] Error de red:", err.message);
++  }
++}
++
++/**
++ * Notifica al admin cuando una pieza ha sido editada y está lista para aprobar.
++ * @param {{ titulo: string, tipo: string, modelo: string }} info
++ */
++export async function notificarPiezaLista(info) {
++  const tipo = info.tipo ?? "desconocido";
++  const modelo = info.modelo ?? "—";
++  const titulo = info.titulo ?? "Sin título";
++  await sendTelegram(
++    `✅ *Pieza lista para aprobación*\n\n` +
++    `📹 *${titulo}*\n` +
++    `👤 Modelo: ${modelo}\n` +
++    `🎬 Tipo: ${tipo}\n\n` +
++    `Revísala en la Mesa de Aprobación.`
++  );
++}
++
++/**
++ * Notifica al admin cuando un trial reel está listo para aprobación.
++ * @param {{ cuenta: string, modelo: string, usos: number }} info
++ */
++export async function notificarTrialListo(info) {
++  await sendTelegram(
++    `🔄 *Trial Reel listo para aprobación*\n\n` +
++    `📱 Cuenta: @${info.cuenta ?? "—"}\n` +
++    `👤 Modelo: ${info.modelo ?? "—"}\n` +
++    `🔁 Usos anteriores: ${info.usos ?? 0}\n\n` +
++    `Apruébalo en la sección _Trial Reels_ de la Mesa de Aprobación.`
++  );
++}
++
++/**
++ * Notifica al admin de un error crítico en el runner.
++ * @param {string} context - Contexto donde ocurrió el error
++ * @param {Error|string} err
++ */
++export async function notificarError(context, err) {
++  const msg = err instanceof Error ? err.message : String(err);
++  await sendTelegram(
++    `❌ *Error en el runner*\n\n` +
++    `📍 Contexto: ${context}\n` +
++    `💬 ${msg}`
++  );
++}
+diff --git a/runner/src/tipos.mjs b/runner/src/tipos.mjs
+new file mode 100644
+index 0000000..e03ef3e
+--- /dev/null
++++ b/runner/src/tipos.mjs
+@@ -0,0 +1,223 @@
++/**
++ * Handlers para cada tipo de vídeo.
++ * Cada función recibe la pieza desde Supabase, descarga el bruto de R2,
++ * procesa con ffmpeg/Whisper y sube el resultado de vuelta a R2.
++ */
++
++import { tmpdir } from "os";
++import path from "path";
++import { rm, writeFile, mkdir } from "fs/promises";
++import { existsSync } from "fs";
++
++import { downloadFromR2, uploadToR2, publicUrl } from "./r2.mjs";
++import {
++  extractAudio,
++  transcribeWithWhisper,
++  generateASS,
++} from "./whisper.mjs";
++import {
++  renderTipo1,
++  renderTipo2,
++  renderTipo3,
++  renderTipo4,
++} from "./ffmpeg.mjs";
++
++const TMP_DIR = process.env.TMP_DIR ?? "/tmp/halo-runner";
++
++/**
++ * Procesa una pieza de tipo 1 (hablando a cámara → subtítulos Whisper).
++ * @param {object} pieza - Fila de library_content
++ * @param {object} supabase - Cliente Supabase admin
++ * @returns {string} r2_key del resultado
++ */
++export async function procesarTipo1(pieza, supabase) {
++  const workDir = path.join(TMP_DIR, pieza.id);
++  await mkdir(workDir, { recursive: true });
++
++  try {
++    const rawPath = path.join(workDir, "raw.mp4");
++    const audioDir = path.join(workDir, "audio");
++    const assPath = path.join(workDir, "subs.ass");
++    const outPath = path.join(workDir, "output.mp4");
++
++    // 1. Descargar bruto
++    await downloadFromR2(pieza.r2_key, rawPath);
++
++    // 2. Transcribir con Whisper
++    const wavPath = await extractAudio(rawPath, audioDir);
++    const segments = await transcribeWithWhisper(wavPath, audioDir);
++
++    if (segments.length === 0) {
++      console.warn(`[tipo1] Sin segmentos de audio para pieza ${pieza.id}`);
++    }
++
++    // 3. Generar archivo ASS
++    const assContent = generateASS(segments);
++    await writeFile(assPath, assContent, "utf-8");
++
++    // 4. Renderizar con ffmpeg
++    await renderTipo1(rawPath, assPath, outPath);
++
++    // 5. Subir a R2
++    const outKey = `editado/${pieza.id}_t1.mp4`;
++    await uploadToR2(outPath, outKey);
++
++    // 6. Actualizar Supabase
++    await supabase
++      .from("library_content")
++      .update({ r2_key: outKey, estado: "en_aprobacion" })
++      .eq("id", pieza.id);
++
++    return outKey;
++  } finally {
++    await rm(workDir, { recursive: true, force: true });
++  }
++}
++
++/**
++ * Procesa una pieza de tipo 2 (caption → frase superpuesta + audio referencia).
++ * @param {object} pieza
++ * @param {object} supabase
++ * @returns {string}
++ */
++export async function procesarTipo2(pieza, supabase) {
++  const workDir = path.join(TMP_DIR, pieza.id);
++  await mkdir(workDir, { recursive: true });
++
++  try {
++    const rawPath = path.join(workDir, "raw.mp4");
++    const audioRefPath = path.join(workDir, "ref_audio.mp4");
++    const outPath = path.join(workDir, "output.mp4");
++
++    // 1. Descargar bruto
++    await downloadFromR2(pieza.r2_key, rawPath);
++
++    // 2. Descargar audio de referencia si existe
++    let refAudio = undefined;
++    if (pieza.r2_key_referencia) {
++      await downloadFromR2(pieza.r2_key_referencia, audioRefPath);
++      refAudio = audioRefPath;
++    }
++
++    // 3. Renderizar (frase del campo frase_quemada)
++    await renderTipo2(rawPath, outPath, {
++      frase: pieza.frase_quemada ?? "",
++      audioRefPath: refAudio,
++    });
++
++    // 4. Subir a R2
++    const outKey = `editado/${pieza.id}_t2.mp4`;
++    await uploadToR2(outPath, outKey);
++
++    // 5. Actualizar Supabase
++    await supabase
++      .from("library_content")
++      .update({ r2_key: outKey, estado: "en_aprobacion" })
++      .eq("id", pieza.id);
++
++    return outKey;
++  } finally {
++    await rm(workDir, { recursive: true, force: true });
++  }
++}
++
++/**
++ * Procesa una pieza de tipo 3 (reto → subtítulos Whisper + freeze final).
++ * @param {object} pieza
++ * @param {object} supabase
++ * @returns {string}
++ */
++export async function procesarTipo3(pieza, supabase) {
++  const workDir = path.join(TMP_DIR, pieza.id);
++  await mkdir(workDir, { recursive: true });
++
++  try {
++    const rawPath = path.join(workDir, "raw.mp4");
++    const audioDir = path.join(workDir, "audio");
++    const assPath = path.join(workDir, "subs.ass");
++    const outPath = path.join(workDir, "output.mp4");
++
++    // 1. Descargar bruto
++    await downloadFromR2(pieza.r2_key, rawPath);
++
++    // 2. Transcribir con Whisper
++    const wavPath = await extractAudio(rawPath, audioDir);
++    const segments = await transcribeWithWhisper(wavPath, audioDir);
++
++    // 3. Generar ASS
++    const assContent = generateASS(segments);
++    await writeFile(assPath, assContent, "utf-8");
++
++    // 4. Renderizar tipo 3 (con freeze frame)
++    await renderTipo3(rawPath, assPath, outPath);
++
++    // 5. Subir a R2
++    const outKey = `editado/${pieza.id}_t3.mp4`;
++    await uploadToR2(outPath, outKey);
++
++    // 6. Actualizar Supabase
++    await supabase
++      .from("library_content")
++      .update({ r2_key: outKey, estado: "en_aprobacion" })
++      .eq("id", pieza.id);
++
++    return outKey;
++  } finally {
++    await rm(workDir, { recursive: true, force: true });
++  }
++}
++
++/**
++ * Procesa una pieza de tipo 4 (con vídeo de referencia → copia exacta de estructura).
++ * @param {object} pieza
++ * @param {object} supabase
++ * @returns {string}
++ */
++export async function procesarTipo4(pieza, supabase) {
++  const workDir = path.join(TMP_DIR, pieza.id);
++  await mkdir(workDir, { recursive: true });
++
++  try {
++    const rawPath = path.join(workDir, "raw.mp4");
++    const refPath = path.join(workDir, "referencia.mp4");
++    const outPath = path.join(workDir, "output.mp4");
++
++    // 1. Descargar bruto y referencia
++    await downloadFromR2(pieza.r2_key, rawPath);
++
++    if (!pieza.r2_key_referencia) {
++      throw new Error(`Tipo 4 sin r2_key_referencia para pieza ${pieza.id}`);
++    }
++    await downloadFromR2(pieza.r2_key_referencia, refPath);
++
++    // 2. Transcribir el bruto si tiene audio hablado
++    let assPath = null;
++    if (pieza.tiene_locucion) {
++      const audioDir = path.join(workDir, "audio");
++      const wavPath = await extractAudio(rawPath, audioDir);
++      const segments = await transcribeWithWhisper(wavPath, audioDir);
++      if (segments.length > 0) {
++        assPath = path.join(workDir, "subs.ass");
++        const assContent = generateASS(segments);
++        await writeFile(assPath, assContent, "utf-8");
++      }
++    }
++
++    // 3. Renderizar tipo 4
++    await renderTipo4(rawPath, refPath, outPath, assPath);
++
++    // 4. Subir a R2
++    const outKey = `editado/${pieza.id}_t4.mp4`;
++    await uploadToR2(outPath, outKey);
++
++    // 5. Actualizar Supabase
++    await supabase
++      .from("library_content")
++      .update({ r2_key: outKey, estado: "en_aprobacion" })
++      .eq("id", pieza.id);
++
++    return outKey;
++  } finally {
++    await rm(workDir, { recursive: true, force: true });
++  }
++}
+diff --git a/runner/src/whisper.mjs b/runner/src/whisper.mjs
+new file mode 100644
+index 0000000..b2d7d1b
+--- /dev/null
++++ b/runner/src/whisper.mjs
+@@ -0,0 +1,124 @@
++import { execFile } from "child_process";
++import { promisify } from "util";
++import { mkdir, readFile } from "fs/promises";
++import { existsSync } from "fs";
++import path from "path";
++
++const execFileAsync = promisify(execFile);
++
++const WHISPER_BIN = process.env.WHISPER_BIN ?? "whisper-cpp";
++const WHISPER_MODEL = process.env.WHISPER_MODEL ?? "/opt/whisper/ggml-small.bin";
++
++/**
++ * Extrae el audio de un vídeo con ffmpeg (WAV 16kHz mono para Whisper).
++ * @param {string} videoPath - Ruta del vídeo
++ * @param {string} outputDir - Directorio temporal
++ * @returns {string} Ruta del archivo WAV
++ */
++export async function extractAudio(videoPath, outputDir) {
++  await mkdir(outputDir, { recursive: true });
++  const wavPath = path.join(outputDir, "audio.wav");
++  const ffmpeg = process.env.FFMPEG_BIN ?? "ffmpeg";
++  await execFileAsync(ffmpeg, [
++    "-y",
++    "-i", videoPath,
++    "-ar", "16000",
++    "-ac", "1",
++    "-f", "wav",
++    wavPath,
++  ]);
++  return wavPath;
++}
++
++/**
++ * Transcribe el audio con whisper-cpp y devuelve un array de segmentos SRT-like.
++ * @param {string} wavPath - Ruta del archivo WAV
++ * @param {string} outputDir - Directorio donde se generará el archivo SRT/VTT
++ * @returns {{ start: number, end: number, text: string }[]} Segmentos de subtítulo
++ */
++export async function transcribeWithWhisper(wavPath, outputDir) {
++  await mkdir(outputDir, { recursive: true });
++
++  const baseName = path.join(outputDir, "subs");
++  await execFileAsync(WHISPER_BIN, [
++    "-m", WHISPER_MODEL,
++    "-f", wavPath,
++    "-osrt",         // output SRT
++    "-of", baseName, // output file prefix
++    "-l", "es",      // language: Spanish
++    "--word-thold", "0.01",
++  ]);
++
++  const srtPath = baseName + ".srt";
++  if (!existsSync(srtPath)) {
++    throw new Error(`Whisper no generó archivo SRT en ${srtPath}`);
++  }
++
++  const raw = await readFile(srtPath, "utf-8");
++  return parseSRT(raw);
++}
++
++/**
++ * Parsea un archivo SRT y devuelve segmentos.
++ * @param {string} srtContent
++ * @returns {{ start: number, end: number, text: string }[]}
++ */
++function parseSRT(srtContent) {
++  const blocks = srtContent.trim().split(/\n\n+/);
++  const segments = [];
++  for (const block of blocks) {
++    const lines = block.trim().split("\n");
++    if (lines.length < 3) continue;
++    const timeLine = lines[1];
++    const match = timeLine.match(
++      /(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/
++    );
++    if (!match) continue;
++    const toSec = (h, m, s, ms) =>
++      Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(ms) / 1000;
++    const start = toSec(match[1], match[2], match[3], match[4]);
++    const end = toSec(match[5], match[6], match[7], match[8]);
++    const text = lines.slice(2).join(" ").trim();
++    if (text) segments.push({ start, end, text });
++  }
++  return segments;
++}
++
++/**
++ * Genera el contenido de un archivo ASS a partir de segmentos de subtítulo.
++ * Estilo: blanco, negrita, centrado, borde negro, fuente grande.
++ * @param {{ start: number, end: number, text: string }[]} segments
++ * @returns {string} Contenido del archivo ASS
++ */
++export function generateASS(segments) {
++  const toAssTime = (sec) => {
++    const h = Math.floor(sec / 3600);
++    const m = Math.floor((sec % 3600) / 60);
++    const s = Math.floor(sec % 60);
++    const cs = Math.round((sec % 1) * 100);
++    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
++  };
++
++  const header = `[Script Info]
++ScriptType: v4.00+
++PlayResX: 1080
++PlayResY: 1920
++ScaledBorderAndShadow: yes
++
++[V4+ Styles]
++Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
++Style: Default,Arial,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,20,20,100,1
++
++[Events]
++Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
++`;
++
++  const events = segments
++    .map((seg) => {
++      const text = seg.text.replace(/\n/g, "\\N");
++      return `Dialogue: 0,${toAssTime(seg.start)},${toAssTime(seg.end)},Default,,0,0,0,,${text}`;
++    })
++    .join("\n");
++
++  return header + events + "\n";
++}
+diff --git a/src/app/ajustes/AjustesClient.tsx b/src/app/ajustes/AjustesClient.tsx
+index 5cce9cb..57fb49d 100644
+--- a/src/app/ajustes/AjustesClient.tsx
++++ b/src/app/ajustes/AjustesClient.tsx
+@@ -3,25 +3,13 @@
+ import { useEffect, useState } from "react";
+ 
+ interface Config {
+-  dias_alerta: number;
+-  dias_critico: number;
+-  min_videos_mes: number;
+-  objetivo_videos_semana: number;
+   notif_telegram: boolean;
+-  agencia_nombre: string;
+-  moneda: string;
+   pubbler_workspace_id: string;
+   pubbler_api_key: string;
+ }
+ 
+ const DEFAULTS: Config = {
+-  dias_alerta: 5,
+-  dias_critico: 7,
+-  min_videos_mes: 4,
+-  objetivo_videos_semana: 2,
+   notif_telegram: true,
+-  agencia_nombre: "Halo Models",
+-  moneda: "EUR",
+   pubbler_workspace_id: "",
+   pubbler_api_key: "",
+ };
+@@ -112,24 +100,6 @@ export function AjustesClient() {
+ 
+   return (
+     <div className="max-w-2xl space-y-6">
+-      {/* Alertas */}
+-      <div className="card space-y-4">
+-        <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Alertas de contenido</h2>
+-        <Range label="Días sin publicar → Alerta" value={config.dias_alerta} min={1} max={14} accent="accent-amber-400" onChange={(v) => set("dias_alerta", v)} />
+-        <Range label="Días sin publicar → Crítico" value={config.dias_critico} min={1} max={21} accent="accent-red-400" onChange={(v) => set("dias_critico", v)} />
+-        <Range label="Mínimo vídeos / mes" value={config.min_videos_mes} min={1} max={30} accent="accent-halo-accent" onChange={(v) => set("min_videos_mes", v)} />
+-        <Range label="Objetivo vídeos / semana" value={config.objetivo_videos_semana} min={1} max={20} accent="accent-halo-accent" onChange={(v) => set("objetivo_videos_semana", v)} />
+-      </div>
+-
+-      {/* Agencia */}
+-      <div className="card space-y-4">
+-        <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Agencia</h2>
+-        <div className="grid grid-cols-2 gap-4">
+-          <label className="block"><span className="mb-1.5 block text-sm text-halo-text">Nombre</span><input className="input-base" value={config.agencia_nombre} onChange={(e) => set("agencia_nombre", e.target.value)} /></label>
+-          <label className="block"><span className="mb-1.5 block text-sm text-halo-text">Moneda</span><select className="input-base" value={config.moneda} onChange={(e) => set("moneda", e.target.value)}><option value="EUR">EUR €</option><option value="USD">USD $</option><option value="GBP">GBP £</option></select></label>
+-        </div>
+-      </div>
+-
+       {/* Pubbler */}
+       <div className="card space-y-4">
+         <div className="flex items-center justify-between">
+@@ -162,7 +132,7 @@ export function AjustesClient() {
+         </div>
+         <div className="rounded-lg border border-halo-border/60 bg-halo-bg/50 p-2.5 text-[11px] text-halo-subtle space-y-1">
+           <p>Sin API key: al aprobar un vídeo puedes descargarlo y subirlo tú manualmente.</p>
+-          <p>Con API key: al aprobar, el sistema calcula el siguiente slot libre según la estrategia y lo programa en Pubbler automáticamente.</p>
++          <p>Con API key: al aprobar, el sistema calcula el siguiente slot libre y lo programa en Pubbler automáticamente.</p>
+         </div>
+       </div>
+ 
+@@ -170,8 +140,12 @@ export function AjustesClient() {
+       <div className="card">
+         <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Notificaciones</h2>
+         <label className="flex cursor-pointer items-center gap-3">
+-          <button type="button" onClick={() => set("notif_telegram", !config.notif_telegram)} className={`relative h-5 w-10 rounded-full transition-colors ${config.notif_telegram ? "bg-halo-accent" : "bg-halo-muted"}`}>
+-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${config.notif_telegram ? "translate-x-1" : "-translate-x-4"}`} />
++          <button
++            type="button"
++            onClick={() => set("notif_telegram", !config.notif_telegram)}
++            className={`relative h-5 w-10 rounded-full transition-colors ${config.notif_telegram ? "bg-halo-accent" : "bg-halo-muted"}`}
++          >
++            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${config.notif_telegram ? "translate-x-5" : "translate-x-0.5"}`} />
+           </button>
+           <span className="text-sm text-halo-text">Notificaciones Telegram</span>
+         </label>
+@@ -220,7 +194,10 @@ export function AjustesClient() {
+         </div>
+         {importStatus && (
+           <div className="rounded-lg border border-halo-border bg-halo-bg p-3 text-xs space-y-1">
+-            <p className="text-halo-subtle">R2: {importStatus.total_r2} · Importados: {importStatus.already_imported} · Sin importar: <span className={importStatus.missing_count > 0 ? "text-amber-400 font-semibold" : "text-green-400"}>{importStatus.missing_count}</span></p>
++            <p className="text-halo-subtle">
++              R2: {importStatus.total_r2} · Importados: {importStatus.already_imported} · Sin importar:{" "}
++              <span className={importStatus.missing_count > 0 ? "text-amber-400 font-semibold" : "text-green-400"}>{importStatus.missing_count}</span>
++            </p>
+             {importStatus.missing_keys.length > 0 && (
+               <ul className="mt-2 max-h-40 overflow-y-auto space-y-0.5 font-mono text-[10px] text-halo-subtle">
+                 {importStatus.missing_keys.map((key: string) => <li key={key}>{key}</li>)}
+@@ -228,22 +205,16 @@ export function AjustesClient() {
+             )}
+           </div>
+         )}
+-        {importDone && <p className="text-xs text-green-400">✓ {importDone.imported} archivo{importDone.imported !== 1 ? "s" : ""} importado{importDone.imported !== 1 ? "s" : ""} correctamente.</p>}
++        {importDone && (
++          <p className="text-xs text-green-400">
++            ✓ {importDone.imported} archivo{importDone.imported !== 1 ? "s" : ""} importado{importDone.imported !== 1 ? "s" : ""} correctamente.
++          </p>
++        )}
+       </div>
+ 
+-      <button onClick={save} className="btn-primary px-6 py-2 text-sm">{saved ? "Guardado ✓" : "Guardar ajustes"}</button>
++      <button onClick={save} className="btn-primary px-6 py-2 text-sm">
++        {saved ? "Guardado ✓" : "Guardar ajustes"}
++      </button>
+     </div>
+   );
+ }
+-
+-function Range({ label, value, min, max, accent, onChange }: { label: string; value: number; min: number; max: number; accent: string; onChange: (value: number) => void }) {
+-  return (
+-    <label className="block">
+-      <span className="mb-1.5 block text-sm text-halo-text">{label}</span>
+-      <div className="flex items-center gap-2">
+-        <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(parseInt(e.target.value, 10))} className={`flex-1 ${accent}`} />
+-        <span className="w-8 text-right font-mono text-sm text-halo-accent">{value}</span>
+-      </div>
+-    </label>
+-  );
+-}
+diff --git a/src/app/api/trial-reels/route.ts b/src/app/api/trial-reels/route.ts
+new file mode 100644
+index 0000000..56c35e9
+--- /dev/null
++++ b/src/app/api/trial-reels/route.ts
+@@ -0,0 +1,147 @@
++import { NextRequest, NextResponse } from "next/server";
++import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
++
++export type TrialReelRow = {
++  id: string;
++  cuenta_id: string;
++  cuenta_username: string | null;
++  modelo_nombre: string | null;
++  estado: string;
++  storage_path_spoofeado: string | null;
++  sha256_original: string | null;
++  usos_previos: number;
++  ultima_vez_usado: string | null;
++  riesgo_repeticion: boolean;
++  spoofer_params: Record<string, unknown> | null;
++  views_original: number | null;
++  likes_original: number | null;
++  publicado_en: string | null;
++  creado_en: string;
++  // joined from pieza original
++  pieza_origen_r2_key: string | null;
++  pieza_origen_tipo: string | null;
++};
++
++const DEMO_ROWS: TrialReelRow[] = [
++  {
++    id: "trial-demo-1",
++    cuenta_id: "cuenta-demo-1",
++    cuenta_username: "laura_official",
++    modelo_nombre: "Laura M.",
++    estado: "pendiente_aprobacion",
++    storage_path_spoofeado: null,
++    sha256_original: "abc123",
++    usos_previos: 1,
++    ultima_vez_usado: new Date(Date.now() - 35 * 86400000).toISOString().split("T")[0],
++    riesgo_repeticion: false,
++    spoofer_params: { trim_start: 1, trim_end: 1, zoom: 1.03, brightness: 1.02, contrast: 1.03, saturation: 1.05 },
++    views_original: 48700,
++    likes_original: 3200,
++    publicado_en: null,
++    creado_en: new Date().toISOString(),
++    pieza_origen_r2_key: null,
++    pieza_origen_tipo: "tipo2",
++  },
++  {
++    id: "trial-demo-2",
++    cuenta_id: "cuenta-demo-2",
++    cuenta_username: "sofia_halo",
++    modelo_nombre: "Sofía R.",
++    estado: "pendiente_aprobacion",
++    storage_path_spoofeado: null,
++    sha256_original: "def456",
++    usos_previos: 0,
++    ultima_vez_usado: null,
++    riesgo_repeticion: false,
++    spoofer_params: { trim_start: 1, trim_end: 1, zoom: 1.03, brightness: 0.98, contrast: 1.03, saturation: 0.97 },
++    views_original: 125000,
++    likes_original: 8900,
++    publicado_en: null,
++    creado_en: new Date(Date.now() - 3600000).toISOString(),
++    pieza_origen_r2_key: null,
++    pieza_origen_tipo: "tipo1",
++  },
++];
++
++export async function GET() {
++  if (!canUseSupabase()) {
++    return NextResponse.json({ data: DEMO_ROWS });
++  }
++  try {
++    const supabase = createAdminClient();
++    const { data, error } = await supabase
++      .from("trial_reels")
++      .select(`
++        id, cuenta_id, estado, storage_path_spoofeado, sha256_original,
++        usos_previos, ultima_vez_usado, riesgo_repeticion, spoofer_params,
++        views_original, likes_original, publicado_en, creado_en,
++        cuentas_instagram(username, modelos(nombre)),
++        piezas_montaje(r2_key:storage_path_montaje, tipo_video)
++      `)
++      .in("estado", ["pendiente_aprobacion"])
++      .order("creado_en", { ascending: false })
++      .limit(50);
++
++    if (error) throw error;
++
++    const rows: TrialReelRow[] = ((data ?? []) as unknown[]).map((row: unknown) => {
++      const r = row as Record<string, unknown>;
++      const cuenta = r.cuentas_instagram as Record<string, unknown> | null;
++      const modelo = cuenta?.modelos as Record<string, unknown> | null;
++      const pieza = r.piezas_montaje as Record<string, unknown> | null;
++      return {
++        id: r.id as string,
++        cuenta_id: r.cuenta_id as string,
++        cuenta_username: (cuenta?.username as string) ?? null,
++        modelo_nombre: (modelo?.nombre as string) ?? null,
++        estado: r.estado as string,
++        storage_path_spoofeado: (r.storage_path_spoofeado as string) ?? null,
++        sha256_original: (r.sha256_original as string) ?? null,
++        usos_previos: (r.usos_previos as number) ?? 0,
++        ultima_vez_usado: (r.ultima_vez_usado as string) ?? null,
++        riesgo_repeticion: (r.riesgo_repeticion as boolean) ?? false,
++        spoofer_params: (r.spoofer_params as Record<string, unknown>) ?? null,
++        views_original: (r.views_original as number) ?? null,
++        likes_original: (r.likes_original as number) ?? null,
++        publicado_en: (r.publicado_en as string) ?? null,
++        creado_en: r.creado_en as string,
++        pieza_origen_r2_key: (pieza?.r2_key as string) ?? null,
++        pieza_origen_tipo: (pieza?.tipo_video as string) ?? null,
++      };
++    });
++
++    return NextResponse.json({ data: rows });
++  } catch (err) {
++    return NextResponse.json({ data: DEMO_ROWS, _error: String(err) });
++  }
++}
++
++export async function PATCH(req: NextRequest) {
++  try {
++    const { id, accion, nota } = await req.json() as { id: string; accion: "aprobar" | "rechazar"; nota?: string };
++
++    if (!canUseSupabase()) {
++      return NextResponse.json({ ok: true, demo: true });
++    }
++
++    const supabase = createAdminClient();
++
++    if (accion === "aprobar") {
++      const { error } = await supabase
++        .from("trial_reels")
++        .update({ estado: "aprobado", aprobado_en: new Date().toISOString() })
++        .eq("id", id);
++      if (error) throw error;
++    } else {
++      const { error } = await supabase
++        .from("trial_reels")
++        .update({ estado: "rechazado", nota_rechazo: nota ?? null })
++        .eq("id", id);
++      if (error) throw error;
++    }
++
++    return NextResponse.json({ ok: true });
++  } catch (err) {
++    return NextResponse.json({ error: String(err) }, { status: 500 });
++  }
++}
+diff --git a/src/app/aprobacion/MesaClient.tsx b/src/app/aprobacion/MesaClient.tsx
+index 5b3aa8b..78b8137 100644
+--- a/src/app/aprobacion/MesaClient.tsx
++++ b/src/app/aprobacion/MesaClient.tsx
+@@ -114,8 +114,10 @@ export function MesaClient({
+     setCaption(row.caption);
+     setCorrecciones(row.correcciones);
+     setFrase(row.frase_quemada);
+-    setRefOpen(false);
+-    setOriginalOpen(false);
++    // Tipo 4: auto-expandir referencia y original para comparativa de 3 paneles
++    const esTipo4 = row.tipo_video === "tipo4";
++    setRefOpen(esTipo4 && Boolean(row.r2_key_referencia));
++    setOriginalOpen(esTipo4 && Boolean(row.r2_key_original));
+     setActionMessage(null);
+   }, []);
+ 
+@@ -612,6 +614,11 @@ export function MesaClient({
+                     {estadoLabel(selected.estado)}
+                   </span>
+                   <span className="badge text-[9px]">{tipoVideoLabel(selected.tipo_video ?? "sin_clasificar")}</span>
++                  {selected.tipo_video === "tipo4" && (
++                    <span className="rounded-full bg-violet-900/40 px-2 py-0.5 text-[9px] font-semibold text-violet-300 border border-violet-700/30">
++                      ◈ 3 paneles activos
++                    </span>
++                  )}
+                 </div>
+               </div>
+ 
+diff --git a/src/app/aprobacion/TrialReelsMesa.tsx b/src/app/aprobacion/TrialReelsMesa.tsx
+new file mode 100644
+index 0000000..a9125fe
+--- /dev/null
++++ b/src/app/aprobacion/TrialReelsMesa.tsx
+@@ -0,0 +1,263 @@
++"use client";
++
++import { useCallback, useEffect, useState } from "react";
++import type { TrialReelRow } from "@/app/api/trial-reels/route";
++
++function r2Url(key: string | null): string | null {
++  if (!key) return null;
++  if (key.startsWith("http://") || key.startsWith("https://")) return key;
++  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "";
++  return base ? `${base.replace(/\/$/, "")}/${key.replace(/^\//, "")}` : null;
++}
++
++function fmt(n: number | null | undefined) {
++  if (n == null) return "—";
++  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
++  if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
++  return `${n}`;
++}
++
++function SpooferBadge({ params }: { params: Record<string, unknown> | null }) {
++  if (!params) return null;
++  const tags = [
++    params.trim_start != null ? `−${params.trim_start}s inicio` : null,
++    params.trim_end != null ? `−${params.trim_end}s final` : null,
++    params.zoom != null ? `zoom ×${params.zoom}` : null,
++    params.brightness != null && params.brightness !== 1 ? `brillo ${Number(params.brightness) > 1 ? "+" : ""}${((Number(params.brightness) - 1) * 100).toFixed(0)}%` : null,
++    params.contrast != null && params.contrast !== 1 ? `contraste ${Number(params.contrast) > 1 ? "+" : ""}${((Number(params.contrast) - 1) * 100).toFixed(0)}%` : null,
++    params.saturation != null && params.saturation !== 1 ? `saturación ${Number(params.saturation) > 1 ? "+" : ""}${((Number(params.saturation) - 1) * 100).toFixed(0)}%` : null,
++  ].filter(Boolean);
++  return (
++    <div className="flex flex-wrap gap-1">
++      {tags.map((tag) => (
++        <span key={tag} className="rounded bg-halo-muted/60 px-1.5 py-0.5 text-[10px] text-halo-subtle font-mono">
++          {tag}
++        </span>
++      ))}
++    </div>
++  );
++}
++
++export function TrialReelsMesa() {
++  const [rows, setRows] = useState<TrialReelRow[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [selected, setSelected] = useState<TrialReelRow | null>(null);
++  const [actionLoading, setActionLoading] = useState(false);
++  const [nota, setNota] = useState("");
++  const [showReject, setShowReject] = useState(false);
++  const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
++
++  const load = useCallback(async () => {
++    setLoading(true);
++    try {
++      const res = await fetch("/api/trial-reels");
++      const json = await res.json();
++      setRows(json.data ?? []);
++    } finally {
++      setLoading(false);
++    }
++  }, []);
++
++  useEffect(() => { load(); }, [load]);
++
++  async function accion(accion: "aprobar" | "rechazar") {
++    if (!selected) return;
++    setActionLoading(true);
++    try {
++      const res = await fetch("/api/trial-reels", {
++        method: "PATCH",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ id: selected.id, accion, nota }),
++      });
++      const json = await res.json();
++      if (json.ok) {
++        setMessage({ type: "ok", text: accion === "aprobar" ? "Trial reel aprobado — listo para descargar" : "Trial reel rechazado" });
++        setRows((prev) => prev.filter((r) => r.id !== selected.id));
++        setSelected(null);
++        setNota("");
++        setShowReject(false);
++      } else {
++        setMessage({ type: "err", text: "Error al procesar la acción" });
++      }
++    } finally {
++      setActionLoading(false);
++    }
++  }
++
++  function openRow(row: TrialReelRow) {
++    setSelected(row);
++    setNota("");
++    setShowReject(false);
++    setMessage(null);
++  }
++
++  const spoofeadoUrl = r2Url(selected?.storage_path_spoofeado ?? null);
++  const originalUrl = r2Url(selected?.pieza_origen_r2_key ?? null);
++
++  return (
++    <div className="space-y-4">
++      {message && (
++        <div className={`rounded-xl border px-4 py-2.5 text-sm flex items-center gap-2 ${message.type === "ok" ? "border-green-500/30 bg-green-950/30 text-green-300" : "border-red-500/30 bg-red-950/30 text-red-300"}`}>
++          <span>{message.type === "ok" ? "✓" : "✗"}</span>
++          <span>{message.text}</span>
++          <button onClick={() => setMessage(null)} className="ml-auto opacity-50 hover:opacity-100">✕</button>
++        </div>
++      )}
++
++      {loading ? (
++        <div className="grid min-h-[20vh] place-items-center text-sm text-halo-subtle">Cargando trial reels...</div>
++      ) : rows.length === 0 ? (
++        <div className="grid min-h-[30vh] place-items-center rounded-2xl border border-halo-border bg-halo-muted/20 text-sm text-halo-subtle">
++          Sin trial reels pendientes de aprobación
++        </div>
++      ) : (
++        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
++          {rows.map((row) => (
++            <button
++              key={row.id}
++              onClick={() => openRow(row)}
++              className={`rounded-2xl border p-4 text-left transition hover:border-halo-accent/30 ${selected?.id === row.id ? "border-halo-accent/40 bg-halo-accent/5" : "border-halo-border bg-halo-muted/20"}`}
++            >
++              <div className="flex items-center justify-between gap-2 mb-2">
++                <span className="text-sm font-semibold text-halo-text">@{row.cuenta_username ?? "—"}</span>
++                {row.riesgo_repeticion && (
++                  <span className="rounded-full bg-amber-900/40 px-2 py-0.5 text-[10px] font-semibold text-amber-400">⚠ Riesgo</span>
++                )}
++              </div>
++              <p className="text-xs text-halo-subtle mb-1">{row.modelo_nombre ?? "—"}</p>
++              <div className="flex gap-3 text-xs text-halo-subtle mt-2">
++                <span>👁 {fmt(row.views_original)} vistas</span>
++                <span>❤ {fmt(row.likes_original)} likes</span>
++                <span>Uso #{row.usos_previos + 1}</span>
++              </div>
++              {row.ultima_vez_usado && (
++                <p className="mt-1 text-[10px] text-halo-subtle">Último uso: {row.ultima_vez_usado}</p>
++              )}
++            </button>
++          ))}
++        </div>
++      )}
++
++      {/* Modal */}
++      {selected && (
++        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={(e) => { if (e.target === e.currentTarget) setSelected(null); }}>
++          <div className="w-full max-w-4xl rounded-2xl border border-halo-border bg-[#12131e] p-5 space-y-4 overflow-y-auto max-h-[90vh]">
++            <div className="flex items-start justify-between gap-3">
++              <div>
++                <p className="text-xs text-halo-subtle uppercase tracking-wider font-semibold">Trial Reel</p>
++                <h2 className="text-lg font-semibold text-halo-text mt-0.5">@{selected.cuenta_username ?? "—"} · {selected.modelo_nombre}</h2>
++              </div>
++              <button onClick={() => setSelected(null)} className="text-halo-subtle hover:text-halo-text text-lg">✕</button>
++            </div>
++
++            {/* Stats del original */}
++            <div className="grid grid-cols-3 gap-3">
++              <div className="rounded-xl border border-halo-border bg-halo-muted/20 p-3 text-center">
++                <p className="text-[10px] text-halo-subtle uppercase tracking-wider">Vistas original</p>
++                <p className="mt-1 font-mono text-lg font-semibold text-halo-text">{fmt(selected.views_original)}</p>
++              </div>
++              <div className="rounded-xl border border-halo-border bg-halo-muted/20 p-3 text-center">
++                <p className="text-[10px] text-halo-subtle uppercase tracking-wider">Likes original</p>
++                <p className="mt-1 font-mono text-lg font-semibold text-halo-text">{fmt(selected.likes_original)}</p>
++              </div>
++              <div className="rounded-xl border border-halo-border bg-halo-muted/20 p-3 text-center">
++                <p className="text-[10px] text-halo-subtle uppercase tracking-wider">Usos anteriores</p>
++                <p className={`mt-1 font-mono text-lg font-semibold ${selected.usos_previos >= 2 ? "text-amber-400" : "text-halo-text"}`}>{selected.usos_previos}</p>
++              </div>
++            </div>
++
++            {selected.riesgo_repeticion && (
++              <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-2.5 text-sm text-amber-300">
++                ⚠ Este vídeo fue usado recientemente o supera el límite de usos recomendado. Revisa antes de aprobar.
++              </div>
++            )}
++
++            {/* Spoofer params */}
++            <div>
++              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-halo-subtle">Ajustes del spoofer aplicados</p>
++              <SpooferBadge params={selected.spoofer_params} />
++            </div>
++
++            {/* Videos */}
++            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
++              <div>
++                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-halo-subtle">Original (ya publicado)</p>
++                <div className="aspect-[9/16] max-h-[50vh] w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
++                  {originalUrl ? (
++                    <video key={`orig-${selected.id}`} src={originalUrl} controls playsInline className="h-full w-full object-contain" />
++                  ) : (
++                    <div className="grid h-full place-items-center text-xs text-white/25">Sin vídeo original</div>
++                  )}
++                </div>
++              </div>
++              <div>
++                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-halo-subtle">Spoofeado (listo para subir)</p>
++                <div className="aspect-[9/16] max-h-[50vh] w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
++                  {spoofeadoUrl ? (
++                    <video key={`spoof-${selected.id}`} src={spoofeadoUrl} controls playsInline className="h-full w-full object-contain" />
++                  ) : (
++                    <div className="grid h-full place-items-center text-center text-xs text-white/25 px-4">
++                      <p>Vídeo spoofeado</p>
++                      <p className="mt-1 opacity-50">(disponible cuando el runner procese este trial)</p>
++                    </div>
++                  )}
++                </div>
++              </div>
++            </div>
++
++            {spoofeadoUrl && (
++              <a
++                href={spoofeadoUrl}
++                download
++                className="btn-secondary flex items-center justify-center gap-2 py-2 text-sm"
++              >
++                ↓ Descargar trial reel spoofeado
++              </a>
++            )}
++
++            {/* Acciones */}
++            {!showReject ? (
++              <div className="flex gap-3">
++                <button
++                  onClick={() => accion("aprobar")}
++                  disabled={actionLoading}
++                  className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-40 transition"
++                >
++                  {actionLoading ? "Procesando..." : "✓ Aprobar trial reel"}
++                </button>
++                <button
++                  onClick={() => setShowReject(true)}
++                  disabled={actionLoading}
++                  className="rounded-xl border border-red-900/40 bg-red-950/30 px-4 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-950/50 disabled:opacity-40 transition"
++                >
++                  ✕ Rechazar
++                </button>
++              </div>
++            ) : (
++              <div className="space-y-3">
++                <textarea
++                  className="input-base h-20 resize-none text-sm"
++                  placeholder="Motivo del rechazo (opcional)..."
++                  value={nota}
++                  onChange={(e) => setNota(e.target.value)}
++                />
++                <div className="flex gap-3">
++                  <button
++                    onClick={() => accion("rechazar")}
++                    disabled={actionLoading}
++                    className="flex-1 rounded-xl bg-red-700 py-2.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-40 transition"
++                  >
++                    {actionLoading ? "Rechazando..." : "Confirmar rechazo"}
++                  </button>
++                  <button onClick={() => setShowReject(false)} className="btn-secondary px-4 py-2.5 text-sm">
++                    Cancelar
++                  </button>
++                </div>
++              </div>
++            )}
++          </div>
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/src/app/aprobacion/page.tsx b/src/app/aprobacion/page.tsx
+index 21a0e20..c0691f0 100644
+--- a/src/app/aprobacion/page.tsx
++++ b/src/app/aprobacion/page.tsx
+@@ -3,12 +3,14 @@ import { sampleModelos, sampleCuentasInstagram } from "@/lib/data";
+ import { getDemoVideos } from "@/lib/demo-approvals";
+ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+ import { MesaClient, type VideoRow } from "./MesaClient";
++import { TrialReelsMesa } from "./TrialReelsMesa";
+ import type { LibraryContent } from "@/types";
+ 
+ export const dynamic = "force-dynamic";
+ 
+ type SearchParams = {
+   estado?: string;
++  tab?: string;
+ };
+ 
+ const ESTADOS_VALIDOS = ["en_aprobacion", "aprobado", "editando"] as const;
+@@ -140,10 +142,12 @@ async function getModelosYCuentas() {
+ 
+ export default async function AprobacionPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+   const params = await searchParams;
++  const tab = params.tab === "trial" ? "trial" : "reels";
+   const estado = resolveEstado(params.estado);
+   const [rows, { modelos, cuentas }] = await Promise.all([getRows(estado), getModelosYCuentas()]);
+-  const tabs = [
+-    { href: "/aprobacion?estado=en_aprobacion", estado: "en_aprobacion", label: "En aprobacion" },
++
++  const mainTabs = [
++    { href: "/aprobacion?estado=en_aprobacion", estado: "en_aprobacion", label: "En aprobación" },
+     { href: "/aprobacion?estado=aprobado", estado: "aprobado", label: "Aprobados" },
+     { href: "/aprobacion?estado=editando", estado: "editando", label: "Rehacer IA" },
+   ];
+@@ -151,24 +155,45 @@ export default async function AprobacionPage({ searchParams }: { searchParams: P
+   return (
+     <PanelLayout>
+       <div className="space-y-6">
+-        <div className="flex items-center justify-between gap-4">
+-          <h1 className="font-display text-xl font-semibold text-halo-text">Mesa de Aprobacion</h1>
+-          <div className="flex flex-wrap gap-2 text-xs">
+-            {tabs.map((tab) => (
+-              <a
+-                key={tab.estado}
+-                href={tab.href}
+-                className={`rounded-md px-3 py-1.5 transition-colors ${
+-                  estado === tab.estado ? "bg-halo-accent text-white" : "text-halo-subtle hover:text-halo-text"
+-                }`}
+-              >
+-                {tab.label}
+-              </a>
+-            ))}
++        <div className="flex flex-wrap items-center justify-between gap-4">
++          <h1 className="font-display text-xl font-semibold text-halo-text">Mesa de Aprobación</h1>
++          {/* Selector de sección principal */}
++          <div className="flex gap-1 rounded-xl border border-halo-border bg-halo-muted/20 p-1">
++            <a
++              href="/aprobacion?tab=reels"
++              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === "reels" ? "bg-halo-accent text-white" : "text-halo-subtle hover:text-halo-text"}`}
++            >
++              Reels
++            </a>
++            <a
++              href="/aprobacion?tab=trial"
++              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === "trial" ? "bg-halo-accent text-white" : "text-halo-subtle hover:text-halo-text"}`}
++            >
++              Trial Reels
++            </a>
+           </div>
+         </div>
+ 
+-        <MesaClient rows={rows} currentEstado={estado} modelos={modelos} cuentas={cuentas} />
++        {tab === "trial" ? (
++          <TrialReelsMesa />
++        ) : (
++          <>
++            <div className="flex flex-wrap gap-2 text-xs">
++              {mainTabs.map((t) => (
++                <a
++                  key={t.estado}
++                  href={t.href}
++                  className={`rounded-md px-3 py-1.5 transition-colors ${
++                    estado === t.estado ? "bg-halo-accent/20 text-halo-accent border border-halo-accent/30" : "text-halo-subtle hover:text-halo-text"
++                  }`}
++                >
++                  {t.label}
++                </a>
++              ))}
++            </div>
++            <MesaClient rows={rows} currentEstado={estado} modelos={modelos} cuentas={cuentas} />
++          </>
++        )}
+       </div>
+     </PanelLayout>
+   );
+-- 
+2.43.0
+

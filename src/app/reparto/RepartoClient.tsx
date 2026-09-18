@@ -32,6 +32,7 @@ export function RepartoClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [asignando, setAsignando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const [selected, setSelected] = useState<RepartoRow | null>(null);
   const [cuentaId, setCuentaId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -55,6 +56,20 @@ export function RepartoClient({
       alert("Error al ejecutar el reparto");
     } finally {
       setAsignando(false);
+    }
+  }
+
+  async function enviarAlRunner() {
+    setConfirmando(true);
+    try {
+      const res = await fetch("/api/reparto/confirmar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const json = await res.json();
+      alert(`✅ ${json.confirmados ?? 0} vídeos enviados al runner para edición`);
+      startTransition(() => router.refresh());
+    } catch {
+      alert("Error al enviar al runner");
+    } finally {
+      setConfirmando(false);
     }
   }
 
@@ -93,13 +108,22 @@ export function RepartoClient({
             <p className="text-xs text-zinc-500">En reparto ahora</p>
           </div>
         </div>
-        <button
-          onClick={ejecutarReparto}
-          disabled={asignando || pendientes === 0}
-          className="ml-auto rounded-xl bg-[#8B5CF6] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7C3AED] disabled:opacity-40"
-        >
-          {asignando ? "Ejecutando…" : `▶ Ejecutar Reparto (${pendientes} pendientes)`}
-        </button>
+        <div className="ml-auto flex gap-3">
+          <button
+            onClick={ejecutarReparto}
+            disabled={asignando || pendientes === 0}
+            className="rounded-xl bg-[#8B5CF6] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7C3AED] disabled:opacity-40"
+          >
+            {asignando ? "Ejecutando…" : `▶ Ejecutar Reparto (${pendientes} pendientes)`}
+          </button>
+          <button
+            onClick={enviarAlRunner}
+            disabled={confirmando || asignaciones.filter(a => a.estado === "en_reparto").length === 0}
+            className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:opacity-40"
+          >
+            {confirmando ? "Enviando…" : "🎬 Enviar al Runner"}
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}

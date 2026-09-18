@@ -1,6 +1,7 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { BibliotecaClient } from "./BibliotecaClient";
+import { BibliotecaUploadBar } from "./BibliotecaUploadBar";
 import { sampleModelos } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -100,6 +101,7 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: P
         <p className="text-sm text-[color:var(--text-secondary)]">Bandeja de entrada de material bruto</p>
         <h1 className="mt-1 font-display text-3xl font-semibold text-halo-text">Biblioteca</h1>
       </div>
+      <BibliotecaUploadBar modelos={modelos} />
       <BibliotecaClient
         videos={videos}
         modelos={modelos}

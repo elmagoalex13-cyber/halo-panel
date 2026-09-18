@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         r2_key: r2Key,
         demo: true,
-        data: { id: contentId ?? randomUUID(), modelo_id: modeloId, r2_key: r2Key, estado: "en_aprobacion" },
+        data: { id: contentId ?? randomUUID(), modelo_id: modeloId, r2_key: r2Key, estado: "recibido" },
       });
     }
 
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         size_bytes: buffer.byteLength,
         titulo: titulo || file.name,
         tipo_video: tipoVideo,
-        estado: "en_aprobacion",
+        estado: "recibido",
         recibido_at: new Date().toISOString(),
         caption: "",
         frase_quemada: "",
