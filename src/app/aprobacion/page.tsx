@@ -23,6 +23,9 @@ type SupabaseApprovalRow = {
   r2_key: string | null;
   r2_key_referencia: string | null;
   r2_key_original?: string | null;
+  video_procesado_url?: string | null;
+  estado_procesamiento?: string | null;
+  error_mensaje?: string | null;
   caption: string | null;
   frase_quemada: string | null;
   correcciones: string | null;
@@ -43,7 +46,8 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       .from("library_content")
       .select(`
         id, titulo, tipo_video, estado, recibido_at, publicado_at,
-        r2_key, r2_key_referencia, r2_key_original, caption, frase_quemada, correcciones,
+        r2_key, r2_key_referencia, r2_key_original, video_procesado_url, estado_procesamiento, error_mensaje,
+        caption, frase_quemada, correcciones,
         modelo:modelos(nombre),
         cuenta:cuentas_instagram(username)
       `)
@@ -51,25 +55,8 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       .order("recibido_at", { ascending: false })
       .limit(80);
 
-    let data = primary.data as unknown[] | null;
-    let error = primary.error;
-
-    if (error) {
-      const retry = await supabase
-        .from("library_content")
-        .select(`
-          id, titulo, tipo_video, estado, recibido_at, publicado_at,
-          r2_key, r2_key_referencia, caption, frase_quemada, correcciones,
-          modelo:modelos(nombre),
-          cuenta:cuentas_instagram(username)
-        `)
-        .eq("estado", estado)
-        .order("recibido_at", { ascending: false })
-        .limit(80);
-
-      data = retry.data as unknown[] | null;
-      error = retry.error;
-    }
+    const data = primary.data as unknown[] | null;
+    const error = primary.error;
 
     if (error) throw error;
 
@@ -82,6 +69,9 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       r2_key: row.r2_key ?? null,
       r2_key_referencia: row.r2_key_referencia ?? null,
       r2_key_original: row.r2_key_original ?? null,
+      video_procesado_url: row.video_procesado_url ?? null,
+      estado_procesamiento: row.estado_procesamiento ?? null,
+      error_mensaje: row.error_mensaje ?? null,
       caption: row.caption ?? "",
       frase_quemada: row.frase_quemada ?? "",
       correcciones: row.correcciones ?? "",

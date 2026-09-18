@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { estadoLabel, formatDate, tipoVideoLabel } from "@/lib/utils";
+import { urlR2, videoBruto, videoEditado } from "@/lib/media";
 
 export interface VideoRow {
   id: string;
@@ -14,6 +15,9 @@ export interface VideoRow {
   r2_key: string | null;
   r2_key_referencia: string | null;
   r2_key_original: string | null;
+  video_procesado_url: string | null;
+  estado_procesamiento: string | null;
+  error_mensaje: string | null;
   caption: string;
   frase_quemada: string;
   correcciones: string;
@@ -29,12 +33,7 @@ const ESTADO_BADGE: Record<string, string> = {
   editando: "badge-editando",
 };
 
-function videoUrl(r2Key: string | null): string | null {
-  if (!r2Key) return null;
-  if (r2Key.startsWith("http://") || r2Key.startsWith("https://")) return r2Key;
-  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "";
-  return base ? `${base.replace(/\/$/, "")}/${r2Key.replace(/^\//, "")}` : null;
-}
+const videoUrl = urlR2;
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -117,7 +116,7 @@ export function MesaClient({
     // Tipo 4: auto-expandir referencia y original para comparativa de 3 paneles
     const esTipo4 = row.tipo_video === "tipo4";
     setRefOpen(esTipo4 && Boolean(row.r2_key_referencia));
-    setOriginalOpen(esTipo4 && Boolean(row.r2_key_original));
+    setOriginalOpen(esTipo4 && Boolean(videoBruto(row)));
     setActionMessage(null);
   }, []);
 
@@ -211,9 +210,7 @@ export function MesaClient({
     try {
       let cfg: Record<string, unknown> = {};
       try { cfg = JSON.parse(localStorage.getItem("halo-config") ?? "{}"); } catch {}
-      const videoPublicUrl = selected.r2_key
-        ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? ""}/${selected.r2_key}`
-        : null;
+      const videoPublicUrl = videoEditado(selected);
       const res = await fetch("/api/pubbler/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -506,7 +503,7 @@ export function MesaClient({
       ) : (
         <div className="max-h-[calc(100vh-230px)] overflow-y-auto rounded-2xl border border-white/[0.08] bg-white/[0.025]">
           {filteredRows.map((row) => {
-            const url = videoUrl(row.r2_key);
+            const url = videoEditado(row);
             return (
               <button
                 key={row.id}
@@ -583,10 +580,10 @@ export function MesaClient({
 
             <div className="grid min-h-0 place-items-center bg-black p-3 sm:p-5">
               <div className="h-full max-h-[88vh] w-auto overflow-hidden rounded-2xl bg-black ring-1 ring-white/10">
-                {videoUrl(selected.r2_key) ? (
+                {videoEditado(selected) ? (
                   <video
                     key={selected.id}
-                    src={videoUrl(selected.r2_key)!}
+                    src={videoEditado(selected)!}
                     controls
                     playsInline
                     autoPlay
@@ -620,6 +617,21 @@ export function MesaClient({
                     </span>
                   )}
                 </div>
+                {selected.estado_procesamiento && selected.estado === "editando" ? (
+                  <p
+                    className={`mt-2 rounded-lg border px-2.5 py-1.5 text-[11px] ${
+                      selected.estado_procesamiento === "error"
+                        ? "border-red-900/50 bg-red-950/30 text-red-300"
+                        : "border-amber-700/30 bg-amber-950/20 text-amber-300"
+                    }`}
+                  >
+                    {selected.estado_procesamiento === "pendiente" && "En cola del runner: se procesara en unos segundos."}
+                    {selected.estado_procesamiento === "procesando" && "El runner esta procesando este video..."}
+                    {selected.estado_procesamiento === "error" &&
+                      `Error del runner: ${selected.error_mensaje ?? "desconocido"}. Pulsa Rehacer para reintentar.`}
+                    {selected.estado_procesamiento === "listo" && "Procesado. Aparecera en En aprobacion."}
+                  </p>
+                ) : null}
               </div>
 
               <div>
@@ -644,13 +656,13 @@ export function MesaClient({
 
               <div>
                 <label className="mb-1 block text-[9px] font-semibold uppercase tracking-widest text-white/35">
-                  Correcciones <span className="font-normal normal-case text-white/20">(van con Rehacer)</span>
+                  Nota para Rehacer <span className="font-normal normal-case text-white/20">(obligatoria para rehacer)</span>
                 </label>
                 <textarea
                   value={correcciones}
                   onChange={(event) => setCorrecciones(event.target.value)}
                   rows={2}
-                  placeholder="que cambiar y como"
+                  placeholder="que hay que cambiar y como (se guarda con el video)"
                   className="input-base w-full resize-none text-xs"
                 />
               </div>
@@ -769,12 +781,12 @@ export function MesaClient({
 
                   <div>
                     <p className="mb-1 text-[10px] text-white/35">Original sin editar</p>
-                    {selected.r2_key_original ? (
+                    {videoBruto(selected) ? (
                       originalOpen ? (
                         <div className="relative mx-auto max-h-[280px] overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "9/16" }}>
                           <video
                             key={`original-${selected.id}`}
-                            src={videoUrl(selected.r2_key_original)!}
+                            src={videoBruto(selected)!}
                             controls
                             playsInline
                             autoPlay
@@ -793,7 +805,7 @@ export function MesaClient({
                           onClick={() => setOriginalOpen(true)}
                           className="group relative flex h-28 w-16 overflow-hidden rounded-xl bg-black ring-1 ring-white/10 transition-all hover:ring-[#06B6D4]/60"
                         >
-                          <video src={videoUrl(selected.r2_key_original)!} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                          <video src={videoBruto(selected)!} className="h-full w-full object-cover" muted playsInline preload="metadata" />
                           <div className="absolute inset-0 flex items-center justify-center bg-black/40 transition-colors group-hover:bg-black/20">
                             <div className="grid h-8 w-8 place-items-center rounded-full bg-black/70 ring-1 ring-white/20">
                               <svg className="ml-0.5 h-3.5 w-3.5 text-white" fill="currentColor" viewBox="0 0 16 16">
@@ -814,12 +826,9 @@ export function MesaClient({
               </div>
 
               <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-3">
-                {videoUrl(selected.r2_key) && (
+                {videoEditado(selected) && (
                   <a
-                    href={videoUrl(selected.r2_key)!}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={`/api/descargar?id=${selected.id}&tipo=editado`}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#8B5CF6]/30 bg-[#8B5CF6]/10 py-2 text-sm font-medium text-[#A78BFA] transition-all hover:border-[#8B5CF6]/60 hover:bg-[#8B5CF6]/20"
                   >
                     ↓ Descargar mp4
@@ -841,16 +850,14 @@ export function MesaClient({
                 </button>
                 <button
                   onClick={() => saveAndAct("rehacer")}
-                  disabled={loading}
+                  disabled={loading || !correcciones.trim()}
+                  title={correcciones.trim() ? undefined : "Escribe una nota para rehacer"}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] py-2.5 text-sm font-semibold text-white/80 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white disabled:opacity-40"
                 >
                   ↺ Rehacer <kbd className="rounded bg-white/10 px-1.5 text-[9px] font-normal">R</kbd>
                 </button>
                 <a
-                  href={videoUrl(selected.r2_key_original) ?? videoUrl(selected.r2_key) ?? "#"}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`/api/descargar?id=${selected.id}&tipo=original`}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-700/40 bg-amber-950/30 py-2.5 text-sm font-semibold text-amber-400 transition-all hover:bg-amber-950/50 hover:text-amber-300"
                 >
                   ↓ Editar yo <span className="text-[9px] font-normal opacity-60">(descarga original)</span>

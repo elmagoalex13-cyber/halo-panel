@@ -45,3 +45,8 @@ export async function getSignedDownloadUrl(key: string, bucket = process.env.R2_
     { expiresIn: 3600 },
   );
 }
+
+export async function getR2Object(key: string, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos") {
+  const client = createR2Client();
+  return client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+}
