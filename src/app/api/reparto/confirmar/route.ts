@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { createAdminClient } from '@/lib/supabase/server';
 
 function tipoVideoANumero(tipoVideo: string | null): number {
   if (!tipoVideo) return 4;
