@@ -50,13 +50,17 @@ export function AjustesClient() {
             <p>Para activarlo añade estas variables en Vercel (Settings → Environment Variables) y vuelve a desplegar:</p>
             <p className="font-mono text-halo-text">PUBLER_API_KEY = (Publer → Settings → API)</p>
             <p className="font-mono text-halo-text">PUBLER_WORKSPACE_ID = (id de tu workspace)</p>
+            <p className="font-mono text-halo-text">CRON_SECRET = (una clave larga cualquiera; la misma en el .env del runner)</p>
           </div>
         )}
       </div>
 
       <div className="card space-y-3">
         <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Ritmo de publicación</h2>
-        <p className="text-xs text-halo-subtle">Por cada cuenta de Instagram y día (hora de España):</p>
+        <p className="text-xs text-halo-subtle">
+          Por cada cuenta de Instagram y día (hora de España). Los reels son los vídeos que apruebas; los trial reels los genera solo el runner con
+          los vídeos virales de la propia cuenta (spoofer, máximo 5 usos por vídeo).
+        </p>
         <ul className="space-y-1.5 text-sm">
           {(estado?.slots ?? []).map((s) => (
             <li key={s.hora} className="flex items-center justify-between rounded-lg border border-halo-border/60 bg-halo-bg/40 px-3 py-2">

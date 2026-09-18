@@ -9,12 +9,10 @@
  *   4. actualiza las estadisticas de la cuenta (mediana, umbral, procesados, extraidos).
  * Sin Telegram. Necesita IG_SESSIONID en el .env del runner.
  */
-import { mkdir, rm } from "fs/promises";
-import { createWriteStream } from "fs";
-import { pipeline } from "stream/promises";
-import { Readable } from "stream";
+import { rm } from "fs/promises";
 import path from "path";
 import { config } from "./config.mjs";
+import { descargarUrl } from "./descarga.mjs";
 import { publicUrl, uploadToR2 } from "./r2.mjs";
 import { reelsDeCuenta } from "./instagram.mjs";
 
@@ -42,25 +40,18 @@ export function tagsMetricas(reel) {
   return [`m:codigo=${reel.codigo}`, `m:comentarios=${reel.comentarios ?? 0}`, `m:compartidos=${reel.compartidos ?? 0}`];
 }
 
-async function descargar(url, destino) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(120000) });
-  if (!res.ok || !res.body) throw new Error(`Descarga ${res.status}`);
-  await mkdir(path.dirname(destino), { recursive: true });
-  await pipeline(Readable.fromWeb(res.body), createWriteStream(destino));
-}
-
 async function subirReel(username, reel) {
   const base = `referencias/${username}/${reel.codigo}`;
   const dir = path.join(config.tmpDir, "scraper");
   const mp4 = path.join(dir, `${reel.codigo}.mp4`);
   let thumbUrl = null;
   try {
-    await descargar(reel.videoUrl, mp4);
+    await descargarUrl(reel.videoUrl, mp4);
     await uploadToR2(mp4, `${base}.mp4`, "video/mp4");
     if (reel.miniatura) {
       const jpg = path.join(dir, `${reel.codigo}.jpg`);
       try {
-        await descargar(reel.miniatura, jpg);
+        await descargarUrl(reel.miniatura, jpg);
         await uploadToR2(jpg, `${base}.jpg`, "image/jpeg");
         thumbUrl = publicUrl(`${base}.jpg`);
       } catch {

@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
 type WithModelName<T> = T & { modelos?: { nombre?: string | null } | null };
 
 async function loadDashboardData() {
-  const vacio = { videos: [] as LibraryContent[], modelos: [] as Modelo[], facturacion: [] as FacturacionModelo[] };
+  const vacio = { videos: [] as LibraryContent[], modelos: [] as Modelo[], facturacion: [] as FacturacionModelo[], trials: [] as Array<{ estado: string; publicado_at: string | null }> };
+  let trials: Array<{ estado: string; publicado_at: string | null }> = [];
   if (!canUseSupabase()) return vacio;
 
   try {
@@ -33,7 +34,9 @@ async function loadDashboardData() {
       supabase.from("facturacion_modelos").select("*, modelos(nombre)").gte("periodo_inicio", mesInicio),
     ]);
 
-    const videos = ((videosResult.data ?? []) as Array<WithModelName<LibraryContent>>).map((video) => ({
+    const todas = (videosResult.data ?? []) as Array<WithModelName<LibraryContent> & { tipo?: number | null }>;
+    trials = todas.filter((v) => v.tipo === 5).map((v) => ({ estado: v.estado, publicado_at: (v as { publicado_at?: string | null }).publicado_at ?? null }));
+    const videos = todas.filter((v) => v.tipo !== 5).map((video) => ({
       ...video,
       modelo_nombre: video.modelos?.nombre ?? "Sin modelo",
     })) as LibraryContent[];
@@ -42,7 +45,7 @@ async function loadDashboardData() {
       modelo_nombre: row.modelos?.nombre ?? "Sin modelo",
     })) as FacturacionModelo[];
 
-    return { videos, modelos: (modelosResult.data ?? []) as Modelo[], facturacion };
+    return { videos, modelos: (modelosResult.data ?? []) as Modelo[], facturacion, trials };
   } catch {
     return vacio;
   }
@@ -61,7 +64,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion }, cuentasReales] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales()]);
+  const [{ videos, modelos, facturacion, trials }, cuentasReales] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales()]);
   const cuentasIG = loadCuentasIG(cuentasReales);
 
   const now = new Date();
@@ -101,6 +104,9 @@ export default async function DashboardPage({
     { label: "Programados", href: "/aprobacion?estado=aprobado", desc: "en Publer", total: programadas },
     { label: "Publicados", href: "/aprobacion?estado=aprobado", desc: "ya en Instagram", total: piezas.filter((v) => v.estado === "publicado").length },
   ].map((e) => ({ ...e, estado: e.label }));
+  const trialsSinProgramar = trials.filter((t) => t.estado === "aprobado" && !(t.publicado_at && new Date(t.publicado_at).getTime() > ahoraMs)).length;
+  const trialsProgramados = trials.filter((t) => t.estado === "aprobado" && t.publicado_at && new Date(t.publicado_at).getTime() > ahoraMs).length;
+  const trialsPublicados = trials.filter((t) => t.estado === "publicado").length;
   const maxEtapa = Math.max(1, ...etapas.map((e) => e.total));
   const rechazados = piezas.filter((v) => v.estado === "rechazado").length;
   const runnerPendiente = piezas.filter((v) => v.estado === "editando" && v.estado_procesamiento === "pendiente").length;
@@ -246,6 +252,12 @@ export default async function DashboardPage({
             </li>
           ))}
         </ol>
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3 text-xs text-white/50">
+          <span className="font-semibold text-white/70">Trial reels (automáticos):</span>
+          <span className="badge">{trialsSinProgramar} en cola</span>
+          <span className="badge">{trialsProgramados} programados</span>
+          <span className="badge">{trialsPublicados} publicados</span>
+        </div>
       </GlassCard>
 
       <GlassCard className="mt-6 p-5">

@@ -53,6 +53,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
         cuenta:cuentas_instagram(username)
       `)
       .eq("estado", estado)
+      .or("tipo.is.null,tipo.neq.5") // los trial reels automaticos no pasan por la Mesa
       .order("recibido_at", { ascending: false })
       .limit(80);
 

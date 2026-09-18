@@ -12,6 +12,7 @@ import { procesarTipo } from "./tipos.mjs";
 import { asignarFrase } from "./frases.mjs";
 import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
+import { cicloTrials } from "./trials.mjs";
 
 const falta = faltanVariables();
 if (falta.length) {
@@ -121,3 +122,19 @@ setInterval(() => descargarReferenciasPendientes(supabase), 60000);
 console.log(`Scraper de referencias activo (cuentas cada ${config.scraperHoras}h, umbral viral x${config.scraperFactor} la mediana, sesion IG: ${config.igSessionId ? "si" : "NO"})`);
 setTimeout(() => cicloScraper(supabase), 10000);
 setInterval(() => cicloScraper(supabase), 60000);
+
+// Trial reels: repone la cola de cada cuenta (3 al dia) con virales propios pasados por el spoofer
+setTimeout(() => cicloTrials(supabase), 20000);
+setInterval(() => cicloTrials(supabase), 5 * 60000);
+
+// Pide al panel que programe en Publer lo pendiente (trial reels nuevos, aprobados sin fecha...)
+async function avisarPanel() {
+  if (!config.panelUrl || !config.cronSecret) return;
+  try {
+    const res = await fetch(`${config.panelUrl}/api/publer/programar`, { method: "POST", headers: { Authorization: `Bearer ${config.cronSecret}` } });
+    if (!res.ok) console.error(`[panel] programar respondio ${res.status}`);
+  } catch (err) {
+    console.error("[panel] no se pudo avisar:", err.message);
+  }
+}
+setInterval(avisarPanel, 10 * 60000);

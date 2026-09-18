@@ -62,7 +62,8 @@ node /opt/halo-runner/src/diagnostico.mjs
 `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` (sin barra final y con un solo `https://`),
 `POLL_INTERVAL_MS` (15000), `MAX_PIEZAS` (3). Opcionales: `WHISPER_BIN`, `WHISPER_MODEL`, `TMP_DIR`,
 `IG_SESSIONID` (scraper y descarga de referencias), `SCRAPER_HORAS` (24), `SCRAPER_DIAS` (14),
-`SCRAPER_MAX_REELS` (30), `SCRAPER_FACTOR` (1.5).
+`SCRAPER_MAX_REELS` (30), `SCRAPER_FACTOR` (1.5), `TRIAL_COLCHON` (9), `TRIAL_MAX_USOS` (5), `TRIAL_FACTOR` (1.5),
+`TRIAL_HORAS` (3), `PANEL_URL` y `CRON_SECRET` (para que el runner avise al panel de que programe en Publer).
 
 ## Tipos
 1 hablando (subtítulos) · 2 caption (frase del banco quemada; si la pieza no trae `frase_quemada`,
@@ -93,3 +94,19 @@ runner la coge en menos de 1 minuto. Para lanzarlo ya desde el VPS:
 ```bash
 ssh root@94.143.143.73 'cd /opt/halo-runner && grep -q "^IG_SESSIONID=" .env || echo "IG_SESSIONID=PEGA_AQUI_TU_SESSIONID" >> .env; pm2 restart halo-runner --update-env && node src/scraper-cli.mjs'
 ```
+
+## Trial reels automáticos (spoofer)
+Por cada cuenta de Instagram activa de una modelo, el runner (`src/trials.mjs`):
+
+1. lee sus reels y se queda con los **virales** (vistas > mediana × `TRIAL_FACTOR`),
+2. cada viral se puede reutilizar **como máximo 5 veces** (`TRIAL_MAX_USOS`). Cada uso pasa por el
+   **spoofer** (`src/spoofer.mjs`): recorta ~1 s al inicio y ~1 s al final, amplía (zoom), ajusta brillo,
+   contraste y saturación, aplica un filtro suave y borra metadatos, con parámetros distintos cada vez,
+3. mantiene en cola `TRIAL_COLCHON` (9 = 3 días × 3 al día) trial reels por cuenta.
+
+Cada trial es una fila de `library_content` (`origen='sistema'`, `tipo=5`, `estado='aprobado'`, `shortcode_ig` = reel de
+origen) que el panel programa en Publer como **trial reel** a las 09:00, 14:00 y 19:00 (hora de España). Los reels
+normales (los vídeos que apruebas) van a las 09:00 y 18:30.
+
+El panel programa cuando se aprueba un vídeo, cuando alguien abre el panel y cuando el runner lo avisa cada 10 min:
+en el `.env` del VPS añade `PANEL_URL=https://tu-panel.vercel.app` y `CRON_SECRET=<el mismo valor que en Vercel>`.

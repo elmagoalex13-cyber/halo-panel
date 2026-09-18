@@ -1,0 +1,3 @@
+{
+  "crons": [{ "path": "/api/publer/programar", "schedule": "0 6 * * *" }]
+}

@@ -3,16 +3,18 @@ import { urlR2 } from "@/lib/media";
 
 // Programacion automatica en Publer de los videos aprobados.
 // Reglas (hora de Espana) por cada cuenta de Instagram y dia:
-//   09:00 reel en la cuadricula · 14:00 trial reel · 18:30 reel en la cuadricula · 19:00 trial reel
-// Para cambiar el ritmo basta con editar SLOTS.
+//   2 reels en la cuadricula (los videos aprobados):        09:00 y 18:30
+//   3 trial reels (virales propios pasados por el spoofer): 09:00, 14:00 y 19:00
+// Para cambiar el ritmo basta con editar estas dos listas.
 
 export const ZONA = "Europe/Madrid";
+export const HORAS_REEL = ["09:00", "18:30"];
+export const HORAS_TRIAL = ["09:00", "14:00", "19:00"];
+export const TIPO_TRIAL = 5; // library_content.tipo de los trial reels (los crea el runner)
 export const SLOTS: Array<{ hora: string; trial: boolean }> = [
-  { hora: "09:00", trial: false },
-  { hora: "14:00", trial: true },
-  { hora: "18:30", trial: false },
-  { hora: "19:00", trial: true },
-];
+  ...HORAS_REEL.map((hora) => ({ hora, trial: false })),
+  ...HORAS_TRIAL.map((hora) => ({ hora, trial: true })),
+].sort((a, b) => a.hora.localeCompare(b.hora) || Number(a.trial) - Number(b.trial));
 
 const BASE = process.env.PUBLER_BASE_URL ?? "https://app.publer.com/api/v1";
 const DIAS_VISTA = 60;
@@ -82,18 +84,20 @@ export function isoMadrid(fecha: Date) {
 
 type Cuenta = { id: string; username: string };
 
-/** Primer hueco libre (mirando todas las cuentas dadas). Ocupados: Set "cuentaId|ISO-minuto". */
-export function siguienteHueco(cuentas: Cuenta[], ocupados: Set<string>, desde = new Date()) {
+export const claveHueco = (cuentaId: string, instante: Date, trial: boolean) => `${cuentaId}|${instante.toISOString().slice(0, 16)}|${trial ? "t" : "r"}`;
+
+/** Primer hueco libre del tipo pedido (reel o trial) mirando todas las cuentas dadas. */
+export function siguienteHueco(cuentas: Cuenta[], ocupados: Set<string>, trial = false, desde = new Date()) {
+  const horas = trial ? HORAS_TRIAL : HORAS_REEL;
   const limite = desde.getTime() + MARGEN_MIN * 60000;
   const hoy = new Date(desde.getTime());
   for (let d = 0; d < DIAS_VISTA; d++) {
     const dia = partesMadrid(new Date(hoy.getTime() + d * 86400000));
-    for (const slot of SLOTS) {
-      const instante = instanteMadrid(dia, slot.hora);
+    for (const hora of horas) {
+      const instante = instanteMadrid(dia, hora);
       if (instante.getTime() < limite) continue;
-      const clave = instante.toISOString().slice(0, 16);
       for (const c of cuentas) {
-        if (!ocupados.has(`${c.id}|${clave}`)) return { cuenta: c, instante, trial: slot.trial };
+        if (!ocupados.has(claveHueco(c.id, instante, trial))) return { cuenta: c, instante, trial };
       }
     }
   }
@@ -161,18 +165,18 @@ export async function programarPieza(supabase: SupabaseClient, piezaId: string):
   try {
     const { data: pieza } = await supabase
       .from("library_content")
-      .select("id, modelo_id, cuenta_id, caption, video_procesado_url, r2_key, estado, publicado_at")
+      .select("id, modelo_id, cuenta_id, tipo, caption, video_procesado_url, r2_key, estado, publicado_at")
       .eq("id", piezaId)
       .single();
     if (!pieza) return { ok: false, motivo: "error", mensaje: "Pieza no encontrada" };
     const videoUrl = urlR2(pieza.video_procesado_url);
     if (!videoUrl) return { ok: false, motivo: "sin_video", mensaje: "La pieza no tiene video editado" };
 
-    const { data: cuentasIG } = await supabase
-      .from("cuentas_instagram")
-      .select("id, username")
-      .eq("modelo_id", pieza.modelo_id)
-      .eq("activa", true);
+    // Trial reel: va siempre a la cuenta de la que salio el video viral. Reel normal: a cualquier cuenta de la modelo.
+    const esTrial = pieza.tipo === TIPO_TRIAL;
+    let consulta = supabase.from("cuentas_instagram").select("id, username").eq("activa", true);
+    consulta = esTrial && pieza.cuenta_id ? consulta.eq("id", pieza.cuenta_id) : consulta.eq("modelo_id", pieza.modelo_id);
+    const { data: cuentasIG } = await consulta;
     const cuentasPub = await cuentasPublerInstagram();
     const candidatas = ((cuentasIG ?? []) as Cuenta[])
       .map((c) => ({ c, pub: cuentasPub.find((p) => normal(p.name) === normal(c.username) || normal(p.name).includes(normal(c.username))) }))
@@ -186,15 +190,17 @@ export async function programarPieza(supabase: SupabaseClient, piezaId: string):
     const ids = candidatas.map((x) => x.c.id);
     const { data: ocup } = await supabase
       .from("library_content")
-      .select("cuenta_id, publicado_at")
+      .select("cuenta_id, publicado_at, tipo")
       .in("cuenta_id", ids)
       .in("estado", ["aprobado", "publicado"])
       .gte("publicado_at", new Date(Date.now() - 86400000).toISOString());
     const ocupados = new Set(
-      ((ocup ?? []) as Array<{ cuenta_id: string; publicado_at: string }>).map((o) => `${o.cuenta_id}|${new Date(o.publicado_at).toISOString().slice(0, 16)}`),
+      ((ocup ?? []) as Array<{ cuenta_id: string; publicado_at: string; tipo: number | null }>).map((o) =>
+        claveHueco(o.cuenta_id, new Date(o.publicado_at), o.tipo === TIPO_TRIAL),
+      ),
     );
 
-    const hueco = siguienteHueco(candidatas.map((x) => x.c), ocupados);
+    const hueco = siguienteHueco(candidatas.map((x) => x.c), ocupados, esTrial);
     if (!hueco) return { ok: false, motivo: "error", mensaje: "No hay huecos libres en los proximos 60 dias" };
     const pub = candidatas.find((x) => x.c.id === hueco.cuenta.id)!.pub!;
 
@@ -240,8 +246,8 @@ export async function programarPieza(supabase: SupabaseClient, piezaId: string):
 
 let ocupado = false;
 
-/** Programa todas las aprobadas que aun no tienen fecha (p. ej. las aprobadas antes de activar Publer). */
-export async function programarPendientes(supabase: SupabaseClient, limite = 10) {
+/** Programa las aprobadas sin fecha: reels aprobados (p. ej. antes de activar Publer) y trial reels nuevos. */
+export async function programarPendientes(supabase: SupabaseClient, limite = 6) {
   if (ocupado || !publerActivo()) return 0;
   ocupado = true;
   try {
