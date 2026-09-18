@@ -4,6 +4,8 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { VaultEntry } from "@/types";
 import { VaultClient } from "./VaultClient";
 
+export const dynamic = "force-dynamic";
+
 async function loadModelos() {
   if (!canUseSupabase()) return [] as { id: string; nombre: string }[];
   const { data } = await createAdminClient().from("modelos").select("id, nombre").order("nombre");

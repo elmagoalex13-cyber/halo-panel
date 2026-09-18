@@ -50,8 +50,8 @@ export async function PATCH(req: NextRequest) {
     await supabase
       .from("log_agentes")
       .insert({
-        agente: "mesa-aprobacion",
-        accion,
+        agente: "runner_edicion",
+        accion: `mesa_${accion}`,
         resultado: "ok",
         detalle: { content_id: id },
       })
