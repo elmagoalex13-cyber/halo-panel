@@ -1,41 +1,54 @@
-import { NextRequest, NextResponse } from "next/server";
-import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase-admin';
 
-export const dynamic = "force-dynamic";
+function tipoVideoANumero(tipoVideo: string | null): number {
+  if (!tipoVideo) return 4;
+  const s = tipoVideo.toLowerCase();
+  if (s.includes('1')) return 1;
+  if (s.includes('2')) return 2;
+  if (s.includes('3')) return 3;
+  return 4;
+}
 
-// POST /api/reparto/confirmar
-// Mueve vídeos de en_reparto → editando para que el runner los procese
-// Body: { ids?: string[] }  — si no se pasan ids, confirma todos los en_reparto con tipo_video asignado
 export async function POST(req: NextRequest) {
-  if (!canUseSupabase()) {
-    return NextResponse.json({ ok: true, confirmados: 0, demo: true });
+  const body = await req.json().catch(() => ({}));
+  const ids: string[] | undefined = body.ids;
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from('library_content')
+    .select('id, tipo_video')
+    .eq('estado', 'en_reparto')
+    .not('tipo_video', 'is', null)
+    .neq('tipo_video', 'sin_clasificar');
+
+  if (ids?.length) query = query.in('id', ids);
+
+  const { data: piezas, error: fetchError } = await query;
+
+  if (fetchError) {
+    return NextResponse.json({ ok: false, error: fetchError.message }, { status: 500 });
   }
 
-  try {
-    const body = await req.json().catch(() => ({}));
-    const ids: string[] | undefined = body.ids;
+  if (!piezas || piezas.length === 0) {
+    return NextResponse.json({ ok: true, confirmados: 0 });
+  }
 
-    const supabase = createAdminClient();
-
-    let query = supabase
-      .from("library_content")
+  let confirmados = 0;
+  for (const pieza of piezas) {
+    const tipo = tipoVideoANumero(pieza.tipo_video);
+    const { error } = await supabase
+      .from('library_content')
       .update({
-        estado: "editando",
+        estado: 'editando',
+        estado_procesamiento: 'pendiente',
+        tipo,
         updated_at: new Date().toISOString(),
       })
-      .eq("estado", "en_reparto")
-      .not("tipo_video", "is", null)
-      .neq("tipo_video", "sin_clasificar");
+      .eq('id', pieza.id);
 
-    if (ids?.length) {
-      query = query.in("id", ids);
-    }
-
-    const { data, error } = await query.select("id");
-
-    if (error) throw error;
-    return NextResponse.json({ ok: true, confirmados: data?.length ?? 0 });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    if (!error) confirmados++;
   }
+
+  return NextResponse.json({ ok: true, confirmados });
 }
