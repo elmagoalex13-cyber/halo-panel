@@ -1,70 +1,84 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { SIN_CANCION } from "@/lib/frases";
+
+export const dynamic = "force-dynamic";
+
+type Cuerpo = {
+  id?: string;
+  frase?: string;
+  cancion_nombre?: string;
+  cancion_artista?: string | null;
+  audio_id_ig?: string | null;
+  puntuacion?: number;
+  activa?: boolean;
+};
+
+function limpiar(b: Cuerpo) {
+  const fila: Record<string, unknown> = {};
+  if (b.frase !== undefined) fila.frase = b.frase.trim();
+  if (b.cancion_nombre !== undefined) fila.cancion_nombre = b.cancion_nombre.trim() || SIN_CANCION;
+  if (b.cancion_artista !== undefined) fila.cancion_artista = b.cancion_artista?.trim() || null;
+  if (b.audio_id_ig !== undefined) fila.audio_id_ig = b.audio_id_ig?.trim() || null;
+  if (b.puntuacion !== undefined) fila.puntuacion = Math.min(10, Math.max(0, Math.round(Number(b.puntuacion) || 0)));
+  if (b.activa !== undefined) fila.activa = Boolean(b.activa);
+  return fila;
+}
+
+function error(e: unknown, status = 500) {
+  return NextResponse.json({ error: e instanceof Error ? e.message : (e as { message?: string })?.message ?? "Error interno" }, { status });
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    if (!canUseSupabase()) {
-      return NextResponse.json({
-        data: {
-          id: crypto.randomUUID(),
-          frase: body.frase,
-          cancion_nombre: body.cancion_nombre,
-          cancion_artista: body.cancion_artista || null,
-          audio_id_ig: body.audio_id_ig || null,
-          origen: "manual",
-          puntuacion: body.puntuacion ?? 5,
-          veces_usada: 0,
-          activa: true,
-        },
-      });
-    }
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
+    if (!canUseSupabase()) return error("Supabase no configurado", 503);
+    const body = (await req.json()) as Cuerpo;
+    if (!body.frase?.trim()) return error("Escribe la frase", 400);
+    const { data, error: err } = await createAdminClient()
       .from("banco_frases_canciones")
-      .insert({
-        frase: body.frase,
-        cancion_nombre: body.cancion_nombre,
-        cancion_artista: body.cancion_artista || null,
-        audio_id_ig: body.audio_id_ig || null,
-        puntuacion: body.puntuacion ?? 5,
-        origen: "manual",
-        veces_usada: 0,
-        activa: true,
-      })
+      .insert({ puntuacion: 5, ...limpiar(body), cancion_nombre: body.cancion_nombre?.trim() || SIN_CANCION, origen: "manual", veces_usada: 0, activa: true })
       .select()
       .single();
-    if (error) throw error;
+    if (err) throw err;
     return NextResponse.json({ data });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
+  } catch (e) {
+    return error(e);
   }
 }
 
+// Edita cualquier campo de la frase (texto, cancion, artista, audio, puntuacion, activa)
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, activa } = (await req.json()) as { id?: string; activa?: boolean };
-    if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
-    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
-    const supabase = createAdminClient();
-    const { error } = await supabase.from("banco_frases_canciones").update({ activa }).eq("id", id);
-    if (error) throw error;
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
+    if (!canUseSupabase()) return error("Supabase no configurado", 503);
+    const body = (await req.json()) as Cuerpo;
+    if (!body.id) return error("Falta id", 400);
+    const fila = limpiar(body);
+    if (fila.frase === "") return error("La frase no puede estar vacia", 400);
+    if (Object.keys(fila).length === 0) return error("Nada que actualizar", 400);
+    const { data, error: err } = await createAdminClient()
+      .from("banco_frases_canciones")
+      .update({ ...fila, updated_at: new Date().toISOString() })
+      .eq("id", body.id)
+      .select()
+      .single();
+    if (err) throw err;
+    return NextResponse.json({ ok: true, data });
+  } catch (e) {
+    return error(e);
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
+    if (!canUseSupabase()) return error("Supabase no configurado", 503);
     const { id } = (await req.json()) as { id?: string };
-    if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
-    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
+    if (!id) return error("Falta id", 400);
     const supabase = createAdminClient();
-    const { error } = await supabase.from("banco_frases_canciones").delete().eq("id", id);
-    if (error) throw error;
+    await supabase.from("banco_frases_usos").delete().eq("frase_id", id);
+    const { error: err } = await supabase.from("banco_frases_canciones").delete().eq("id", id);
+    if (err) throw err;
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
+  } catch (e) {
+    return error(e);
   }
 }

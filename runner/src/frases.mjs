@@ -13,7 +13,7 @@ export async function asignarFrase(supabase, pieza) {
   if (error || !data?.length) return null;
 
   const f = data[0];
-  const notas = f.cancion_nombre ? `Audio sugerido: ${f.cancion_nombre}${f.cancion_artista ? " - " + f.cancion_artista : ""}` : null;
+  const notas = f.cancion_nombre && f.cancion_nombre !== "Sin cancion" ? `Audio sugerido: ${f.cancion_nombre}${f.cancion_artista ? " - " + f.cancion_artista : ""}` : null;
   await supabase
     .from("library_content")
     .update({ frase_quemada: f.frase, ...(notas ? { notas_editor: notas } : {}) })

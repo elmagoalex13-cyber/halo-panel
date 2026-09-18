@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/** La BD exige cancion_nombre; las frases sin cancion usan este valor. */
+export const SIN_CANCION = "Sin cancion";
+
 export type FraseElegida = { id: string; frase: string; nota: string | null };
 
 /** Frase activa menos usada del banco (a igualdad, la de mayor puntuacion). */
@@ -13,7 +16,7 @@ export async function elegirFrase(supabase: SupabaseClient): Promise<FraseElegid
     .limit(1);
   if (error || !data?.length) return null;
   const f = data[0] as { id: string; frase: string; cancion_nombre: string | null; cancion_artista: string | null };
-  const nota = f.cancion_nombre ? `Audio sugerido: ${f.cancion_nombre}${f.cancion_artista ? " - " + f.cancion_artista : ""}` : null;
+  const nota = f.cancion_nombre && f.cancion_nombre !== SIN_CANCION ? `Audio sugerido: ${f.cancion_nombre}${f.cancion_artista ? " - " + f.cancion_artista : ""}` : null;
   return { id: f.id, frase: f.frase, nota };
 }
 

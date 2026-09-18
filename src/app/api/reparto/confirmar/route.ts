@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { canUseSupabase, createAdminClient } from '@/lib/supabase/server';
+import { elegirFrase, registrarUsoFrase } from '@/lib/frases';
 import { FILTRO_ETIQUETADO, tipoNumero } from '@/lib/tipoVideo';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   let query = supabase
     .from('library_content')
-    .select('id, tipo_video, tipo')
+    .select('id, tipo_video, tipo, cuenta_id, frase_quemada')
     .eq('estado', 'en_reparto')
     .or(FILTRO_ETIQUETADO);
 
@@ -33,18 +34,25 @@ export async function POST(req: NextRequest) {
 
   let confirmados = 0;
   for (const pieza of piezas) {
+    const tipoPieza = tipoNumero(pieza.tipo_video as string | null, pieza.tipo as number | null);
+    // Tipo 2 (caption/gesto): la frase sale sola del banco de frases
+    const frase = tipoPieza === 2 && !pieza.frase_quemada ? await elegirFrase(supabase) : null;
     const { error } = await supabase
       .from('library_content')
       .update({
         estado: 'editando',
         estado_procesamiento: 'pendiente',
         error_mensaje: null,
-        tipo: tipoNumero(pieza.tipo_video as string | null, pieza.tipo as number | null),
+        tipo: tipoPieza,
+        ...(frase ? { frase_quemada: frase.frase, ...(frase.nota ? { notas_editor: frase.nota } : {}) } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', pieza.id);
 
-    if (!error) confirmados++;
+    if (!error) {
+      confirmados++;
+      if (frase) await registrarUsoFrase(supabase, frase.id, pieza.id as string, (pieza.cuenta_id as string | null) ?? null);
+    }
   }
 
   return NextResponse.json({ ok: true, confirmados });
