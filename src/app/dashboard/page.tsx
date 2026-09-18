@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { AtSign, CheckCircle2, Clapperboard, Clock3, Scissors, TrendingUp, Users, Wallet } from "lucide-react";
+import { AtSign, CheckCircle2, Clapperboard, Clock3, TrendingUp, UserCheck, Users, Wallet } from "lucide-react";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { GlassCard } from "@/components/GlassCard";
 import { PanelLayout } from "@/components/PanelLayout";
@@ -75,13 +76,34 @@ export default async function DashboardPage({
   }
 
   const enAprobacion = videos.filter((video) => video.estado === "en_aprobacion").length;
-  const porEditar = videos.filter((video) => ["clasificando", "en_reparto", "editando"].includes(video.estado)).length;
   const reelsEsteMes = videos.filter((video) => new Date(video.recibido_at) >= monthStart).length;
   const reelsMesPasado = videos.filter((video) => {
     const d = new Date(video.recibido_at);
     return d >= lastMonthStart && d < monthStart;
   }).length;
   const deltaReelsPct = reelsMesPasado ? Math.round(((reelsEsteMes - reelsMesPasado) / reelsMesPasado) * 100) : undefined;
+
+  type Pieza = LibraryContent & { estado_procesamiento?: string | null };
+  const piezas = videos as Pieza[];
+  const modelosActivas = modelos.filter((m) => m.activa).length;
+  const aprobadosSemana = piezas.filter(
+    (v) => (v.estado === "aprobado" || v.estado === "publicado") && v.aprobado_at && new Date(v.aprobado_at).getTime() >= weekAgo,
+  ).length;
+  const publicados = piezas.filter((v) => v.estado === "publicado").length;
+  const etapas = [
+    { estado: "recibido", label: "Recibidos", href: "/biblioteca", desc: "por etiquetar" },
+    { estado: "clasificando", label: "Etiquetados", href: "/reparto", desc: "por repartir" },
+    { estado: "en_reparto", label: "En reparto", href: "/reparto", desc: "por confirmar" },
+    { estado: "editando", label: "Editando", href: "/aprobacion", desc: "en el runner" },
+    { estado: "en_aprobacion", label: "En aprobación", href: "/aprobacion", desc: "por revisar" },
+    { estado: "aprobado", label: "Aprobados", href: "/calendario", desc: "por publicar" },
+    { estado: "publicado", label: "Publicados", href: "/calendario", desc: "en redes" },
+  ].map((e) => ({ ...e, total: piezas.filter((v) => v.estado === e.estado).length }));
+  const maxEtapa = Math.max(1, ...etapas.map((e) => e.total));
+  const rechazados = piezas.filter((v) => v.estado === "rechazado").length;
+  const runnerPendiente = piezas.filter((v) => v.estado === "editando" && v.estado_procesamiento === "pendiente").length;
+  const runnerProcesando = piezas.filter((v) => v.estado === "editando" && v.estado_procesamiento === "procesando").length;
+  const runnerError = piezas.filter((v) => v.estado_procesamiento === "error").length;
 
   const aprobados = videos.filter((video) => video.estado === "aprobado" && withinPeriodo(video.aprobado_at ?? video.recibido_at)).length;
   const completados = videos.filter((video) => video.estado === "publicado" && withinPeriodo(video.aprobado_at ?? video.recibido_at)).length;
@@ -117,6 +139,9 @@ export default async function DashboardPage({
     ...(modelosSinMaterial.length > 0
       ? [{ nivel: "amarillo" as NotifNivel, texto: `Sin material nuevo en 7+ días: ${modelosSinMaterial.map((m) => m.nombre).join(", ")}` }]
       : []),
+    ...(runnerError > 0
+      ? [{ nivel: "rojo" as NotifNivel, texto: `${runnerError} vídeo${runnerError > 1 ? "s" : ""} con error en el runner de edición`, href: "/aprobacion" }]
+      : []),
     ...(enAprobacion > 0 && aprobacionUrgente.length === 0
       ? [{ nivel: "verde" as NotifNivel, texto: `${enAprobacion} vídeo${enAprobacion > 1 ? "s" : ""} listo${enAprobacion > 1 ? "s" : ""} para revisar`, href: "/aprobacion" }]
       : []),
@@ -140,8 +165,9 @@ export default async function DashboardPage({
 
   return (
     <PanelLayout>
+      <AutoRefresh segundos={30} />
       <div className="mb-8">
-        <p className="text-sm text-[color:var(--text-secondary)]">{saludo}, Alex 👋</p>
+        <p className="text-sm text-[color:var(--text-secondary)]">{saludo} 👋</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Panel de Administracion</h1>
       </div>
 
@@ -166,18 +192,56 @@ export default async function DashboardPage({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatTile label="Creadores" value={modelos.length} icon={Users} subtitle="modelos registradas" />
-        <StatTile label="Reels" value={videos.length} icon={Clapperboard} subtitle="videos en el sistema" />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <StatTile label="Modelos activas" value={modelosActivas} icon={Users} subtitle={`de ${modelos.length} registradas`} />
+        <StatTile label="Vídeos en sistema" value={videos.length} icon={Clapperboard} subtitle="en total" />
         <StatTile
           label="Por revisar"
           value={enAprobacion}
           icon={Clock3}
           glow={enAprobacion > 0 ? "purple" : undefined}
-          subtitle="en mesa de aprobacion"
+          subtitle="en mesa de aprobación"
         />
-        <StatTile label="Por editar" value={porEditar} icon={Scissors} subtitle="para editores" />
+        <StatTile label="Aprobados esta semana" value={aprobadosSemana} icon={UserCheck} subtitle="últimos 7 días" />
+        <StatTile label="Publicados" value={publicados} icon={CheckCircle2} subtitle="en total" />
       </div>
+
+      <GlassCard className="mt-6 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-white">Pipeline en directo</h2>
+            <p className="text-xs text-white/40">Se actualiza solo cada 30 segundos</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="badge">{runnerPendiente} en cola</span>
+            <span className="badge">{runnerProcesando} procesando</span>
+            <span className={`badge ${runnerError > 0 ? "badge-rechazado" : ""}`}>{runnerError} con error</span>
+            <span className="badge">{rechazados} rechazados</span>
+          </div>
+        </div>
+        <ol className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
+          {etapas.map((e, i) => (
+            <li key={e.estado}>
+              <Link
+                href={e.href}
+                className="group flex h-full flex-col rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 transition hover:border-[#8B5CF6]/40 hover:bg-white/[0.06]"
+              >
+                <span className="text-[10px] uppercase tracking-wider text-white/30">
+                  {i + 1}. {e.label}
+                </span>
+                <span className="mt-2 font-display text-3xl font-semibold text-white">{e.total}</span>
+                <span className="text-[11px] text-white/40">{e.desc}</span>
+                <span className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                  <span
+                    className="block h-full rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#A78BFA]"
+                    style={{ width: `${(e.total / maxEtapa) * 100}%` }}
+                  />
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      </GlassCard>
 
       <GlassCard className="mt-6 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
