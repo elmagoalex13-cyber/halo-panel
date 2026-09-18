@@ -4,6 +4,12 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { VaultEntry } from "@/types";
 import { VaultClient } from "./VaultClient";
 
+async function loadModelos() {
+  if (!canUseSupabase()) return [] as { id: string; nombre: string }[];
+  const { data } = await createAdminClient().from("modelos").select("id, nombre").order("nombre");
+  return (data ?? []) as { id: string; nombre: string }[];
+}
+
 async function loadVaultEntries() {
   if (!canUseSupabase()) return [] as VaultEntry[];
 
@@ -23,7 +29,7 @@ async function loadVaultEntries() {
 }
 
 export default async function VaultPage() {
-  const entries = await loadVaultEntries();
+  const [entries, modelos] = await Promise.all([loadVaultEntries(), loadModelos()]);
 
   return (
     <PanelLayout>
@@ -32,7 +38,7 @@ export default async function VaultPage() {
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Vault</h1>
       </div>
       <GlassCard className="p-5">
-        <VaultClient entries={entries} />
+        <VaultClient entries={entries} modelos={modelos} />
       </GlassCard>
     </PanelLayout>
   );

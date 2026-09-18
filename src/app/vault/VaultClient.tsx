@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Eye, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Copy, Eye, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { VaultCategoria, VaultEntry } from "@/types";
 
 const categories: Array<{ id: VaultCategoria; label: string; icon: string }> = [
@@ -14,10 +14,13 @@ const categories: Array<{ id: VaultCategoria; label: string; icon: string }> = [
   { id: "otro", label: "Otro", icon: "◆" },
 ];
 
-export function VaultClient({ entries }: { entries: VaultEntry[] }) {
+export function VaultClient({ entries, modelos }: { entries: VaultEntry[]; modelos: { id: string; nombre: string }[] }) {
   const router = useRouter();
   const [revealed, setRevealed] = useState<{ title: string; value: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState<VaultEntry | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const nombreModelo = (id?: string | null) => modelos.find((m) => m.id === id)?.nombre;
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<VaultEntry | null>(null);
@@ -34,10 +37,12 @@ export function VaultClient({ entries }: { entries: VaultEntry[] }) {
   async function reveal(entry: VaultEntry) {
     const response = await fetch(`/api/vault?id=${entry.id}`);
     const data = await response.json();
-    setRevealed({
-      title: entry.nombre,
-      value: data.value ?? "Demo: valor descifrado solo disponible con Supabase y VAULT_MASTER_KEY",
-    });
+    if (!response.ok) {
+      setError(data.error ?? "No se pudo descifrar la entrada");
+      return;
+    }
+    setError(null);
+    setRevealed({ title: entry.nombre, value: data.value });
   }
 
   async function addEntry(e: React.FormEvent<HTMLFormElement>) {
@@ -45,10 +50,16 @@ export function VaultClient({ entries }: { entries: VaultEntry[] }) {
     setSaving(true);
     const formData = new FormData(e.currentTarget);
     try {
-      const res = await fetch("/api/vault", { method: "POST", body: formData });
+      if (editando) formData.set("id", editando.id);
+      const res = await fetch("/api/vault", { method: editando ? "PUT" : "POST", body: formData });
       if (res.ok) {
         setShowForm(false);
+        setEditando(null);
+        setError(null);
         router.refresh();
+      } else {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(j?.error ?? "No se pudo guardar");
       }
     } finally {
       setSaving(false);
@@ -59,7 +70,8 @@ export function VaultClient({ entries }: { entries: VaultEntry[] }) {
     setDeletingId(entry.id);
     setConfirmDelete(null);
     try {
-      await fetch(`/api/vault?id=${entry.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/vault?id=${entry.id}`, { method: "DELETE" });
+      if (!res.ok) setError("No se pudo eliminar");
       router.refresh();
     } finally {
       setDeletingId(null);
@@ -70,10 +82,15 @@ export function VaultClient({ entries }: { entries: VaultEntry[] }) {
     <div>
       <div className="mb-5 flex items-center justify-between gap-4">
         <p className="text-sm text-[color:var(--text-secondary)]">{entries.length} entradas agrupadas por categoría</p>
-        <button className="btn-primary flex h-10 items-center gap-2 px-4 text-sm" onClick={() => setShowForm(true)}>
+        <button className="btn-primary flex h-10 items-center gap-2 px-4 text-sm" onClick={() => {
+            setEditando(null);
+            setShowForm(true);
+          }}>
           <Plus className="h-4 w-4" /> Nueva
         </button>
       </div>
+
+      {error ? <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {grouped.map((group) => (
@@ -92,7 +109,7 @@ export function VaultClient({ entries }: { entries: VaultEntry[] }) {
                     <div className="min-w-0">
                       <p className="truncate font-medium text-white">{entry.nombre}</p>
                       <p className="truncate text-xs text-[color:var(--text-secondary)]">
-                        {entry.descripcion ?? "Sin descripción"}
+                        {[nombreModelo(entry.modelo_id), entry.descripcion].filter(Boolean).join(" · ") || "Sin descripción"}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-2">
@@ -102,6 +119,16 @@ export function VaultClient({ entries }: { entries: VaultEntry[] }) {
                         aria-label="Ver"
                       >
                         <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="grid h-9 w-9 place-items-center rounded-[10px] border border-white/[0.1] bg-white/[0.04] text-white"
+                        onClick={() => {
+                          setEditando(entry);
+                          setShowForm(true);
+                        }}
+                        aria-label="Editar"
+                      >
+                        <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         className="grid h-9 w-9 place-items-center rounded-[10px] border border-white/[0.1] bg-white/[0.04] text-red-400 disabled:opacity-50"
@@ -179,27 +206,38 @@ export function VaultClient({ entries }: { entries: VaultEntry[] }) {
       {showForm ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
           <form onSubmit={addEntry} className="glass-card w-full max-w-lg p-5">
-            <h2 className="font-display text-2xl font-semibold text-white">Nueva entrada</h2>
-            <input name="nombre" className="input mt-4 h-10 w-full px-3 text-sm" placeholder="Nombre" required />
-            <select name="categoria" className="input mt-3 h-10 w-full px-3 text-sm" defaultValue="otro">
+            <h2 className="font-display text-2xl font-semibold text-white">{editando ? "Editar entrada" : "Nueva entrada"}</h2>
+            <input name="nombre" className="input mt-4 h-10 w-full px-3 text-sm" placeholder="Nombre" defaultValue={editando?.nombre ?? ""} required />
+            <select name="categoria" className="input mt-3 h-10 w-full px-3 text-sm" defaultValue={editando?.categoria ?? "otro"}>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.label}
                 </option>
               ))}
             </select>
-            <input name="descripcion" className="input mt-3 h-10 w-full px-3 text-sm" placeholder="Descripción" />
+            <input name="descripcion" className="input mt-3 h-10 w-full px-3 text-sm" placeholder="Descripción" defaultValue={editando?.descripcion ?? ""} />
+            <select name="modelo_id" className="input mt-3 h-10 w-full px-3 text-sm" defaultValue={editando?.modelo_id ?? ""}>
+              <option value="">Sin modelo asociada</option>
+              {modelos.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nombre}
+                </option>
+              ))}
+            </select>
             <textarea
               name="value"
               className="input mt-3 min-h-28 w-full p-3 text-sm"
-              placeholder="Valor a cifrar"
-              required
+              placeholder={editando ? "Valor nuevo (déjalo vacío para no cambiarlo)" : "Valor a cifrar"}
+              required={!editando}
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 className="h-10 rounded-[10px] border border-white/[0.1] bg-white/[0.04] px-4 text-sm text-white"
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setEditando(null);
+                }}
                 disabled={saving}
               >
                 Cancelar

@@ -50,6 +50,7 @@ export function CalendarioClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const weekStart = getWeekStart(weekOffset);
   const year = now.getFullYear();
@@ -76,11 +77,17 @@ export function CalendarioClient({
   async function guardarUrl(id: string) {
     setSaving(true);
     try {
-      await fetch(`/api/calendario/${id}/publicar`, {
+      const res = await fetch(`/api/calendario/${id}/publicar`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url_publicado: urlInput, publicado_at: new Date().toISOString() }),
       });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(j?.error ?? "No se pudo marcar como publicado");
+        return;
+      }
+      setError(null);
       startTransition(() => router.refresh());
       setEditingId(null);
       setUrlInput("");
@@ -91,6 +98,7 @@ export function CalendarioClient({
 
   return (
     <div className="space-y-6">
+      {error ? <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p> : null}
       {/* Controles */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-xl border border-zinc-800 overflow-hidden">

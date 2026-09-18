@@ -1,5 +1,6 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { CalendarioClient } from "./CalendarioClient";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,7 @@ async function loadData() {
     const [pubRes, cuentasRes] = await Promise.all([
       supabase
         .from("library_content")
-        .select(`id, estado, tipo_video, aprobado_at, publicado_at, url_publicado,
+        .select(`id, estado, tipo_video, tipo, aprobado_at, publicado_at, url_publicado,
           modelo:modelos(nombre), cuenta:cuentas_instagram(username)`)
         .in("estado", ["aprobado", "publicado"])
         .or(`publicado_at.gte.${hace30},aprobado_at.gte.${hace30}`)
@@ -37,7 +38,10 @@ async function loadData() {
     ]);
 
     return {
-      publicaciones: (pubRes.data ?? []) as unknown as PublicacionRow[],
+      publicaciones: ((pubRes.data ?? []) as unknown as Array<PublicacionRow & { tipo?: number | null }>).map((p) => ({
+        ...p,
+        tipo_video: tipoVideoEfectivo(p.tipo_video, p.tipo),
+      })),
       cuentas: (cuentasRes.data ?? []) as { id: string; username: string; modelo_id: string }[],
     };
   } catch {

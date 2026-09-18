@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { CreatorConfigSummary } from "../CreatorConfigSummary";
+import { PortalAccesoButton } from "../PortalAccesoButton";
+import type { CreatorConfig } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 
 export const revalidate = 0;
@@ -27,9 +30,17 @@ type CuentaDetail = {
   diasSinPublicar: number | null;
 };
 
+type Encargo = { id: string; tipo_video: string | null; estado: string; instrucciones: string | null; fecha_limite: string | null; created_at: string };
+
 type ModeloRow = {
   id: string;
   nombre: string;
+  nombre_real?: string | null;
+  email?: string | null;
+  telefono?: string | null;
+  porcentaje_comision?: number | null;
+  notas?: string | null;
+  portal_token?: string | null;
   activa?: boolean | null;
   created_at?: string | null;
 };
@@ -64,12 +75,15 @@ async function getModeloDetail(id: string) {
   const supabase = createAdminClient();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-  const [{ data: modelo }, { data: cuentas }, { data: pipeline }, { data: ultimasPublicaciones }, { data: facturacionHistorica }] = await Promise.all([
+  const [{ data: modelo }, { data: cuentas }, { data: pipeline }, { data: ultimasPublicaciones }, { data: facturacionHistorica }, { data: config }, { data: encargos }, { data: conteo }] = await Promise.all([
     supabase.from("modelos").select("*").eq("id", id).single(),
     supabase.from("cuentas_instagram").select("id, username, seguidores, activa").eq("modelo_id", id),
     supabase.from("library_content").select("id, titulo, tipo_video, estado, recibido_at").eq("modelo_id", id).not("estado", "in", "(publicado,archivado)").order("recibido_at", { ascending: false }).limit(20),
     supabase.from("library_content").select("id, titulo, tipo_video, publicado_at, cuenta_id, cuentas_instagram(username)").eq("modelo_id", id).eq("estado", "publicado").order("publicado_at", { ascending: false }).limit(15),
     supabase.from("facturacion_modelos").select("periodo_inicio, ingresos_brutos, comision_agencia, suscriptores_activos").eq("modelo_id", id).order("periodo_inicio", { ascending: false }).limit(6),
+    supabase.from("creator_configs").select("*").eq("modelo_id", id).maybeSingle(),
+    supabase.from("encargos").select("id, tipo_video, estado, instrucciones, fecha_limite, created_at").eq("modelo_id", id).order("created_at", { ascending: false }).limit(20),
+    supabase.from("library_content").select("estado").eq("modelo_id", id),
   ]);
   if (!modelo) return null;
 
@@ -83,7 +97,16 @@ async function getModeloDetail(id: string) {
     if (publicacion.cuenta_id && !lastPubByCuenta[publicacion.cuenta_id]) lastPubByCuenta[publicacion.cuenta_id] = publicacion.publicado_at;
   });
 
+  const porEstado: Record<string, number> = {};
+  ((conteo ?? []) as Array<{ estado: string }>).forEach((v) => {
+    porEstado[v.estado] = (porEstado[v.estado] || 0) + 1;
+  });
+
   return {
+    config: (config ?? null) as CreatorConfig | null,
+    encargos: (encargos ?? []) as Encargo[],
+    porEstado,
+    totalVideos: (conteo ?? []).length,
     modelo: modelo as ModeloRow,
     pipeline: (pipeline ?? []) as PipelineRow[],
     ultimasPublicaciones: (ultimasPublicaciones ?? []) as unknown as PublicacionRow[],
@@ -102,7 +125,8 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   const data = await getModeloDetail(id);
   if (!data) notFound();
 
-  const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion } = data;
+  const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion, config, encargos, porEstado, totalVideos } = data;
+  const pendientes = encargos.filter((e) => e.estado !== "entregado");
   const facturacionMes = facturacion[0];
 
   return (
@@ -119,7 +143,10 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
             <h1 className="font-display text-2xl font-bold text-halo-text">{modelo.nombre}</h1>
             <p className="text-sm text-halo-subtle">Alta: {formatDate(modelo.created_at)}</p>
           </div>
-          <span className={`badge ml-auto ${modelo.activa ? "bg-green-500/20 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>{modelo.activa ? "Activa" : "Inactiva"}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <PortalAccesoButton modeloId={modelo.id} nombre={modelo.nombre} />
+          </div>
+          <span className={`badge ${modelo.activa ? "bg-green-500/20 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>{modelo.activa ? "Activa" : "Inactiva"}</span>
         </div>
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -128,6 +155,58 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
           <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">Suscriptores</div><div className="font-display text-2xl font-bold text-halo-text">{facturacionMes?.suscriptores_activos?.toLocaleString("es") ?? "—"}</div></div>
           <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">En pipeline</div><div className="font-display text-2xl font-bold text-halo-text">{pipeline.length}</div></div>
         </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="card">
+            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Ficha</h2>
+            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2 text-sm">
+              {[
+                ["Nombre real", modelo.nombre_real],
+                ["Email", modelo.email],
+                ["Telefono", modelo.telefono],
+                ["Comision agencia", modelo.porcentaje_comision != null ? `${modelo.porcentaje_comision}%` : null],
+                ["Portal", modelo.portal_token ? `/m/${modelo.portal_token}` : "Sin acceso creado"],
+                ["Notas", modelo.notas],
+              ].map(([k, v]) => (
+                <div key={k as string} className="contents">
+                  <dt className="text-halo-subtle">{k}</dt>
+                  <dd className="break-words text-halo-text">{v || "—"}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-4 flex flex-wrap gap-1.5 border-t border-halo-border pt-3">
+              <span className="badge">{totalVideos} videos en total</span>
+              {Object.entries(porEstado).map(([estado, n]) => (
+                <span key={estado} className={`badge ${ESTADO_BADGE[estado] ?? ""}`}>
+                  {n} {estadoLabel(estado).toLowerCase()}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Videos pendientes de grabar ({pendientes.length})</h2>
+            {encargos.length === 0 ? (
+              <p className="text-sm text-halo-subtle">No tiene referencias asignadas. Asignalas desde Instagram → Referencias.</p>
+            ) : (
+              <div className="space-y-2">
+                {encargos.map((e) => (
+                  <div key={e.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
+                    <span className={`badge flex-shrink-0 ${e.estado === "entregado" ? "badge-aprobado" : "badge-editando"}`}>{e.estado === "entregado" ? "Entregado" : "Pendiente"}</span>
+                    <span className="flex-1 truncate text-sm text-halo-text">{e.instrucciones || (e.tipo_video ? `Tipo ${e.tipo_video.replace(/\D/g, "")}` : "Con referencia")}</span>
+                    <span className="font-mono text-xs text-halo-subtle">{formatDate(e.created_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {config ? (
+          <div>
+            <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Perfil de creadora</h2>
+            <CreatorConfigSummary config={config} />
+          </div>
+        ) : null}
 
         <div>
           <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Cuentas Instagram</h2>
