@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Plus } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
-import type { BancoReferenciaVideo, Modelo, ReferenciaCuenta } from "@/types";
+import type { BancoReferenciaVideo, Modelo } from "@/types";
 
 function formatNum(value: number | null): string {
   if (value === null) return "—";
@@ -16,11 +16,9 @@ function formatNum(value: number | null): string {
 export function BancoReferenciasSection({
   videos,
   modelos,
-  cuentas,
 }: {
   videos: BancoReferenciaVideo[];
   modelos: Modelo[];
-  cuentas: ReferenciaCuenta[];
 }) {
   const router = useRouter();
   const [filtroCuenta, setFiltroCuenta] = useState("all");
@@ -34,6 +32,11 @@ export function BancoReferenciasSection({
   const [urlManual, setUrlManual] = useState("");
   const [fraseManual, setFraseManual] = useState("");
   const [addLoading, setAddLoading] = useState(false);
+
+  const usernames = useMemo(
+    () => Array.from(new Set(videos.map((v) => v.cuenta_username).filter((u): u is string => Boolean(u)))).sort(),
+    [videos],
+  );
 
   const filtered = useMemo(
     () => (filtroCuenta === "all" ? videos : videos.filter((v) => v.cuenta_username === filtroCuenta)),
@@ -100,9 +103,9 @@ export function BancoReferenciasSection({
           <h2 className="font-display text-lg font-semibold text-white">Banco de referencias virales</h2>
           <select value={filtroCuenta} onChange={(e) => setFiltroCuenta(e.target.value)} className="input-base w-auto py-1.5 text-xs">
             <option value="all">Todas las cuentas</option>
-            {cuentas.map((c) => (
-              <option key={c.id} value={c.username}>
-                @{c.username}
+            {usernames.map((username) => (
+              <option key={username} value={username}>
+                @{username}
               </option>
             ))}
           </select>
@@ -124,7 +127,12 @@ export function BancoReferenciasSection({
           {filtered.map((video) => (
             <GlassCard key={video.id} className="group flex cursor-pointer flex-col p-3" onClick={() => openEnviar(video)}>
               <div className="mb-2 grid aspect-[9/16] max-h-40 w-full place-items-center overflow-hidden rounded-xl bg-white/[0.04] text-3xl">
-                🎬
+                {video.thumbnail_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={video.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  "🎬"
+                )}
               </div>
               {video.cuenta_username ? <p className="mb-1 truncate text-xs font-semibold text-[#A78BFA]">@{video.cuenta_username}</p> : null}
               {video.frase ? <p className="mb-1.5 line-clamp-2 text-sm text-white/85">&quot;{video.frase}&quot;</p> : null}

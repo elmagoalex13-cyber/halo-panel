@@ -8,7 +8,6 @@ import { RefreshButton } from "@/components/RefreshButton";
 import { StatTile } from "@/components/StatTile";
 import { PeriodoSelect } from "./PeriodoSelect";
 import { CreadorasFilter } from "./CreadorasFilter";
-import { sampleFacturacion, sampleModelos, sampleVideos } from "@/lib/data";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -19,16 +18,17 @@ export const dynamic = "force-dynamic";
 type WithModelName<T> = T & { modelos?: { nombre?: string | null } | null };
 
 async function loadDashboardData() {
-  if (!canUseSupabase()) {
-    return { videos: sampleVideos, modelos: sampleModelos, facturacion: sampleFacturacion };
-  }
+  const vacio = { videos: [] as LibraryContent[], modelos: [] as Modelo[], facturacion: [] as FacturacionModelo[] };
+  if (!canUseSupabase()) return vacio;
 
   try {
     const supabase = createAdminClient();
+    const now = new Date();
+    const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
     const [videosResult, modelosResult, facturacionResult] = await Promise.all([
-      supabase.from("library_content").select("*, modelos(nombre)").order("recibido_at", { ascending: false }).limit(50),
+      supabase.from("library_content").select("*, modelos(nombre)").order("recibido_at", { ascending: false }).limit(5000),
       supabase.from("modelos").select("*"),
-      supabase.from("facturacion_modelos").select("*, modelos(nombre)").order("periodo_inicio", { ascending: false }),
+      supabase.from("facturacion_modelos").select("*, modelos(nombre)").gte("periodo_inicio", mesInicio),
     ]);
 
     const videos = ((videosResult.data ?? []) as Array<WithModelName<LibraryContent>>).map((video) => ({
@@ -40,13 +40,9 @@ async function loadDashboardData() {
       modelo_nombre: row.modelos?.nombre ?? "Sin modelo",
     })) as FacturacionModelo[];
 
-    return {
-      videos: videos.length ? videos : sampleVideos,
-      modelos: ((modelosResult.data ?? []) as Modelo[]).length ? (modelosResult.data as Modelo[]) : sampleModelos,
-      facturacion: facturacion.length ? facturacion : sampleFacturacion,
-    };
+    return { videos, modelos: (modelosResult.data ?? []) as Modelo[], facturacion };
   } catch {
-    return { videos: sampleVideos, modelos: sampleModelos, facturacion: sampleFacturacion };
+    return vacio;
   }
 }
 
@@ -280,7 +276,16 @@ export default async function DashboardPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.06]">
+              {cuentasIG.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-5 py-8 text-center text-sm text-white/35">
+                    Sin cuentas de Instagram. Anadelas en Modelos.
+                  </td>
+                </tr>
+              ) : null}
               {cuentasIG.map((cuenta) => {
+                const conectada = cuenta.metricool_estado === "conectada";
+                const dato = (valor: number) => (conectada ? formatNumber(valor) : "—");
                 const vistas30d = cuenta.reels.reduce((sum, reel) => sum + reel.visitas, 0);
                 const score = Math.round(vistas30d / Math.max(1, cuenta.publicaciones));
                 return (
@@ -288,22 +293,19 @@ export default async function DashboardPage({
                     <td className="px-5 py-3 text-white/85">{cuenta.modelo_nombre}</td>
                     <td className="whitespace-nowrap px-5 py-3">
                       <span className="font-code text-white/85">@{cuenta.username}</span>{" "}
-                      <span className={`badge whitespace-nowrap text-[9px] ${cuenta.metricool_estado === "conectada" ? "badge-aprobado" : ""}`}>
-                        {cuenta.metricool_estado === "conectada" ? "Metricool" : "Solo scraping"}
+                      <span className={`badge whitespace-nowrap text-[9px] ${conectada ? "badge-aprobado" : ""}`}>
+                        {conectada ? "Metricool" : "Solo scraping"}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right text-white/85">{formatNumber(cuenta.seguidores)}</td>
-                    <td className={`px-5 py-3 text-right font-semibold ${cuenta.ganancia_hoy >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                      {cuenta.ganancia_hoy >= 0 ? "+" : ""}
-                      {formatNumber(cuenta.ganancia_hoy)}
+                    <td className="px-5 py-3 text-right text-white/85">{cuenta.seguidores > 0 ? formatNumber(cuenta.seguidores) : "—"}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-white/40">
+                      {conectada ? `${cuenta.ganancia_hoy >= 0 ? "+" : ""}${formatNumber(cuenta.ganancia_hoy)}` : "—"}
                     </td>
-                    <td className="px-5 py-3 text-right text-white/85">{formatNumber(vistas30d)}</td>
-                    <td className="px-5 py-3 text-right text-white/85">{formatNumber(score)}</td>
-                    <td className="px-5 py-3 text-right text-white/85">{cuenta.publicaciones}</td>
-                    <td className="px-5 py-3 text-right text-white/85">{cuenta.reels_30d_count}</td>
-                    <td className="px-5 py-3 text-right text-white/40">
-                      {now.toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                    </td>
+                    <td className="px-5 py-3 text-right text-white/85">{dato(vistas30d)}</td>
+                    <td className="px-5 py-3 text-right text-white/85">{dato(score)}</td>
+                    <td className="px-5 py-3 text-right text-white/85">{dato(cuenta.publicaciones)}</td>
+                    <td className="px-5 py-3 text-right text-white/85">{dato(cuenta.reels_30d_count)}</td>
+                    <td className="px-5 py-3 text-right text-white/40">—</td>
                   </tr>
                 );
               })}

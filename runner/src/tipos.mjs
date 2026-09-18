@@ -65,7 +65,7 @@ export async function procesarTipo1(pieza, supabase) {
     // 6. Actualizar Supabase
     await supabase
       .from("library_content")
-      .update({ r2_key: outKey, estado: "en_aprobacion" })
+      .update({ r2_key: outKey, estado: "en_aprobacion", estado_procesamiento: "listo", error_mensaje: null })
       .eq("id", pieza.id);
 
     return outKey;
@@ -112,7 +112,7 @@ export async function procesarTipo2(pieza, supabase) {
     // 5. Actualizar Supabase
     await supabase
       .from("library_content")
-      .update({ r2_key: outKey, estado: "en_aprobacion" })
+      .update({ r2_key: outKey, estado: "en_aprobacion", estado_procesamiento: "listo", error_mensaje: null })
       .eq("id", pieza.id);
 
     return outKey;
@@ -158,7 +158,7 @@ export async function procesarTipo3(pieza, supabase) {
     // 6. Actualizar Supabase
     await supabase
       .from("library_content")
-      .update({ r2_key: outKey, estado: "en_aprobacion" })
+      .update({ r2_key: outKey, estado: "en_aprobacion", estado_procesamiento: "listo", error_mensaje: null })
       .eq("id", pieza.id);
 
     return outKey;
@@ -213,7 +213,7 @@ export async function procesarTipo4(pieza, supabase) {
     // 5. Actualizar Supabase
     await supabase
       .from("library_content")
-      .update({ r2_key: outKey, estado: "en_aprobacion" })
+      .update({ r2_key: outKey, estado: "en_aprobacion", estado_procesamiento: "listo", error_mensaje: null })
       .eq("id", pieza.id);
 
     return outKey;

@@ -22,7 +22,7 @@ function estadoBadge(estado: string) {
   };
   const labels: Record<string, string> = {
     recibido: "Recibido",
-    clasificando: "Clasificando",
+    clasificando: "Etiquetado",
     etiquetado: "Etiquetado",
     en_reparto: "En reparto",
   };
@@ -290,7 +290,7 @@ export function BibliotecaClient({
                   </button>
                 </div>
 
-                {selected.estado === "etiquetado" && (
+                {selected.estado === "clasificando" && (
                   <button
                     onClick={() => enviarReparto(selected.id)}
                     disabled={asignandoId === selected.id}

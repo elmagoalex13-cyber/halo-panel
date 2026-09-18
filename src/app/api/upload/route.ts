@@ -32,12 +32,7 @@ export async function POST(req: NextRequest) {
     await uploadToR2(r2Key, buffer, file.type || "video/mp4");
 
     if (!canUseSupabase()) {
-      return NextResponse.json({
-        ok: true,
-        r2_key: r2Key,
-        demo: true,
-        data: { id: contentId ?? randomUUID(), modelo_id: modeloId, r2_key: r2Key, estado: "recibido" },
-      });
+      return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     }
 
     const supabase = createAdminClient();
@@ -76,6 +71,8 @@ export async function POST(req: NextRequest) {
         titulo: titulo || file.name,
         tipo_video: tipoVideo,
         estado: "recibido",
+        origen: "upload_manual",
+        estado_procesamiento: "sin_procesar",
         recibido_at: new Date().toISOString(),
         caption: "",
         frase_quemada: "",

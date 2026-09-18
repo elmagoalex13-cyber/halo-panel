@@ -3,29 +3,30 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+// Envia una referencia a una modelo creando un encargo (tabla `encargos`).
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
-    modelo_id: string;
+    modelo_id?: string;
     banco_id?: string;
-    url_referencia_ig?: string;
-    r2_key_referencia?: string;
+    url_referencia_ig?: string | null;
     instrucciones?: string | null;
   };
 
+  if (!body.modelo_id) {
+    return NextResponse.json({ error: "modelo_id requerido" }, { status: 400 });
+  }
   if (!canUseSupabase()) {
-    return NextResponse.json({ ok: true, demo: true });
+    return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }
 
   try {
     const supabase = createAdminClient();
-
     const { data, error } = await supabase
-      .from("asignaciones_modelo")
+      .from("encargos")
       .insert({
         modelo_id: body.modelo_id,
-        tipo: "referencia",
-        r2_key_referencia: body.r2_key_referencia ?? null,
-        url_referencia_ig: body.url_referencia_ig ?? null,
+        referencia_id: body.banco_id ?? null,
+        pagina_url: body.url_referencia_ig ?? null,
         instrucciones: body.instrucciones ?? null,
         estado: "pendiente",
       })
@@ -35,6 +36,6 @@ export async function POST(req: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ ok: true, data });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }

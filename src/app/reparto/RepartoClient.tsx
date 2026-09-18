@@ -188,7 +188,7 @@ export function RepartoClient({
                       {ESTADO_LABELS[row.estado] ?? row.estado}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-zinc-500">{row.asignada_at ? formatDate(row.asignada_at) : "—"}</td>
+                  <td className="px-4 py-3 text-zinc-500">{row.reparto_at ? formatDate(row.reparto_at) : "—"}</td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => { setSelected(row); setCuentaId(""); }}

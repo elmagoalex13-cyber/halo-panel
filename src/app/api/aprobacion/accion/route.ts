@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateDemoVideo } from "@/lib/demo-approvals";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { VideoEstado } from "@/types";
 
@@ -26,21 +25,7 @@ export async function PATCH(req: NextRequest) {
     const nuevoEstado = ESTADO_MAP[accion] as VideoEstado;
 
     if (!canUseSupabase()) {
-      const ok = await updateDemoVideo(id, {
-        estado: nuevoEstado,
-        caption: caption ?? "",
-        correcciones: correcciones ?? "",
-        frase_quemada: frase_quemada ?? "",
-        notas_editor: frase_quemada ?? correcciones ?? "",
-        updated_at: new Date().toISOString(),
-        ...(accion === "aprobar" ? { aprobado_at: new Date().toISOString() } : {}),
-      });
-
-      if (!ok) {
-        return NextResponse.json({ error: "Video demo no encontrado" }, { status: 404 });
-      }
-
-      return NextResponse.json({ ok: true, demo: true, estado: nuevoEstado });
+      return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     }
 
     const supabase = createAdminClient();
@@ -53,6 +38,11 @@ export async function PATCH(req: NextRequest) {
     if (correcciones !== undefined) update.correcciones = correcciones;
     if (frase_quemada !== undefined) update.frase_quemada = frase_quemada;
     if (accion === "aprobar") update.aprobado_at = new Date().toISOString();
+    if (accion === "rehacer") {
+      // El runner vuelve a coger la pieza: reset del estado de procesamiento
+      update.estado_procesamiento = "pendiente";
+      update.error_mensaje = null;
+    }
 
     const { error } = await supabase.from("library_content").update(update).eq("id", id);
     if (error) throw error;

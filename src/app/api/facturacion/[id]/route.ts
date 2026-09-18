@@ -10,7 +10,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     for (const key of allowed) {
       if (key in body) payload[key] = body[key];
     }
-    if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true });
+    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     const supabase = createAdminClient();
     const { data, error } = await supabase.from("facturacion_modelos").update(payload).eq("id", id).select().single();
     if (error) throw error;
@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true });
+    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     const supabase = createAdminClient();
     const { error } = await supabase.from("facturacion_modelos").delete().eq("id", id);
     if (error) throw error;

@@ -22,50 +22,9 @@ export type TrialReelRow = {
   pieza_origen_tipo: string | null;
 };
 
-const DEMO_ROWS: TrialReelRow[] = [
-  {
-    id: "trial-demo-1",
-    cuenta_id: "cuenta-demo-1",
-    cuenta_username: "laura_official",
-    modelo_nombre: "Laura M.",
-    estado: "pendiente_aprobacion",
-    storage_path_spoofeado: null,
-    sha256_original: "abc123",
-    usos_previos: 1,
-    ultima_vez_usado: new Date(Date.now() - 35 * 86400000).toISOString().split("T")[0],
-    riesgo_repeticion: false,
-    spoofer_params: { trim_start: 1, trim_end: 1, zoom: 1.03, brightness: 1.02, contrast: 1.03, saturation: 1.05 },
-    views_original: 48700,
-    likes_original: 3200,
-    publicado_en: null,
-    creado_en: new Date().toISOString(),
-    pieza_origen_r2_key: null,
-    pieza_origen_tipo: "tipo2",
-  },
-  {
-    id: "trial-demo-2",
-    cuenta_id: "cuenta-demo-2",
-    cuenta_username: "sofia_halo",
-    modelo_nombre: "Sofía R.",
-    estado: "pendiente_aprobacion",
-    storage_path_spoofeado: null,
-    sha256_original: "def456",
-    usos_previos: 0,
-    ultima_vez_usado: null,
-    riesgo_repeticion: false,
-    spoofer_params: { trim_start: 1, trim_end: 1, zoom: 1.03, brightness: 0.98, contrast: 1.03, saturation: 0.97 },
-    views_original: 125000,
-    likes_original: 8900,
-    publicado_en: null,
-    creado_en: new Date(Date.now() - 3600000).toISOString(),
-    pieza_origen_r2_key: null,
-    pieza_origen_tipo: "tipo1",
-  },
-];
-
 export async function GET() {
   if (!canUseSupabase()) {
-    return NextResponse.json({ data: DEMO_ROWS });
+    return NextResponse.json({ data: [] as TrialReelRow[] });
   }
   try {
     const supabase = createAdminClient();
@@ -112,7 +71,7 @@ export async function GET() {
 
     return NextResponse.json({ data: rows });
   } catch (err) {
-    return NextResponse.json({ data: DEMO_ROWS, _error: String(err) });
+    return NextResponse.json({ data: [] as TrialReelRow[], _error: String(err) });
   }
 }
 
@@ -121,7 +80,7 @@ export async function PATCH(req: NextRequest) {
     const { id, accion, nota } = await req.json() as { id: string; accion: "aprobar" | "rechazar"; nota?: string };
 
     if (!canUseSupabase()) {
-      return NextResponse.json({ ok: true, demo: true });
+      return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     }
 
     const supabase = createAdminClient();

@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   if (!canUseSupabase()) {
-    return NextResponse.json({ value: "demo-secret-value" });
+    return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }
 
   const supabase = createAdminClient();
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const descripcion = String(formData.get("descripcion") ?? "");
 
   if (!value || !nombre) return NextResponse.json({ error: "nombre and value are required" }, { status: 400 });
-  if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true });
+  if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
   const encrypted = encryptVaultValue(value);
   const supabase = createAdminClient();
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
-  if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true });
+  if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
   const supabase = createAdminClient();
   const { error } = await supabase.from("vault_panel").delete().eq("id", id);

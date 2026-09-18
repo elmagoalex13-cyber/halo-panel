@@ -2,7 +2,6 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { BibliotecaClient } from "./BibliotecaClient";
 import { BibliotecaUploadBar } from "./BibliotecaUploadBar";
-import { sampleModelos } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +11,7 @@ async function loadData(estado: string, modeloId: string, tipo: string) {
   if (!canUseSupabase()) {
     return {
       videos: [],
-      modelos: sampleModelos.map((m) => ({ id: m.id, nombre: m.nombre })),
+      modelos: [],
       totalCounts: { revisar: 0, etiquetado: 0, en_reparto: 0, all: 0 },
     };
   }
@@ -21,10 +20,10 @@ async function loadData(estado: string, modeloId: string, tipo: string) {
     const supabase = createAdminClient();
 
     const estadosMap: Record<string, string[]> = {
-      revisar: ["recibido", "clasificando"],
-      etiquetado: ["etiquetado"],
+      revisar: ["recibido"],
+      etiquetado: ["clasificando"],
       en_reparto: ["en_reparto"],
-      all: ["recibido", "clasificando", "etiquetado", "en_reparto"],
+      all: ["recibido", "clasificando", "en_reparto"],
     };
     const estadosFiltro = estadosMap[estado] ?? estadosMap["all"];
 
@@ -32,7 +31,7 @@ async function loadData(estado: string, modeloId: string, tipo: string) {
       .from("library_content")
       .select(`
         id, titulo, tipo_video, estado, recibido_at, r2_key, r2_key_original,
-        size_bytes, filename_original, clasificacion_ia,
+        size_bytes, filename_original, clasificacion_confianza, clasificacion_razon,
         modelo:modelos(id, nombre),
         cuenta:cuentas_instagram(username)
       `)
@@ -48,13 +47,19 @@ async function loadData(estado: string, modeloId: string, tipo: string) {
 
     const [modelosRes, countsRecibido, countsEtiquetado, countsReparto] = await Promise.all([
       supabase.from("modelos").select("id, nombre").eq("activa", true).order("nombre"),
-      supabase.from("library_content").select("id", { count: "exact", head: true }).in("estado", ["recibido", "clasificando"]),
-      supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "etiquetado"),
+      supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "recibido"),
+      supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "clasificando"),
       supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "en_reparto"),
     ]);
 
     return {
-      videos: (data ?? []) as unknown as BibliotecaVideo[],
+      videos: ((data ?? []) as unknown as Array<BibliotecaVideo & { clasificacion_confianza?: number | null; clasificacion_razon?: string | null }>).map((v) => ({
+        ...v,
+        clasificacion_ia:
+          v.clasificacion_confianza != null || v.clasificacion_razon
+            ? { tipo: v.tipo_video ?? undefined, confianza: v.clasificacion_confianza ?? undefined, razon: v.clasificacion_razon ?? undefined }
+            : null,
+      })) as BibliotecaVideo[],
       modelos: (modelosRes.data ?? []) as { id: string; nombre: string }[],
       totalCounts: {
         revisar: countsRecibido.count ?? 0,
@@ -66,7 +71,7 @@ async function loadData(estado: string, modeloId: string, tipo: string) {
   } catch {
     return {
       videos: [],
-      modelos: sampleModelos.map((m) => ({ id: m.id, nombre: m.nombre })),
+      modelos: [],
       totalCounts: { revisar: 0, etiquetado: 0, en_reparto: 0, all: 0 },
     };
   }

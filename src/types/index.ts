@@ -190,6 +190,7 @@ export type BancoReferenciaVideo = {
   cuenta_referencia_id: string | null;
   cuenta_username?: string | null;
   url_referencia: string | null;
+  thumbnail_url?: string | null;
   frase: string | null;
   cancion_nombre?: string | null;
   cancion_artista?: string | null;

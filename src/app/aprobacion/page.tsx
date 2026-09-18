@@ -1,10 +1,7 @@
 import { PanelLayout } from "@/components/PanelLayout";
-import { sampleModelos, sampleCuentasInstagram } from "@/lib/data";
-import { getDemoVideos } from "@/lib/demo-approvals";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { MesaClient, type VideoRow } from "./MesaClient";
 import { TrialReelsMesa } from "./TrialReelsMesa";
-import type { LibraryContent } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -37,35 +34,8 @@ function resolveEstado(value: string | undefined): ApprovalEstado {
   return ESTADOS_VALIDOS.includes(value as ApprovalEstado) ? (value as ApprovalEstado) : "en_aprobacion";
 }
 
-async function demoRows(estado: ApprovalEstado): Promise<VideoRow[]> {
-  const videos = await getDemoVideos();
-  const rawByModelo = new Map<string, LibraryContent>();
-  videos
-    .filter((video) => video.r2_key.startsWith("bruto/"))
-    .forEach((video) => rawByModelo.set(video.modelo_id, video));
-
-  return videos
-    .filter((video) => video.estado === estado)
-    .map((video) => ({
-      id: video.id,
-      titulo: video.filename_original,
-      tipo_video: video.tipo_video,
-      estado: video.estado,
-      recibido_at: video.recibido_at,
-      r2_key: video.signed_url ?? video.r2_key ?? null,
-      r2_key_referencia: null,
-      r2_key_original: rawByModelo.get(video.modelo_id)?.signed_url ?? rawByModelo.get(video.modelo_id)?.r2_key ?? null,
-      caption: "caption" in video && typeof video.caption === "string" ? video.caption : "",
-      frase_quemada:
-        "frase_quemada" in video && typeof video.frase_quemada === "string" ? video.frase_quemada : video.notas_editor ?? "",
-      correcciones: "correcciones" in video && typeof video.correcciones === "string" ? video.correcciones : "",
-      modelo_nombre: video.modelo_nombre,
-      cuenta_username: null,
-    }));
-}
-
 async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
-  if (!canUseSupabase()) return demoRows(estado);
+  if (!canUseSupabase()) return [];
 
   try {
     const supabase = createAdminClient();
@@ -119,12 +89,12 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       cuenta_username: row.cuenta?.username ?? null,
     }));
   } catch {
-    return demoRows(estado);
+    return [];
   }
 }
 
 async function getModelosYCuentas() {
-  if (!canUseSupabase()) return { modelos: sampleModelos, cuentas: sampleCuentasInstagram };
+  if (!canUseSupabase()) return { modelos: [], cuentas: [] };
   try {
     const supabase = createAdminClient();
     const [{ data: modelos }, { data: cuentas }] = await Promise.all([
@@ -136,7 +106,7 @@ async function getModelosYCuentas() {
       cuentas: (cuentas ?? []) as { id: string; username: string; modelo_id: string }[],
     };
   } catch {
-    return { modelos: sampleModelos, cuentas: sampleCuentasInstagram };
+    return { modelos: [], cuentas: [] };
   }
 }
 

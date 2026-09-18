@@ -1,12 +1,11 @@
 import { GlassCard } from "@/components/GlassCard";
 import { PanelLayout } from "@/components/PanelLayout";
-import { sampleVaultEntries } from "@/lib/data";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { VaultEntry } from "@/types";
 import { VaultClient } from "./VaultClient";
 
 async function loadVaultEntries() {
-  if (!canUseSupabase()) return sampleVaultEntries;
+  if (!canUseSupabase()) return [] as VaultEntry[];
 
   try {
     const supabase = createAdminClient();
@@ -16,9 +15,9 @@ async function loadVaultEntries() {
       .order("categoria")
       .order("nombre");
 
-    return ((data ?? []) as VaultEntry[]).length ? (data as VaultEntry[]) : sampleVaultEntries;
+    return (data ?? []) as VaultEntry[];
   } catch {
-    return sampleVaultEntries;
+    return [] as VaultEntry[];
   }
 }
 

@@ -8,7 +8,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const now = new Date().toISOString();
 
-    if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true, ultimo_scrape_at: now });
+    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
     const supabase = createAdminClient();
     const { error } = await supabase.from("referencias_cuentas").update({ ultimo_scrape_at: now }).eq("id", id);

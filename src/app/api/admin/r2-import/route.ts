@@ -67,6 +67,8 @@ export async function POST() {
     titulo: key,
     tipo_video: "sin_clasificar",
     estado: "en_aprobacion",
+    origen: "upload_manual",
+    estado_procesamiento: "sin_procesar",
     recibido_at: new Date().toISOString(),
     caption: "",
     frase_quemada: "",

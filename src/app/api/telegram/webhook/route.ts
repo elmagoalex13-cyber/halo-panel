@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   }
 
   if (!canUseSupabase()) {
-    return NextResponse.json({ ok: true, demo: true });
+    return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }
 
   const supabase = createAdminClient();

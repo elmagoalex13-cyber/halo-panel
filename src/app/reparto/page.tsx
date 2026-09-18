@@ -1,13 +1,12 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { RepartoClient } from "./RepartoClient";
-import { sampleModelos, sampleCuentasInstagram } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 async function loadData() {
   if (!canUseSupabase()) {
-    return { asignaciones: [], modelos: sampleModelos, cuentas: sampleCuentasInstagram, pendientes: 0 };
+    return { asignaciones: [], modelos: [], cuentas: [], pendientes: 0 };
   }
   try {
     const supabase = createAdminClient();
@@ -15,13 +14,13 @@ async function loadData() {
       supabase
         .from("library_content")
         .select(`id, titulo, tipo_video, estado, recibido_at, r2_key, filename_original,
-          asignada_at, modelo:modelos(nombre), cuenta:cuentas_instagram(username)`)
+          reparto_at, modelo:modelos(nombre), cuenta:cuentas_instagram(username)`)
         .in("estado", ["en_reparto", "editando", "en_aprobacion", "aprobado"])
-        .order("asignada_at", { ascending: false })
+        .order("reparto_at", { ascending: false, nullsFirst: false })
         .limit(80),
       supabase.from("modelos").select("id, nombre").eq("activa", true).order("nombre"),
       supabase.from("cuentas_instagram").select("id, username, modelo_id, activa").order("username"),
-      supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "etiquetado"),
+      supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "clasificando").not("tipo_video", "is", null).neq("tipo_video", "sin_clasificar"),
     ]);
     return {
       asignaciones: (aRes.data ?? []) as unknown as RepartoRow[],
@@ -40,7 +39,7 @@ export type RepartoRow = {
   tipo_video: string | null;
   estado: string;
   recibido_at: string;
-  asignada_at: string | null;
+  reparto_at: string | null;
   r2_key: string | null;
   filename_original: string | null;
   modelo: { nombre: string } | null;

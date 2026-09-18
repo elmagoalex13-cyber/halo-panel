@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PanelLayout } from "@/components/PanelLayout";
-import { sampleFacturacion, sampleModelos, sampleVideos } from "@/lib/data";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 
@@ -60,35 +59,7 @@ type FacturacionRow = {
 };
 
 async function getModeloDetail(id: string) {
-  if (!canUseSupabase()) {
-    const modelo = sampleModelos.find((item) => item.id === id);
-    if (!modelo) return null;
-    const pipeline = sampleVideos
-      .filter((video) => video.modelo_id === id && !["publicado", "archivado"].includes(video.estado))
-      .map((video) => ({
-        id: video.id,
-        titulo: video.filename_original,
-        tipo_video: video.tipo_video,
-        estado: video.estado,
-        recibido_at: video.recibido_at,
-      })) satisfies PipelineRow[];
-    const ultimasPublicaciones = sampleVideos
-      .filter((video) => video.modelo_id === id && ["aprobado", "publicado"].includes(video.estado))
-      .map((video) => ({ ...video, titulo: video.filename_original, publicado_at: video.aprobado_at ?? video.recibido_at, cuentas_instagram: { username: modelo.instagram?.[0]?.replace("@", "") } }));
-    const facturacion = sampleFacturacion
-      .filter((row) => row.modelo_id === id)
-      .map((row) => ({ ...row, suscriptores_activos: 1240 }));
-    const cuentas = (modelo.instagram ?? []).map((username, index) => ({
-      id: `${modelo.id}-${index}`,
-      username: username.replace("@", ""),
-      seguidores: index ? 12400 : 48600,
-      activa: modelo.activa,
-      publicadosMes: index ? 2 : 5,
-      lastPublished: index ? new Date(Date.now() - 6 * 86400000).toISOString() : new Date().toISOString(),
-      diasSinPublicar: index ? 6 : 0,
-    }));
-    return { modelo: { ...modelo, created_at: modelo.fecha_alta }, pipeline, ultimasPublicaciones, facturacion, cuentas };
-  }
+  if (!canUseSupabase()) return null;
 
   const supabase = createAdminClient();
   const now = new Date();

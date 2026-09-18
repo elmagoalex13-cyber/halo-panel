@@ -1,20 +1,18 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { ModelosClient } from "./ModelosClient";
-import { sampleCreatorConfigs, sampleCuentasInstagram, sampleModelos, sampleVideos } from "@/lib/data";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { CreatorConfig, CuentaInstagram, Modelo } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 async function loadModelos() {
-  if (!canUseSupabase()) {
-    return {
-      modelos: sampleModelos,
-      cuentas: sampleCuentasInstagram,
-      creatorConfigs: sampleCreatorConfigs,
-      pipelineByModelo: pipelineFromSample(),
-    };
-  }
+  const vacio = {
+    modelos: [] as Modelo[],
+    cuentas: [] as CuentaInstagram[],
+    creatorConfigs: [] as CreatorConfig[],
+    pipelineByModelo: {} as Record<string, number>,
+  };
+  if (!canUseSupabase()) return vacio;
 
   try {
     const supabase = createAdminClient();
@@ -22,38 +20,23 @@ async function loadModelos() {
       supabase.from("modelos").select("*").order("nombre"),
       supabase.from("cuentas_instagram").select("*").order("username"),
       supabase.from("creator_configs").select("*"),
-      supabase.from("library_content").select("modelo_id, estado"),
+      supabase.from("library_content").select("modelo_id, estado").limit(5000),
     ]);
     const pipelineByModelo: Record<string, number> = {};
     ((pipelineResult.data ?? []) as Array<{ modelo_id: string; estado: string }>).forEach((row) => {
-      if (!["aprobado", "publicado"].includes(row.estado)) {
+      if (!["aprobado", "publicado", "rechazado", "archivado"].includes(row.estado)) {
         pipelineByModelo[row.modelo_id] = (pipelineByModelo[row.modelo_id] || 0) + 1;
       }
     });
     return {
-      modelos: ((modelosResult.data ?? []) as Modelo[]).length ? (modelosResult.data as Modelo[]) : sampleModelos,
-      cuentas: ((cuentasResult.data ?? []) as CuentaInstagram[]).length ? (cuentasResult.data as CuentaInstagram[]) : sampleCuentasInstagram,
+      modelos: (modelosResult.data ?? []) as Modelo[],
+      cuentas: (cuentasResult.data ?? []) as CuentaInstagram[],
       creatorConfigs: (creatorConfigsResult.data ?? []) as CreatorConfig[],
       pipelineByModelo,
     };
   } catch {
-    return {
-      modelos: sampleModelos,
-      cuentas: sampleCuentasInstagram,
-      creatorConfigs: sampleCreatorConfigs,
-      pipelineByModelo: pipelineFromSample(),
-    };
+    return vacio;
   }
-}
-
-function pipelineFromSample() {
-  const pipelineByModelo: Record<string, number> = {};
-  sampleVideos.forEach((video) => {
-    if (!["aprobado", "publicado"].includes(video.estado)) {
-      pipelineByModelo[video.modelo_id] = (pipelineByModelo[video.modelo_id] || 0) + 1;
-    }
-  });
-  return pipelineByModelo;
 }
 
 export default async function ModelosPage() {

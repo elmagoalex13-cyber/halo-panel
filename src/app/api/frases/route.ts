@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const { id, activa } = (await req.json()) as { id?: string; activa?: boolean };
     if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
-    if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true });
+    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     const supabase = createAdminClient();
     const { error } = await supabase.from("banco_frases_canciones").update({ activa }).eq("id", id);
     if (error) throw error;
@@ -59,7 +59,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const { id } = (await req.json()) as { id?: string };
     if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
-    if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true });
+    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     const supabase = createAdminClient();
     const { error } = await supabase.from("banco_frases_canciones").delete().eq("id", id);
     if (error) throw error;

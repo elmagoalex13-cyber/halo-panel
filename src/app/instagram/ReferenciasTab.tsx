@@ -201,7 +201,7 @@ export function ReferenciasTab({
       )}
 
       <div className="border-t border-white/[0.08] pt-5">
-        <BancoReferenciasSection videos={bancoVideos} modelos={modelos} cuentas={cuentas} />
+        <BancoReferenciasSection videos={bancoVideos} modelos={modelos} />
       </div>
 
       {editModal ? (

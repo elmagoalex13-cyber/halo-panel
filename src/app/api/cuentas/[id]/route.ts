@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (key in body) payload[key] = body[key];
     }
 
-    if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true });
+    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
     const supabase = createAdminClient();
     const { data, error } = await supabase.from("cuentas_instagram").update(payload).eq("id", id).select().single();

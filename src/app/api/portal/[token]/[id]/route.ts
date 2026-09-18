@@ -45,6 +45,8 @@ export async function PATCH(
           mimetype: body.mimetype ?? "video/mp4",
           tipo_video: asignacion.tipo === "referencia" ? "con_referencia" : asignacion.tipo,
           estado: "en_reparto",
+          origen: "portal",
+          estado_procesamiento: "sin_procesar",
           recibido_at: new Date().toISOString(),
         })
         .select("id")

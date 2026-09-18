@@ -1,12 +1,11 @@
 import { Sidebar } from "@/components/Sidebar";
-import { getDemoApprovalCount } from "@/lib/demo-approvals";
+import { syncRunnerResultados } from "@/lib/runnerSync";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 async function getApprovalCount() {
-  if (!canUseSupabase()) {
-    return getDemoApprovalCount();
-  }
+  if (!canUseSupabase()) return 0;
   try {
+    await syncRunnerResultados();
     const supabase = createAdminClient();
     const { count } = await supabase
       .from("library_content")

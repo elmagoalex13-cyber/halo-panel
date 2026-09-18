@@ -11,10 +11,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (key in body) payload[key] = body[key];
     }
 
-    if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true, ...payload });
+    if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
     const supabase = createAdminClient();
-    const { data, error } = await supabase.from("referencias_videos").update(payload).eq("id", id).select().single();
+    let { data, error } = await supabase.from("referencias_videos").update(payload).eq("id", id).select().single();
+
+    // Si la columna confirmado_at aun no existe en la BD, se guarda el resto.
+    if (error && "confirmado_at" in payload && /confirmado_at/.test(error.message)) {
+      const { confirmado_at: _omit, ...resto } = payload;
+      void _omit;
+      ({ data, error } = await supabase.from("referencias_videos").update(resto).eq("id", id).select().single());
+    }
+
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (error) {

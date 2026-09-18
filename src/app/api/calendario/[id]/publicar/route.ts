@@ -11,7 +11,7 @@ export async function PATCH(
   const body = await req.json() as { url_publicado?: string; publicado_at?: string };
 
   if (!canUseSupabase()) {
-    return NextResponse.json({ ok: true, demo: true });
+    return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }
 
   try {

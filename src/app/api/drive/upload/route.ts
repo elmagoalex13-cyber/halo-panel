@@ -16,7 +16,7 @@ type DriveVideoRow = {
 export async function POST(request: Request) {
   const { id } = (await request.json()) as { id?: string };
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
-  if (!canUseSupabase()) return NextResponse.json({ ok: true, demo: true, drive_url: "https://drive.google.com/" });
+  if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
   const supabase = createAdminClient();
   const { data, error } = await supabase.from("library_content").select("*, modelos(nombre)").eq("id", id).single();

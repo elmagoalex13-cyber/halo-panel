@@ -3,7 +3,6 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { CuentasTab } from "./CuentasTab";
 import { ReferenciasTab } from "./ReferenciasTab";
 import { IdeasViralesTab } from "./IdeasViralesTab";
-import { sampleBancoReferencias, sampleModelos, sampleReferenciasCuentas, sampleReferenciasVideos } from "@/lib/data";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { BancoReferenciaVideo, Modelo, ReferenciaCuenta, ReferenciaVideo } from "@/types";
@@ -11,64 +10,83 @@ import type { BancoReferenciaVideo, Modelo, ReferenciaCuenta, ReferenciaVideo } 
 export const dynamic = "force-dynamic";
 
 async function loadReferencias(): Promise<ReferenciaCuenta[]> {
-  if (!canUseSupabase()) return sampleReferenciasCuentas;
+  if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
     const { data } = await supabase.from("referencias_cuentas").select("*").order("created_at", { ascending: false });
-    return ((data ?? []) as ReferenciaCuenta[]).length ? (data as ReferenciaCuenta[]) : sampleReferenciasCuentas;
+    return (data ?? []) as ReferenciaCuenta[];
   } catch {
-    return sampleReferenciasCuentas;
+    return [];
   }
 }
 
+type BancoRow = {
+  id: string;
+  cuenta_ref_id: string | null;
+  url_original: string | null;
+  thumbnail_url: string | null;
+  descripcion: string | null;
+  created_at: string | null;
+  cuenta?: { username?: string | null } | null;
+};
+
+// Banco de referencias virales: tabla `referencias` (bot + manuales).
 async function loadBancoReferencias(): Promise<BancoReferenciaVideo[]> {
-  if (!canUseSupabase()) return sampleBancoReferencias;
+  if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("banco_frases_canciones")
-      .select(
-        "id, cuenta_referencia_id, url_referencia, frase, cancion_nombre, cancion_artista, views_referencia, likes_referencia, fecha_publicacion_ref, origen, created_at, cuenta_referencia:referencias_cuentas(username)",
-      )
-      .order("views_referencia", { ascending: false })
-      .limit(100);
-    const rows = ((data ?? []) as unknown as Array<BancoReferenciaVideo & { cuenta_referencia?: { username?: string | null } | null }>).map(
-      (row) => ({ ...row, cuenta_username: row.cuenta_referencia?.username ?? null }),
-    );
-    return rows;
+    const { data, error } = await supabase
+      .from("referencias")
+      .select("id, cuenta_ref_id, url_original, thumbnail_url, descripcion, created_at, cuenta:cuentas_referencia(username)")
+      .eq("activa", true)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) return [];
+    return ((data ?? []) as unknown as BancoRow[]).map((row) => ({
+      id: row.id,
+      cuenta_referencia_id: row.cuenta_ref_id,
+      cuenta_username: row.cuenta?.username ?? null,
+      url_referencia: row.url_original,
+      thumbnail_url: row.thumbnail_url,
+      frase: row.descripcion,
+      views_referencia: null,
+      likes_referencia: null,
+      origen: row.cuenta_ref_id ? "bot" : "manual",
+      created_at: row.created_at,
+    }));
   } catch {
-    return sampleBancoReferencias;
+    return [];
   }
 }
 
 async function loadModelosActivos(): Promise<Modelo[]> {
-  if (!canUseSupabase()) return sampleModelos;
+  if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
     const { data } = await supabase.from("modelos").select("*").eq("activa", true).order("nombre");
-    return ((data ?? []) as Modelo[]).length ? (data as Modelo[]) : sampleModelos;
+    return (data ?? []) as Modelo[];
   } catch {
-    return sampleModelos;
+    return [];
   }
 }
 
 type VideoWithCuenta = ReferenciaVideo & { referencias_cuentas?: { username?: string | null } | null };
 
 async function loadReferenciasVideos(): Promise<ReferenciaVideo[]> {
-  if (!canUseSupabase()) return sampleReferenciasVideos;
+  if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("referencias_videos")
-      .select("*, referencias_cuentas(username)")
+      .select("*, referencias_cuentas:cuenta_id(username)")
       .order("fecha_publicacion", { ascending: false });
-    const rows = ((data ?? []) as VideoWithCuenta[]).map((row) => ({
+    if (error) return [];
+    return ((data ?? []) as VideoWithCuenta[]).map((row) => ({
       ...row,
       cuenta_username: row.referencias_cuentas?.username ?? undefined,
     }));
-    return rows.length ? rows : sampleReferenciasVideos;
   } catch {
-    return sampleReferenciasVideos;
+    return [];
   }
 }
 

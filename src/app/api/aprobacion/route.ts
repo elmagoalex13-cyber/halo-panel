@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!canUseSupabase()) {
-      return NextResponse.json({ data: { id: crypto.randomUUID(), modelo_id, titulo, estado: "en_aprobacion" } });
+      return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     }
 
     const supabase = createAdminClient();
@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
         drive_url: drive_url || null,
         notas_editor: notas_editor || null,
         estado: "en_aprobacion",
+        origen: "upload_manual",
+        estado_procesamiento: "sin_procesar",
         recibido_at: new Date().toISOString(),
         caption: "",
         frase_quemada: "",

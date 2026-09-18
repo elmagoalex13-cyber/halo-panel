@@ -28,6 +28,8 @@ export async function POST(
       mimetype: "video/mp4",
       tipo_video: v.tipo ?? "sin_clasificar",
       estado: "en_reparto",
+      origen: "portal",
+      estado_procesamiento: "sin_procesar",
       recibido_at: new Date().toISOString(),
     }));
 

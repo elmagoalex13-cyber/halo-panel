@@ -192,51 +192,57 @@ export function CuentasTab({ cuentas }: { cuentas: CuentaIGDemo[] }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50/70 p-4">
-          <p className="text-sm font-semibold text-neutral-900">Quien la sigue</p>
-          <div className="mt-3 flex items-center gap-3">
-            <span className="font-display text-2xl font-bold text-neutral-900">{selected.demografia.pct_mujeres}%</span>
-            <div className="flex-1">
-              <div className="flex h-2 overflow-hidden rounded-full bg-neutral-200">
-                <div className="h-full bg-[#8B5CF6]" style={{ width: `${selected.demografia.pct_mujeres}%` }} />
-                <div className="h-full bg-neutral-300" style={{ width: `${selected.demografia.pct_hombres}%` }} />
+        {selected.demografia.fecha ? (
+          <div className="rounded-2xl border border-neutral-100 bg-neutral-50/70 p-4">
+            <p className="text-sm font-semibold text-neutral-900">Quien la sigue</p>
+            <div className="mt-3 flex items-center gap-3">
+              <span className="font-display text-2xl font-bold text-neutral-900">{selected.demografia.pct_mujeres}%</span>
+              <div className="flex-1">
+                <div className="flex h-2 overflow-hidden rounded-full bg-neutral-200">
+                  <div className="h-full bg-[#8B5CF6]" style={{ width: `${selected.demografia.pct_mujeres}%` }} />
+                  <div className="h-full bg-neutral-300" style={{ width: `${selected.demografia.pct_hombres}%` }} />
+                </div>
+                <p className="mt-1 text-xs text-neutral-400">sin clasificar por Instagram (no son mujeres)</p>
               </div>
-              <p className="mt-1 text-xs text-neutral-400">sin clasificar por Instagram (no son mujeres)</p>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {selected.demografia.tramos.map((tramo) => (
+                <div key={tramo.rango} className="flex items-center gap-2 text-xs">
+                  <span className="w-24 shrink-0 text-neutral-500">{tramo.rango}</span>
+                  <div className="h-1.5 flex-1 rounded-full bg-neutral-200">
+                    <div className="h-full rounded-full bg-[#A78BFA]" style={{ width: `${tramo.pct}%` }} />
+                  </div>
+                  <span className="w-10 shrink-0 text-right font-semibold text-neutral-700">
+                    {tramo.pct % 1 === 0 ? tramo.pct : tramo.pct.toFixed(1).replace(".", ",")}%
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5">
+              {selected.demografia.ciudades.map((ciudad, i) => (
+                <span key={ciudad.ciudad} className="flex items-center gap-1.5 text-xs text-neutral-500">
+                  <span className="h-2 w-2 rounded-sm" style={{ background: CIUDAD_COLORS[i % CIUDAD_COLORS.length] }} />
+                  {ciudad.pct % 1 === 0 ? ciudad.pct : ciudad.pct.toFixed(1).replace(".", ",")}%
+                </span>
+              ))}
+            </div>
+
+            <button className="mt-3 text-xs font-semibold text-[#8B5CF6] hover:underline">
+              » todos los tramos y las ciudades
+            </button>
+
+            <div className="mt-3 flex flex-wrap justify-between gap-1 text-[11px] text-neutral-400">
+              <span>Demografia del {new Date(selected.demografia.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}</span>
+              <span>seguidores del {selected.demografia.fecha}</span>
             </div>
           </div>
-
-          <div className="mt-4 space-y-2">
-            {selected.demografia.tramos.map((tramo) => (
-              <div key={tramo.rango} className="flex items-center gap-2 text-xs">
-                <span className="w-24 shrink-0 text-neutral-500">{tramo.rango}</span>
-                <div className="h-1.5 flex-1 rounded-full bg-neutral-200">
-                  <div className="h-full rounded-full bg-[#A78BFA]" style={{ width: `${tramo.pct}%` }} />
-                </div>
-                <span className="w-10 shrink-0 text-right font-semibold text-neutral-700">
-                  {tramo.pct % 1 === 0 ? tramo.pct : tramo.pct.toFixed(1).replace(".", ",")}%
-                </span>
-              </div>
-            ))}
+        ) : (
+          <div className="grid place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 p-6 text-center text-sm text-neutral-400">
+            Sin estadisticas todavia. Conecta esta cuenta con Metricool desde Modelos para ver demografia y reels.
           </div>
-
-          <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5">
-            {selected.demografia.ciudades.map((ciudad, i) => (
-              <span key={ciudad.ciudad} className="flex items-center gap-1.5 text-xs text-neutral-500">
-                <span className="h-2 w-2 rounded-sm" style={{ background: CIUDAD_COLORS[i % CIUDAD_COLORS.length] }} />
-                {ciudad.pct % 1 === 0 ? ciudad.pct : ciudad.pct.toFixed(1).replace(".", ",")}%
-              </span>
-            ))}
-          </div>
-
-          <button className="mt-3 text-xs font-semibold text-[#8B5CF6] hover:underline">
-            » todos los tramos y las ciudades
-          </button>
-
-          <div className="mt-3 flex flex-wrap justify-between gap-1 text-[11px] text-neutral-400">
-            <span>Demografia del {new Date(selected.demografia.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}</span>
-            <span>seguidores del {selected.demografia.fecha}</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Reels grid */}
@@ -244,7 +250,7 @@ export function CuentasTab({ cuentas }: { cuentas: CuentaIGDemo[] }) {
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="font-display text-base font-semibold text-neutral-900">Ultimos reels</h3>
           <p className="text-xs text-neutral-400">
-            {selected.reels_30d_count} en 30 d · {selected.reels_7d_count} en 7 d · mediana {formatVisitas(selected.mediana_visitas)} visitas
+            {reels.length === 0 ? "sin datos" : `${selected.reels_30d_count} en 30 d · ${selected.reels_7d_count} en 7 d · mediana ${formatVisitas(selected.mediana_visitas)} visitas`}
           </p>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">

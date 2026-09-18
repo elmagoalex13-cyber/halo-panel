@@ -5,7 +5,7 @@ export async function POST() {
   const inicio = Date.now();
 
   if (!canUseSupabase()) {
-    return NextResponse.json({ ok: true, message: "Sync iniciado", demo: true });
+    return NextResponse.json({ ok: false, error: "Supabase no configurado" }, { status: 503 });
   }
 
   const supabase = createAdminClient();
@@ -25,7 +25,7 @@ export async function POST() {
 
 export async function GET() {
   if (!canUseSupabase()) {
-    return NextResponse.json({ lastSync: { created_at: new Date().toISOString(), resultado: "ok", duracion_ms: 0 } });
+    return NextResponse.json({ lastSync: null });
   }
 
   const supabase = createAdminClient();

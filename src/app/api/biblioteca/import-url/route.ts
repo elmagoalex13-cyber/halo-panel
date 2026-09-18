@@ -26,10 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!canUseSupabase()) {
-      return NextResponse.json({
-        summary: { total: urls.length, ok: urls.length, duplicates: 0, errors: 0 },
-        results: urls.map((u) => ({ url: u, ok: true, demo: true })),
-      });
+      return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     }
 
     const supabase = createAdminClient();
@@ -70,6 +67,7 @@ export async function POST(req: NextRequest) {
           r2_key: r2Key,
           r2_url: url,
           estado: "recibido",
+          estado_procesamiento: "sin_procesar",
           recibido_at: new Date().toISOString(),
           titulo: url.split("/").pop()?.split("?")[0] ?? "imported",
         });

@@ -1,7 +1,6 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { FacturacionClient } from "./FacturacionClient";
 import { VenuzSyncButton } from "./VenuzSyncButton";
-import { sampleFacturacion, sampleModelos } from "@/lib/data";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { FacturacionModelo, Modelo } from "@/types";
 
@@ -11,7 +10,7 @@ type BillingWithModel = FacturacionModelo & { modelos?: { nombre?: string | null
 
 async function loadData() {
   if (!canUseSupabase()) {
-    return { rows: sampleFacturacion, modelos: sampleModelos, lastSync: null, lastSyncOk: false };
+    return { rows: [] as FacturacionModelo[], modelos: [] as Modelo[], lastSync: null, lastSyncOk: false };
   }
 
   try {
@@ -27,18 +26,16 @@ async function loadData() {
       modelo_nombre: row.modelos?.nombre ?? row.modelo_nombre ?? "Sin modelo",
     })) as FacturacionModelo[];
 
-    const modelos = ((modelosResult.data ?? []) as Modelo[]).length
-      ? (modelosResult.data as Modelo[])
-      : sampleModelos;
+    const modelos = (modelosResult.data ?? []) as Modelo[];
 
     return {
-      rows: rows.length ? rows : sampleFacturacion,
+      rows,
       modelos,
       lastSync: lastSyncResult.data?.created_at ?? null,
       lastSyncOk: lastSyncResult.data?.resultado === "ok",
     };
   } catch {
-    return { rows: sampleFacturacion, modelos: sampleModelos, lastSync: null, lastSyncOk: false };
+    return { rows: [] as FacturacionModelo[], modelos: [] as Modelo[], lastSync: null, lastSyncOk: false };
   }
 }
 

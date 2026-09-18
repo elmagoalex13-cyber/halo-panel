@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/server';
+import { canUseSupabase, createAdminClient } from '@/lib/supabase/server';
 
+export const dynamic = 'force-dynamic';
+
+// tipo_video en BD es texto ('tipo1'..'tipo4'); el runner trabaja con el numero 1-4.
 function tipoVideoANumero(tipoVideo: string | null): number {
   if (!tipoVideo) return 4;
   const s = tipoVideo.toLowerCase();
@@ -11,6 +14,10 @@ function tipoVideoANumero(tipoVideo: string | null): number {
 }
 
 export async function POST(req: NextRequest) {
+  if (!canUseSupabase()) {
+    return NextResponse.json({ ok: false, error: 'Supabase no configurado' }, { status: 503 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const ids: string[] | undefined = body.ids;
   const supabase = createAdminClient();
@@ -36,13 +43,13 @@ export async function POST(req: NextRequest) {
 
   let confirmados = 0;
   for (const pieza of piezas) {
-    const tipo = tipoVideoANumero(pieza.tipo_video);
     const { error } = await supabase
       .from('library_content')
       .update({
         estado: 'editando',
         estado_procesamiento: 'pendiente',
-        tipo,
+        error_mensaje: null,
+        tipo: tipoVideoANumero(pieza.tipo_video as string | null),
         updated_at: new Date().toISOString(),
       })
       .eq('id', pieza.id);
