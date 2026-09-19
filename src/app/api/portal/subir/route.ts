@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
     encargo_id?: string;
     referencia_id?: string;
   };
-  if (!body.key || !body.key.startsWith(`bruto/${sesion.modeloId}/`)) {
+  const supabasePrefix = `supabase://portal-uploads/${sesion.modeloId}/`;
+  if (!body.key || (!body.key.startsWith(`bruto/${sesion.modeloId}/`) && !body.key.startsWith(supabasePrefix))) {
     return NextResponse.json({ error: "Archivo no valido" }, { status: 400 });
   }
 

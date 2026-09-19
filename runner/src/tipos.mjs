@@ -6,11 +6,32 @@
  *  tipo 4 = con referencia (mismo recorte/duracion que la referencia)
  */
 import path from "path";
+import { createWriteStream } from "fs";
 import { rm, writeFile, mkdir } from "fs/promises";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import { config } from "./config.mjs";
 import { downloadFromR2, uploadToR2, keyDesdeUrl } from "./r2.mjs";
 import { compactSubtitleSegments, extractAudio, generateASS, speechBounds, transcribeWithWhisper } from "./whisper.mjs";
 import { renderTipo1, renderTipo2, renderTipo3, renderTipo4 } from "./ffmpeg.mjs";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
+
+async function downloadInput(key, destPath) {
+  if (key.startsWith("supabase://")) {
+    const withoutScheme = key.slice("supabase://".length);
+    const slash = withoutScheme.indexOf("/");
+    const bucket = withoutScheme.slice(0, slash);
+    const objectPath = withoutScheme.slice(slash + 1);
+    const { data, error } = await supabase.storage.from(bucket).download(objectPath);
+    if (error || !data) throw new Error(`Supabase Storage: ${error?.message ?? "no se pudo descargar"}`);
+    await mkdir(path.dirname(destPath), { recursive: true });
+    await pipeline(Readable.fromWeb(data.stream()), createWriteStream(destPath));
+    return;
+  }
+  await downloadFromR2(key, destPath);
+}
 
 async function subtitulos(rawPath, workDir) {
   try {
@@ -42,7 +63,7 @@ export async function procesarTipo(tipo, pieza) {
   try {
     const rawPath = path.join(workDir, "raw.mp4");
     const outPath = path.join(workDir, "output.mp4");
-    await downloadFromR2(rawKey, rawPath);
+    await downloadInput(rawKey, rawPath);
 
     if (tipo === 1) {
       const subs = await subtitulos(rawPath, workDir);
