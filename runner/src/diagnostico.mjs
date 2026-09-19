@@ -11,7 +11,8 @@ const ok = (m) => console.log("OK   ", m);
 const ko = (m) => console.log("FALLO", m);
 
 const falta = faltanVariables();
-falta.length ? ko(`variables .env que faltan: ${falta.join(", ")}`) : ok("variables .env completas");
+if (falta.length) ko(`variables .env que faltan: ${falta.join(", ")}`);
+else ok("variables .env completas");
 console.log(`     intervalo de cola: ${config.pollMs / 1000}s (POLL_INTERVAL_MS)`);
 
 for (const [nombre, bin] of [["ffmpeg", config.ffmpeg], ["ffprobe", config.ffprobe]]) {
@@ -23,7 +24,8 @@ for (const [nombre, bin] of [["ffmpeg", config.ffmpeg], ["ffprobe", config.ffpro
   }
 }
 const w = await resolverWhisper();
-w ? ok(`whisper: ${w.bin} con modelo ${w.model}`) : ko("whisper no encontrado: los tipos 1/3/4 saldran SIN subtitulos");
+if (w) ok(`whisper: ${w.bin} con modelo ${w.model}`);
+else ko("whisper no encontrado: los tipos 1/3/4 saldran SIN subtitulos");
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
 const { data, error } = await supabase

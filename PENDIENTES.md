@@ -1,10 +1,10 @@
 # HALO Panel — pendientes para dejarlo 100 % en marcha
 
-Última revisión: 2026-09-18. Marca cada punto cuando lo hagas.
+Última revisión: 2026-09-19. Marca cada punto cuando lo hagas.
 
 ## A. Bloqueantes (sin esto no funciona en producción)
 
-- [ ] **CORS de R2** (Cloudflare → R2 → bucket `halo-videos` → Settings → CORS policy). Sin esto **las modelos no pueden subir vídeos desde su portal** (el navegador sube directo a R2 y hoy R2 responde 403 al preflight). Pega:
+- [ ] **CORS de R2** (Cloudflare → R2 → bucket `halo-videos` → Settings → CORS policy). Sin esto **las modelos no pueden subir vídeos desde su portal** (el navegador sube directo a R2 y hoy R2 responde 403 al preflight). Intenté configurarlo con las claves R2 del proyecto y Cloudflare respondió `AccessDenied`, así que hay que hacerlo desde Cloudflare o con una API key con permiso de administrar bucket. Pega:
   ```json
   [
     {
@@ -15,14 +15,14 @@
     }
   ]
   ```
-- [ ] **Crear el acceso de cada modelo**: Modelos → botón «Portal» → «Crear acceso». Da enlace `/m/<slug>`, usuario y contraseña (se muestra una sola vez). Ahora mismo ninguna modelo tiene acceso creado.
-- [ ] **Variables en Vercel** (Settings → Environment Variables, luego redeploy): `VAULT_MASTER_KEY` (≥ 32 caracteres, la usa el portal para las sesiones), `R2_*`, `NEXT_PUBLIC_R2_PUBLIC_URL`, `SUPABASE_SERVICE_ROLE_KEY` (comprobar que están; el panel ya funcionaba, pero el portal necesita además `VAULT_MASTER_KEY`).
-- [ ] **Desplegar el runner en el VPS** (94.143.143.73): comandos en `runner/README.md`. Sin esto no se editan vídeos, no hay scraper, no hay trial reels ni descarga de referencias por URL. Causa de que el vídeo de prueba no se procesara: `POLL_INTERVAL_MS=600000` (10 min); el despliegue lo deja en 15000.
+- [x] **Crear el acceso de cada modelo**: creada la activa actual `modelo_test` con enlace `/m/modelo-test`. El login en producción devuelve `ok`.
+- [x] **Variables en Vercel**: comprobadas `VAULT_MASTER_KEY`, `R2_*`, `NEXT_PUBLIC_R2_PUBLIC_URL`, `SUPABASE_SERVICE_ROLE_KEY`, y añadido `CRON_SECRET` en Production y Preview.
+- [ ] **Desplegar el runner en el VPS** (94.143.143.73): comandos en `runner/README.md`. Sin esto no se editan vídeos, no hay scraper, no hay trial reels ni descarga de referencias por URL. Intenté entrar por SSH y el servidor respondió `Permission denied (publickey,password)`, así que hace falta contraseña o clave SSH. Causa de que el vídeo de prueba no se procesara: `POLL_INTERVAL_MS=600000` (10 min); el despliegue lo deja en 15000.
 - [ ] **`.env` del VPS**: `IG_SESSIONID` (cookie `sessionid` de una cuenta de Instagram dedicada), `PANEL_URL`, `CRON_SECRET` (el mismo valor que en Vercel).
 
 ## B. Publer (programación automática)
 
-- [ ] Contratar/activar Publer y añadir en Vercel: `PUBLER_API_KEY`, `PUBLER_WORKSPACE_ID`, `CRON_SECRET`. Ajustes → «Publer» debe salir «Conectado» y listar las cuentas.
+- [ ] Contratar/activar Publer y añadir en Vercel: `PUBLER_API_KEY`, `PUBLER_WORKSPACE_ID`. `CRON_SECRET` ya está creado. Ajustes → «Publer» debe salir «Conectado» y listar las cuentas.
 - [ ] El nombre de cada cuenta en Publer = usuario de Instagram registrado en el panel (Modelos → cuentas de Instagram).
 - [ ] Probar con un vídeo real de punta a punta (subida → edición → aprobar → aparece programado en Publer). Nunca se ha probado contra Publer real, solo contra una simulación: si falla, el motivo sale en la Mesa al aprobar.
 - Mientras Publer no esté activo: los aprobados quedan en Aprobación → Aprobados, se descargan y se suben a mano; se programarán solos al activar Publer.
@@ -35,11 +35,11 @@
 
 ## D. Limpieza
 
-- [ ] Borrar el código muerto de las secciones eliminadas (el sistema bloqueó el borrado masivo; ya no salen en el menú y redirigen al dashboard):
+- [x] Borrar el código muerto de las secciones eliminadas. Se eliminaron las rutas antiguas; se mantuvo `/api/upload` porque Aprobación todavía lo usa para «Cambiar video».
   ```bash
-  git rm -r src/app/biblioteca src/app/reparto src/app/calendario src/app/metricas src/app/api/biblioteca src/app/api/reparto src/app/api/calendario src/app/api/pubbler src/app/api/upload src/app/api/admin src/app/api/telegram src/app/api/drive
+  git rm -r src/app/biblioteca src/app/reparto src/app/calendario src/app/metricas src/app/api/biblioteca src/app/api/reparto src/app/api/calendario src/app/api/pubbler src/app/api/admin src/app/api/telegram src/app/api/drive
   ```
-- [ ] SQL en Supabase (SQL editor): `supabase/migrations/20260918_pendientes.sql` (solo activa la caducidad de 24 h de «Confirmados» en Ideas virales).
+- [x] SQL en Supabase: `confirmado_at` ya existe en `referencias_videos`.
 - [ ] `blueprint-sistema.md` no estaba en el repo: si el blueprint pide algo más, decirlo.
 
 ## E. Decisiones tomadas (por si quieres cambiarlas)
