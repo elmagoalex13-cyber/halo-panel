@@ -21,7 +21,7 @@ export function SubirBoton({
   const [actual, setActual] = useState<{ index: number; total: number } | null>(null);
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
 
-  async function subirUno(file: File, index: number) {
+  async function subirUno(file: File, index: number, onProgress: (loaded: number) => void) {
     const pre = await fetch("/api/portal/presign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -34,9 +34,16 @@ export function SubirBoton({
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
       xhr.setRequestHeader("Content-Type", contentType);
-      xhr.upload.onprogress = (ev) => ev.lengthComputable && setProgreso(Math.round((ev.loaded / ev.total) * 100));
-      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("La subida fallo, prueba otra vez")));
-      xhr.onerror = () => reject(new Error("Sin conexion. Prueba otra vez con mejor cobertura"));
+      xhr.upload.onprogress = (ev) => ev.lengthComputable && onProgress(ev.loaded);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          onProgress(file.size);
+          resolve();
+        } else {
+          reject(new Error(`La subida fallo (${xhr.status}). Prueba otra vez`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("El navegador bloqueo la subida. Revisa el CORS de R2 o prueba otra vez"));
       xhr.send(file);
     });
 
@@ -62,12 +69,30 @@ export function SubirBoton({
     setMensaje(null);
     setProgreso(0);
     setActual({ index: 0, total: files.length });
+    const totalBytes = files.reduce((acc, file) => acc + file.size, 0) || 1;
+    const loadedByFile = Array(files.length).fill(0) as number[];
+    const concurrency = Math.min(3, files.length);
+    let nextIndex = 0;
+    let completed = 0;
+
+    const updateProgress = (index: number, loaded: number) => {
+      loadedByFile[index] = loaded;
+      const totalLoaded = loadedByFile.reduce((acc, value) => acc + value, 0);
+      setProgreso(Math.min(100, Math.round((totalLoaded / totalBytes) * 100)));
+    };
+
     try {
-      for (let i = 0; i < files.length; i++) {
-        setActual({ index: i, total: files.length });
-        setProgreso(0);
-        await subirUno(files[i], i);
-      }
+      await Promise.all(
+        Array.from({ length: concurrency }, async () => {
+          while (nextIndex < files.length) {
+            const index = nextIndex++;
+            setActual({ index, total: files.length });
+            await subirUno(files[index], index, (loaded) => updateProgress(index, loaded));
+            completed++;
+            setActual({ index: completed - 1, total: files.length });
+          }
+        }),
+      );
       setMensaje({ ok: true, texto: files.length === 1 ? "Video subido." : `${files.length} videos subidos.` });
       router.refresh();
     } catch (e) {
