@@ -213,7 +213,8 @@ export function speechBounds(segments, { audioStart = null, padStart = 0, padEnd
   const spoken = segments.filter((seg) => seg.text.trim() && seg.end > seg.start);
   if (!spoken.length) return null;
   const firstWord = spoken[0].start;
-  const start = Number.isFinite(audioStart) ? Math.max(firstWord, audioStart) : firstWord;
+  const audioStartIsClose = Number.isFinite(audioStart) && audioStart <= firstWord + 0.25;
+  const start = audioStartIsClose ? Math.max(firstWord, audioStart) : firstWord;
   return {
     start: Math.max(0, start - padStart),
     end: spoken.at(-1).end + padEnd,
