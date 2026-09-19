@@ -21,6 +21,25 @@ export function SubirBoton({
   const [actual, setActual] = useState<{ index: number; total: number } | null>(null);
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
 
+  async function enviarConXhr(method: "PUT" | "POST", url: string, file: File, contentType: string, onProgress: (loaded: number) => void) {
+    return new Promise<string | null>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(method, url);
+      xhr.setRequestHeader("Content-Type", contentType);
+      xhr.upload.onprogress = (ev) => ev.lengthComputable && onProgress(ev.loaded);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          onProgress(file.size);
+          resolve(xhr.responseText || null);
+        } else {
+          reject(new Error(`La subida fallo (${xhr.status}). Prueba otra vez`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("upload_blocked"));
+      xhr.send(file);
+    });
+  }
+
   async function subirUno(file: File, index: number, onProgress: (loaded: number) => void) {
     const pre = await fetch("/api/portal/presign", {
       method: "POST",
@@ -29,29 +48,24 @@ export function SubirBoton({
     });
     if (!pre.ok) throw new Error(pre.status === 401 ? "Tu sesion ha caducado, vuelve a entrar" : "No se pudo preparar la subida");
     const { url, key, contentType } = (await pre.json()) as { url: string; key: string; contentType: string };
+    let uploadedKey = key;
 
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", url);
-      xhr.setRequestHeader("Content-Type", contentType);
-      xhr.upload.onprogress = (ev) => ev.lengthComputable && onProgress(ev.loaded);
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress(file.size);
-          resolve();
-        } else {
-          reject(new Error(`La subida fallo (${xhr.status}). Prueba otra vez`));
-        }
-      };
-      xhr.onerror = () => reject(new Error("El navegador bloqueo la subida. Revisa el CORS de R2 o prueba otra vez"));
-      xhr.send(file);
-    });
+    try {
+      await enviarConXhr("PUT", url, file, contentType, onProgress);
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "upload_blocked") throw error;
+      const proxyUrl = `/api/portal/upload-proxy?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(contentType)}`;
+      const responseText = await enviarConXhr("POST", proxyUrl, file, contentType, onProgress);
+      const proxy = JSON.parse(responseText ?? "{}") as { key?: string };
+      if (!proxy.key) throw new Error("No se pudo completar la subida alternativa");
+      uploadedKey = proxy.key;
+    }
 
     const reg = await fetch("/api/portal/subir", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        key,
+        key: uploadedKey,
         filename: file.name,
         size: file.size,
         tipo,
