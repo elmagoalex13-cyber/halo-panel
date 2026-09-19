@@ -10,13 +10,24 @@ import { config } from "./config.mjs";
 const FFMPEG = config.ffmpeg;
 const FFPROBE = config.ffprobe;
 
-function addInputWithTrim(args, inputPath, trim = {}) {
-  if (Number.isFinite(trim.start) && trim.start > 0) args.push("-ss", String(trim.start));
-  args.push("-i", inputPath);
-  if (Number.isFinite(trim.end) && trim.end > 0) {
-    const duration = Math.max(0.2, trim.end - Math.max(0, trim.start ?? 0));
-    args.push("-t", String(duration));
-  }
+function hasTrim(trim) {
+  return Number.isFinite(trim?.start) || Number.isFinite(trim?.end);
+}
+
+function buildVideoTrimFilter(trim = {}) {
+  if (!hasTrim(trim)) return null;
+  const parts = [];
+  if (Number.isFinite(trim.start)) parts.push(`start=${Math.max(0, trim.start)}`);
+  if (Number.isFinite(trim.end)) parts.push(`end=${Math.max(0.2, trim.end)}`);
+  return `trim=${parts.join(":")},setpts=PTS-STARTPTS`;
+}
+
+function buildAudioTrimFilter(trim = {}) {
+  if (!hasTrim(trim)) return null;
+  const parts = [];
+  if (Number.isFinite(trim.start)) parts.push(`start=${Math.max(0, trim.start)}`);
+  if (Number.isFinite(trim.end)) parts.push(`end=${Math.max(0.2, trim.end)}`);
+  return `atrim=${parts.join(":")},asetpts=PTS-STARTPTS`;
 }
 
 /**
@@ -59,12 +70,19 @@ function buildVideoFilter({ zoom = false, zoomFactor = 1.03 } = {}) {
  */
 export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
-  const vf = [buildVideoFilter(), assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null].filter(Boolean).join(",");
+  const vf = [
+    buildVideoTrimFilter(trim),
+    buildVideoFilter(),
+    assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null,
+  ].filter(Boolean).join(",");
+  const af = buildAudioTrimFilter(trim);
 
-  const args = ["-y"];
-  addInputWithTrim(args, inputPath, trim);
+  const args = ["-y", "-i", inputPath];
   args.push(
     "-vf", vf,
+  );
+  if (af) args.push("-af", af);
+  args.push(
     "-c:v", "libx264", "-preset", "fast", "-crf", "22",
     "-c:a", "aac", "-b:a", "128k",
     "-movflags", "+faststart",
@@ -126,8 +144,11 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
   await mkdir(path.dirname(outputPath), { recursive: true });
 
   const mainPath = outputPath.replace(".mp4", "_main.mp4");
-  const mainArgs = ["-y"];
-  addInputWithTrim(mainArgs, inputPath, trim);
+  const mainArgs = ["-y", "-i", inputPath];
+  const trimVf = buildVideoTrimFilter(trim);
+  const trimAf = buildAudioTrimFilter(trim);
+  if (trimVf) mainArgs.push("-vf", trimVf);
+  if (trimAf) mainArgs.push("-af", trimAf);
   mainArgs.push(
     "-c:v", "libx264", "-preset", "fast", "-crf", "22",
     "-c:a", "aac", "-b:a", "128k",
@@ -196,16 +217,19 @@ export async function renderTipo4(inputPath, refPath, outputPath, assPath = null
     : { start: 0, end: maxDuration };
 
   // Recortar el bruto a la duración de referencia y aplicar mismo tratamiento
-  const vfParts = [buildVideoFilter()];
+  const vfParts = [buildVideoTrimFilter(inputTrim), buildVideoFilter()].filter(Boolean);
   if (assPath) {
     vfParts.push(`ass='${assPath.replace(/'/g, "\\'")}'`);
   }
   const vf = vfParts.join(",");
+  const af = buildAudioTrimFilter(inputTrim);
 
-  const args = ["-y"];
-  addInputWithTrim(args, inputPath, inputTrim);
+  const args = ["-y", "-i", inputPath];
   args.push(
     "-vf", vf,
+  );
+  if (af) args.push("-af", af);
+  args.push(
     "-c:v", "libx264", "-preset", "fast", "-crf", "22",
     "-c:a", "aac", "-b:a", "128k",
     "-movflags", "+faststart",

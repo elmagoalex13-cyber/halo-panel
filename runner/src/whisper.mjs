@@ -61,7 +61,9 @@ export async function extractAudio(videoPath, outputDir) {
 }
 
 /**
- * Transcribe el audio con whisper-cpp y devuelve un array de segmentos SRT-like.
+ * Transcribe el audio con whisper-cpp y devuelve segmentos con tiempos.
+ * Primero intenta forzar timestamps por palabra; si la version instalada no
+ * soporta esas flags, cae al modo normal.
  * @param {string} wavPath - Ruta del archivo WAV
  * @param {string} outputDir - Directorio donde se generará el archivo SRT/VTT
  * @returns {{ start: number, end: number, text: string }[]} Segmentos de subtítulo
@@ -73,14 +75,24 @@ export async function transcribeWithWhisper(wavPath, outputDir) {
   if (!whisper) return [];
 
   const baseName = path.join(outputDir, "subs");
-  await execFileAsync(whisper.bin, [
+  const commonArgs = [
     "-m", whisper.model,
     "-f", wavPath,
-    "-osrt",         // output SRT
-    "-of", baseName, // output file prefix
-    "-l", "es",      // language: Spanish
+    "-osrt",
+    "-of", baseName,
+    "-l", "es",
     "--word-thold", "0.01",
-  ]);
+  ];
+
+  try {
+    await execFileAsync(whisper.bin, [
+      ...commonArgs,
+      "-ml", "1",
+      "-sow",
+    ]);
+  } catch {
+    await execFileAsync(whisper.bin, commonArgs);
+  }
 
   const srtPath = baseName + ".srt";
   if (!existsSync(srtPath)) {
@@ -127,22 +139,34 @@ function parseSRT(srtContent) {
  */
 export function compactSubtitleSegments(segments, maxWords = 4) {
   const compact = [];
+  const wordTimed = [];
+
   for (const seg of segments) {
     const words = seg.text.trim().split(/\s+/).filter(Boolean);
     if (!words.length) continue;
+
+    if (words.length === 1) {
+      wordTimed.push({ start: seg.start, end: seg.end, text: words[0] });
+      continue;
+    }
+
     const duration = Math.max(0.25, seg.end - seg.start);
-    const totalWords = words.length;
-    for (let i = 0; i < words.length; i += maxWords) {
-      const chunk = words.slice(i, i + maxWords);
-      const start = seg.start + duration * (i / totalWords);
-      const end = seg.start + duration * (Math.min(i + chunk.length, totalWords) / totalWords);
-      compact.push({
-        start,
-        end: Math.max(end, start + 0.35),
-        text: chunk.join(" "),
-      });
+    for (let i = 0; i < words.length; i++) {
+      const start = seg.start + duration * (i / words.length);
+      const end = seg.start + duration * ((i + 1) / words.length);
+      wordTimed.push({ start, end, text: words[i] });
     }
   }
+
+  for (let i = 0; i < wordTimed.length; i += maxWords) {
+    const chunk = wordTimed.slice(i, i + maxWords);
+    compact.push({
+      start: chunk[0].start,
+      end: Math.max(chunk.at(-1).end, chunk[0].start + 0.25),
+      text: chunk.map((word) => word.text).join(" "),
+    });
+  }
+
   return compact;
 }
 
@@ -154,7 +178,7 @@ export function compactSubtitleSegments(segments, maxWords = 4) {
  * @param {number} [opts.padEnd]
  * @returns {{ start: number, end: number } | null}
  */
-export function speechBounds(segments, { padStart = 0.08, padEnd = 0.12 } = {}) {
+export function speechBounds(segments, { padStart = 0.01, padEnd = 0.03 } = {}) {
   const spoken = segments.filter((seg) => seg.text.trim() && seg.end > seg.start);
   if (!spoken.length) return null;
   return {
