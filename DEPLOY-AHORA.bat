@@ -5,7 +5,7 @@ cd /d "%~dp0"
 echo === HALO PANEL DEPLOY ===
 echo.
 
-echo [1/4] Eliminando git lock si existe...
+echo [1/5] Eliminando git lock si existe...
 if exist ".git\index.lock" (
     del /f ".git\index.lock"
     echo    Lock eliminado.
@@ -14,25 +14,36 @@ if exist ".git\index.lock" (
 )
 
 echo.
-echo [2/4] Agregando todos los cambios...
+echo [2/5] Ejecutando lint...
+npm run lint
+if errorlevel 1 goto error
+
+echo.
+echo [3/5] Ejecutando build...
+npm run build
+if errorlevel 1 goto error
+
+echo.
+echo [4/5] Agregando todos los cambios...
 git add -A
 if errorlevel 1 goto error
 
 echo.
-echo [3/4] Haciendo commit...
-git commit -m "feat: pipeline completo — upload bar, import URL, enviar al runner, fix estados"
+echo [5/5] Haciendo commit y push...
+set /p MSG="Mensaje de commit: "
+if "%MSG%"=="" set MSG=chore: actualizacion panel
+git commit -m "%MSG%"
 if errorlevel 1 (
     echo    Nada nuevo que commitear o error.
 )
 
 echo.
-echo [4/4] Haciendo push a GitHub (dispara Vercel)...
 git push origin main
 if errorlevel 1 goto error
 
 echo.
 echo ==========================================
-echo  LISTO. Vercel desplegara en 1-2 minutos.
+echo  LISTO. GitHub queda actualizado.
 echo  Cierra esta ventana cuando quieras.
 echo ==========================================
 pause
