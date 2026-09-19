@@ -4,7 +4,7 @@
 
 ## A. Bloqueantes (sin esto no funciona en producción)
 
-- [ ] **CORS de R2** (Cloudflare → R2 → bucket `halo-videos` → Settings → CORS policy). Sin esto **las modelos no pueden subir vídeos desde su portal** (el navegador sube directo a R2 y hoy R2 responde 403 al preflight). Intenté configurarlo con las claves R2 del proyecto y Cloudflare respondió `AccessDenied`, así que hay que hacerlo desde Cloudflare o con una API key con permiso de administrar bucket. Pega:
+- [x] **CORS de R2** (Cloudflare → R2 → bucket `halo-videos` → Settings → CORS policy). Probado el preflight `PUT` desde `https://halo-panel.vercel.app`: R2 devuelve `204` y permite `GET, HEAD, PUT`.
   ```json
   [
     {
@@ -17,8 +17,8 @@
   ```
 - [x] **Crear el acceso de cada modelo**: creada la activa actual `modelo_test` con enlace `/m/modelo-test`. El login en producción devuelve `ok`.
 - [x] **Variables en Vercel**: comprobadas `VAULT_MASTER_KEY`, `R2_*`, `NEXT_PUBLIC_R2_PUBLIC_URL`, `SUPABASE_SERVICE_ROLE_KEY`, y añadido `CRON_SECRET` en Production y Preview.
-- [ ] **Desplegar el runner en el VPS** (94.143.143.73): comandos en `runner/README.md`. Sin esto no se editan vídeos, no hay scraper, no hay trial reels ni descarga de referencias por URL. Intenté entrar por SSH y el servidor respondió `Permission denied (publickey,password)`, así que hace falta contraseña o clave SSH. Causa de que el vídeo de prueba no se procesara: `POLL_INTERVAL_MS=600000` (10 min); el despliegue lo deja en 15000.
-- [ ] **`.env` del VPS**: `IG_SESSIONID` (cookie `sessionid` de una cuenta de Instagram dedicada), `PANEL_URL`, `CRON_SECRET` (el mismo valor que en Vercel).
+- [x] **Desplegar el runner en el VPS** (94.143.143.73): desplegada versión 2.0.0 en `/opt/halo-runner`, `pm2` online, `POLL_INTERVAL_MS=15000`, `MAX_PIEZAS=3`, ffmpeg/ffprobe OK y Whisper instalado con modelo `small`.
+- [ ] **`.env` del VPS**: `PANEL_URL` y `CRON_SECRET` ya están configurados. Falta `IG_SESSIONID` (cookie `sessionid` de una cuenta de Instagram dedicada) para evitar 429 en scraper/trial reels.
 
 ## B. Publer (programación automática)
 
