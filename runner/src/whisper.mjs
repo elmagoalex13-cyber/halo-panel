@@ -61,6 +61,37 @@ export async function extractAudio(videoPath, outputDir) {
 }
 
 /**
+ * Detecta donde termina el silencio inicial del audio.
+ * Esto complementa Whisper: Whisper puede adelantar el primer timestamp unos
+ * frames, mientras que silencedetect encuentra el primer audio real.
+ * @param {string} audioPath
+ * @returns {Promise<number | null>}
+ */
+export async function detectAudioStart(audioPath) {
+  try {
+    const { stderr } = await execFileAsync(config.ffmpeg, [
+      "-hide_banner",
+      "-nostats",
+      "-i", audioPath,
+      "-af", "silencedetect=noise=-32dB:d=0.03",
+      "-f", "null",
+      "-",
+    ], { maxBuffer: 1024 * 1024 * 4 });
+
+    const startsAtZero = /silence_start:\s*0(?:\.0+)?\b/.test(stderr);
+    if (!startsAtZero) return null;
+
+    const match = stderr.match(/silence_end:\s*([0-9.]+)/);
+    if (!match) return null;
+
+    const start = Number(match[1]);
+    return Number.isFinite(start) ? start : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Transcribe el audio con whisper-cpp y devuelve segmentos con tiempos.
  * Primero intenta forzar timestamps por palabra; si la version instalada no
  * soporta esas flags, cae al modo normal.
@@ -178,11 +209,13 @@ export function compactSubtitleSegments(segments, maxWords = 4) {
  * @param {number} [opts.padEnd]
  * @returns {{ start: number, end: number } | null}
  */
-export function speechBounds(segments, { padStart = 0.01, padEnd = 0.03 } = {}) {
+export function speechBounds(segments, { audioStart = null, padStart = 0, padEnd = 0.03 } = {}) {
   const spoken = segments.filter((seg) => seg.text.trim() && seg.end > seg.start);
   if (!spoken.length) return null;
+  const firstWord = spoken[0].start;
+  const start = Number.isFinite(audioStart) ? Math.max(firstWord, audioStart) : firstWord;
   return {
-    start: Math.max(0, spoken[0].start - padStart),
+    start: Math.max(0, start - padStart),
     end: spoken.at(-1).end + padEnd,
   };
 }
