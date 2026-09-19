@@ -9,7 +9,7 @@ import path from "path";
 import { rm, writeFile, mkdir } from "fs/promises";
 import { config } from "./config.mjs";
 import { downloadFromR2, uploadToR2, keyDesdeUrl } from "./r2.mjs";
-import { extractAudio, transcribeWithWhisper, generateASS } from "./whisper.mjs";
+import { compactSubtitleSegments, extractAudio, generateASS, speechBounds, transcribeWithWhisper } from "./whisper.mjs";
 import { renderTipo1, renderTipo2, renderTipo3, renderTipo4 } from "./ffmpeg.mjs";
 
 async function subtitulos(rawPath, workDir) {
@@ -21,9 +21,11 @@ async function subtitulos(rawPath, workDir) {
       console.warn("[runner] sin segmentos de voz (o whisper no instalado): se renderiza sin subtitulos");
       return null;
     }
+    const trim = speechBounds(segments);
+    const compact = compactSubtitleSegments(segments, 4);
     const assPath = path.join(workDir, "subs.ass");
-    await writeFile(assPath, generateASS(segments), "utf-8");
-    return assPath;
+    await writeFile(assPath, generateASS(compact, { offset: trim?.start ?? 0 }), "utf-8");
+    return { assPath, trim };
   } catch (err) {
     console.warn("[runner] fallo whisper, se renderiza sin subtitulos:", err.message);
     return null;
@@ -43,7 +45,8 @@ export async function procesarTipo(tipo, pieza) {
     await downloadFromR2(rawKey, rawPath);
 
     if (tipo === 1) {
-      await renderTipo1(rawPath, await subtitulos(rawPath, workDir), outPath);
+      const subs = await subtitulos(rawPath, workDir);
+      await renderTipo1(rawPath, subs?.assPath, outPath, { trim: subs?.trim });
     } else if (tipo === 2) {
       let audioRef;
       const refKey = keyDesdeUrl(pieza.audio_referencia_url);
@@ -57,13 +60,15 @@ export async function procesarTipo(tipo, pieza) {
       }
       await renderTipo2(rawPath, outPath, { frase: pieza.frase_quemada ?? "", audioRefPath: audioRef });
     } else if (tipo === 3) {
-      await renderTipo3(rawPath, await subtitulos(rawPath, workDir), outPath);
+      const subs = await subtitulos(rawPath, workDir);
+      await renderTipo3(rawPath, subs?.assPath, outPath, 2, { trim: subs?.trim });
     } else {
       const refKey = keyDesdeUrl(pieza.r2_key_referencia);
       if (!refKey) throw new Error("Tipo 4 sin video de referencia (r2_key_referencia)");
       const refPath = path.join(workDir, "referencia.mp4");
       await downloadFromR2(refKey, refPath);
-      await renderTipo4(rawPath, refPath, outPath, await subtitulos(rawPath, workDir));
+      const subs = await subtitulos(rawPath, workDir);
+      await renderTipo4(rawPath, refPath, outPath, subs?.assPath, { trim: subs?.trim });
     }
 
     await uploadToR2(outPath, outKey);

@@ -118,13 +118,62 @@ function parseSRT(srtContent) {
 }
 
 /**
+ * Divide cada segmento de Whisper en subtitulos cortos.
+ * Mantiene el tiempo del segmento original repartido de forma proporcional
+ * para que no aparezca una frase larga entera en pantalla.
+ * @param {{ start: number, end: number, text: string }[]} segments
+ * @param {number} maxWords
+ * @returns {{ start: number, end: number, text: string }[]}
+ */
+export function compactSubtitleSegments(segments, maxWords = 4) {
+  const compact = [];
+  for (const seg of segments) {
+    const words = seg.text.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) continue;
+    const duration = Math.max(0.25, seg.end - seg.start);
+    const totalWords = words.length;
+    for (let i = 0; i < words.length; i += maxWords) {
+      const chunk = words.slice(i, i + maxWords);
+      const start = seg.start + duration * (i / totalWords);
+      const end = seg.start + duration * (Math.min(i + chunk.length, totalWords) / totalWords);
+      compact.push({
+        start,
+        end: Math.max(end, start + 0.35),
+        text: chunk.join(" "),
+      });
+    }
+  }
+  return compact;
+}
+
+/**
+ * Limites de voz para recortar silencios de entrada/salida.
+ * @param {{ start: number, end: number, text: string }[]} segments
+ * @param {object} opts
+ * @param {number} [opts.padStart]
+ * @param {number} [opts.padEnd]
+ * @returns {{ start: number, end: number } | null}
+ */
+export function speechBounds(segments, { padStart = 0.08, padEnd = 0.12 } = {}) {
+  const spoken = segments.filter((seg) => seg.text.trim() && seg.end > seg.start);
+  if (!spoken.length) return null;
+  return {
+    start: Math.max(0, spoken[0].start - padStart),
+    end: spoken.at(-1).end + padEnd,
+  };
+}
+
+/**
  * Genera el contenido de un archivo ASS a partir de segmentos de subtítulo.
  * Estilo: blanco, negrita, centrado, borde negro, fuente grande.
  * @param {{ start: number, end: number, text: string }[]} segments
+ * @param {object} opts
+ * @param {number} [opts.offset] - Segundos a restar tras recortar el vídeo.
  * @returns {string} Contenido del archivo ASS
  */
-export function generateASS(segments) {
+export function generateASS(segments, { offset = 0 } = {}) {
   const toAssTime = (sec) => {
+    sec = Math.max(0, sec);
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
     const s = Math.floor(sec % 60);
@@ -140,7 +189,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,20,20,100,1
+Style: Default,Arial,78,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,0,2,80,80,560,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -149,7 +198,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   const events = segments
     .map((seg) => {
       const text = seg.text.replace(/\n/g, "\\N");
-      return `Dialogue: 0,${toAssTime(seg.start)},${toAssTime(seg.end)},Default,,0,0,0,,${text}`;
+      return `Dialogue: 0,${toAssTime(seg.start - offset)},${toAssTime(seg.end - offset)},Default,,0,0,0,,${text}`;
     })
     .join("\n");
 

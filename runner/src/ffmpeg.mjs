@@ -10,6 +10,15 @@ import { config } from "./config.mjs";
 const FFMPEG = config.ffmpeg;
 const FFPROBE = config.ffprobe;
 
+function addInputWithTrim(args, inputPath, trim = {}) {
+  if (Number.isFinite(trim.start) && trim.start > 0) args.push("-ss", String(trim.start));
+  args.push("-i", inputPath);
+  if (Number.isFinite(trim.end) && trim.end > 0) {
+    const duration = Math.max(0.2, trim.end - Math.max(0, trim.start ?? 0));
+    args.push("-t", String(duration));
+  }
+}
+
 /**
  * Obtiene la duración en segundos de un vídeo.
  * @param {string} videoPath
@@ -45,21 +54,25 @@ function buildVideoFilter({ zoom = false, zoomFactor = 1.03 } = {}) {
  * @param {string} inputPath
  * @param {string} assPath - Ruta del archivo .ass generado
  * @param {string} outputPath
+ * @param {object} [opts]
+ * @param {{ start?: number, end?: number }} [opts.trim]
  */
-export async function renderTipo1(inputPath, assPath, outputPath) {
+export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   const vf = [buildVideoFilter(), assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null].filter(Boolean).join(",");
 
-  await execFileAsync(FFMPEG, [
-    "-y",
-    "-i", inputPath,
+  const args = ["-y"];
+  addInputWithTrim(args, inputPath, trim);
+  args.push(
     "-vf", vf,
     "-c:v", "libx264", "-preset", "fast", "-crf", "22",
     "-c:a", "aac", "-b:a", "128k",
     "-movflags", "+faststart",
     "-pix_fmt", "yuv420p",
     outputPath,
-  ]);
+  );
+
+  await execFileAsync(FFMPEG, args);
 }
 
 /**
@@ -106,18 +119,31 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath }
  * @param {string} assPath
  * @param {string} outputPath
  * @param {number} freezeDuration - Segundos de freeze al final (default 2)
+ * @param {object} [opts]
+ * @param {{ start?: number, end?: number }} [opts.trim]
  */
-export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration = 2) {
+export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration = 2, { trim } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
 
-  const duration = await getDuration(inputPath);
+  const mainPath = outputPath.replace(".mp4", "_main.mp4");
+  const mainArgs = ["-y"];
+  addInputWithTrim(mainArgs, inputPath, trim);
+  mainArgs.push(
+    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+    "-c:a", "aac", "-b:a", "128k",
+    "-pix_fmt", "yuv420p",
+    mainPath,
+  );
+  await execFileAsync(FFMPEG, mainArgs);
+
+  const duration = await getDuration(mainPath);
   const freezeStart = Math.max(0, duration - 0.05);
   const tmpFreeze = outputPath.replace(".mp4", "_freeze.mp4");
 
   // 1. Congelar último frame
   await execFileAsync(FFMPEG, [
     "-y",
-    "-i", inputPath,
+    "-i", mainPath,
     "-vf", `trim=start=${freezeStart},setpts=PTS-STARTPTS,` +
            `tpad=stop_mode=clone:stop_duration=${freezeDuration}`,
     "-af", `atrim=start=${freezeStart},asetpts=PTS-STARTPTS,` +
@@ -130,7 +156,7 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
 
   // 2. Concatenar original + freeze, reframe, quemar subtítulos
   const concatList = outputPath.replace(".mp4", "_concat.txt");
-  await writeFile(concatList, `file '${inputPath}'\nfile '${tmpFreeze}'\n`);
+  await writeFile(concatList, `file '${mainPath}'\nfile '${tmpFreeze}'\n`);
 
   const vf = [buildVideoFilter(), assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null].filter(Boolean).join(",");
 
@@ -155,11 +181,19 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
  * @param {string} refPath - Vídeo de referencia ya editado
  * @param {string} outputPath
  * @param {string|null} assPath - Subtítulos si aplica
+ * @param {object} [opts]
+ * @param {{ start?: number, end?: number }} [opts.trim]
  */
-export async function renderTipo4(inputPath, refPath, outputPath, assPath = null) {
+export async function renderTipo4(inputPath, refPath, outputPath, assPath = null, { trim } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
 
   const refDuration = await getDuration(refPath);
+  const maxDuration = Number.isFinite(trim?.end) && Number.isFinite(trim?.start)
+    ? Math.min(refDuration, Math.max(0.2, trim.end - trim.start))
+    : refDuration;
+  const inputTrim = Number.isFinite(trim?.start)
+    ? { start: trim.start, end: trim.start + maxDuration }
+    : { start: 0, end: maxDuration };
 
   // Recortar el bruto a la duración de referencia y aplicar mismo tratamiento
   const vfParts = [buildVideoFilter()];
@@ -168,15 +202,16 @@ export async function renderTipo4(inputPath, refPath, outputPath, assPath = null
   }
   const vf = vfParts.join(",");
 
-  await execFileAsync(FFMPEG, [
-    "-y",
-    "-i", inputPath,
-    "-t", String(refDuration),
+  const args = ["-y"];
+  addInputWithTrim(args, inputPath, inputTrim);
+  args.push(
     "-vf", vf,
     "-c:v", "libx264", "-preset", "fast", "-crf", "22",
     "-c:a", "aac", "-b:a", "128k",
     "-movflags", "+faststart",
     "-pix_fmt", "yuv420p",
     outputPath,
-  ]);
+  );
+
+  await execFileAsync(FFMPEG, args);
 }
