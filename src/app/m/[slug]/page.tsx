@@ -50,10 +50,10 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
       .select("id, tipo_video, estado, instrucciones, fecha_limite, created_at, referencia:referencias(id, url_original, url_r2, thumbnail_url, descripcion, tipo_video)")
       .eq("modelo_id", modelo.id)
       .in("estado", ["pendiente", "en_curso"])
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: true }),
     supabase
       .from("library_content")
-      .select("id, titulo, tipo, estado, estado_procesamiento, recibido_at")
+      .select("id, titulo, tipo, recibido_at")
       .eq("modelo_id", modelo.id)
       .like("r2_key", `bruto/${modelo.id}/%`)
       .order("recibido_at", { ascending: false })

@@ -21,8 +21,6 @@ export type Entrega = {
   id: string;
   titulo: string | null;
   tipo: number | null;
-  estado: string;
-  estado_procesamiento: string | null;
   recibido_at: string;
 };
 
@@ -32,14 +30,6 @@ const TIPOS = [
   { tipo: 3, titulo: "Parar imagen", desc: "El reto de parar la imagen: nosotros congelamos el momento del trigger." },
 ];
 const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Parar imagen", 4: "Con referencia" };
-
-function estadoEntrega(e: Entrega) {
-  if (e.estado === "aprobado" || e.estado === "publicado") return { texto: "Aprobado", cls: "bg-emerald-500/15 text-emerald-300" };
-  if (e.estado === "rechazado") return { texto: "Descartado", cls: "bg-red-500/15 text-red-300" };
-  if (e.estado === "en_aprobacion") return { texto: "En revision", cls: "bg-cyan-500/15 text-cyan-300" };
-  if (e.estado_procesamiento === "error") return { texto: "Hubo un problema", cls: "bg-red-500/15 text-red-300" };
-  return { texto: "Editando", cls: "bg-amber-500/15 text-amber-300" };
-}
 
 function VideoReferencia({ r }: { r: Referencia }) {
   return (
@@ -111,7 +101,7 @@ export function PortalClient({
 
       <Seccion
         titulo={`Tus videos pendientes${pendientes.length ? ` (${pendientes.length})` : ""}`}
-        sub="Videos que te hemos asignado. Mira la referencia y sube tu version."
+        sub="Videos que te hemos pedido. Sube uno o varios archivos en el apartado que corresponda."
       >
         {pendientes.length === 0 ? (
           <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/40">
@@ -126,16 +116,16 @@ export function PortalClient({
                   <span className="text-xs text-white/40">Para el {new Date(p.fecha_limite).toLocaleDateString("es-ES")}</span>
                 ) : null}
               </div>
-              {p.referencia ? <VideoReferencia r={p.referencia} /> : null}
-              {p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
+              {p.tipo === 4 && p.referencia ? <VideoReferencia r={p.referencia} /> : null}
+              {p.tipo === 4 && p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
               {p.instrucciones ? <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white/80">{p.instrucciones}</p> : null}
-              <SubirBoton tipo={p.tipo} encargoId={p.id} etiqueta="Subir mi imitacion" />
+              <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta={p.tipo === 4 ? "Subir mi imitacion" : "Subir video"} />
             </article>
           ))
         )}
       </Seccion>
 
-      <Seccion titulo="Subir un video libre" sub="Elige el tipo de video que has grabado. Los videos con referencia estan arriba, en tus pendientes.">
+      <Seccion titulo="Subir videos libres" sub="Puedes seleccionar todos los videos que quieras a la vez.">
         {TIPOS.map((t) => (
           <article key={t.tipo} className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
             <div>
@@ -150,22 +140,19 @@ export function PortalClient({
       </Seccion>
 
       {entregas.length > 0 ? (
-        <Seccion titulo="Tus ultimas entregas">
+        <Seccion titulo="Tus videos subidos">
           <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-            {entregas.map((e) => {
-              const st = estadoEntrega(e);
-              return (
-                <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-white/85">{e.titulo ?? "Video"}</p>
-                    <p className="text-xs text-white/35">
-                      {NOMBRE_TIPO[e.tipo ?? 1]} · {new Date(e.recibido_at).toLocaleDateString("es-ES")}
-                    </p>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${st.cls}`}>{st.texto}</span>
-                </li>
-              );
-            })}
+            {entregas.map((e) => (
+              <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white/85">{e.titulo ?? "Video"}</p>
+                  <p className="text-xs text-white/35">
+                    {NOMBRE_TIPO[e.tipo ?? 1]} · {new Date(e.recibido_at).toLocaleDateString("es-ES")}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">Subido</span>
+              </li>
+            ))}
           </ul>
         </Seccion>
       ) : null}

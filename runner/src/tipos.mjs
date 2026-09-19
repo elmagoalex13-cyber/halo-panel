@@ -9,7 +9,7 @@ import path from "path";
 import { rm, writeFile, mkdir } from "fs/promises";
 import { config } from "./config.mjs";
 import { downloadFromR2, uploadToR2, keyDesdeUrl } from "./r2.mjs";
-import { compactSubtitleSegments, detectAudioStart, extractAudio, generateASS, speechBounds, transcribeWithWhisper } from "./whisper.mjs";
+import { compactSubtitleSegments, extractAudio, generateASS, speechBounds, transcribeWithWhisper } from "./whisper.mjs";
 import { renderTipo1, renderTipo2, renderTipo3, renderTipo4 } from "./ffmpeg.mjs";
 
 async function subtitulos(rawPath, workDir) {
@@ -21,8 +21,7 @@ async function subtitulos(rawPath, workDir) {
       console.warn("[runner] sin segmentos de voz (o whisper no instalado): se renderiza sin subtitulos");
       return null;
     }
-    const audioStart = await detectAudioStart(wavPath);
-    const trim = speechBounds(segments, { audioStart });
+    const trim = speechBounds(segments);
     const compact = compactSubtitleSegments(segments, 4);
     const assPath = path.join(workDir, "subs.ass");
     await writeFile(assPath, generateASS(compact, { offset: trim?.start ?? 0 }), "utf-8");
