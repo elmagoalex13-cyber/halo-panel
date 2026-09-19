@@ -17,6 +17,7 @@ export const config = {
   ffprobe: process.env.FFPROBE_BIN ?? "ffprobe",
   igSessionId: process.env.IG_SESSIONID,
   igCsrf: process.env.IG_CSRFTOKEN,
+  igCookie: process.env.IG_COOKIE,
   trialFactor: parseFloat(process.env.TRIAL_FACTOR ?? "1.5"),
   trialMaxUsos: parseInt(process.env.TRIAL_MAX_USOS ?? "5", 10),
   trialColchon: parseInt(process.env.TRIAL_COLCHON ?? "9", 10),

@@ -15,7 +15,11 @@ function cabeceras() {
     Accept: "*/*",
     "Accept-Language": "es-ES,es;q=0.9",
   };
-  if (config.igSessionId) {
+  if (config.igCookie) {
+    h.Cookie = config.igCookie;
+    const csrf = config.igCsrf ?? config.igCookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] ?? "halo";
+    h["x-csrftoken"] = csrf;
+  } else if (config.igSessionId) {
     const csrf = config.igCsrf ?? "halo";
     h.Cookie = `sessionid=${config.igSessionId}; csrftoken=${csrf}`;
     h["x-csrftoken"] = csrf;
