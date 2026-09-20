@@ -213,12 +213,40 @@ export function speechBounds(segments, { audioStart = null, padStart = 0, padEnd
   const spoken = segments.filter((seg) => seg.text.trim() && seg.end > seg.start);
   if (!spoken.length) return null;
   const firstWord = spoken[0].start;
-  const audioStartIsClose = Number.isFinite(audioStart) && audioStart <= firstWord + 0.25;
-  const start = audioStartIsClose ? Math.max(firstWord, audioStart) : firstWord;
+  const start = Number.isFinite(audioStart) && audioStart > firstWord ? audioStart : firstWord;
   return {
     start: Math.max(0, start - padStart),
     end: spoken.at(-1).end + padEnd,
   };
+}
+
+export function transcriptText(segments) {
+  return segments
+    .map((seg) => seg.text.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function subtitleSegmentsFromText(text, bounds, maxWords = 4) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length || !bounds || !Number.isFinite(bounds.start) || !Number.isFinite(bounds.end)) return [];
+
+  const chunks = [];
+  for (let i = 0; i < words.length; i += maxWords) chunks.push(words.slice(i, i + maxWords));
+
+  const duration = Math.max(0.25, bounds.end - bounds.start);
+  const chunkDuration = duration / chunks.length;
+  return chunks.map((chunk, index) => {
+    const start = bounds.start + chunkDuration * index;
+    const end = index === chunks.length - 1 ? bounds.end : bounds.start + chunkDuration * (index + 1);
+    return {
+      start,
+      end: Math.max(end, start + 0.25),
+      text: chunk.join(" "),
+    };
+  });
 }
 
 /**

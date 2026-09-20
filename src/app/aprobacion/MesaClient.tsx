@@ -403,12 +403,12 @@ export function MesaClient({
 
               <div>
                 <label className="mb-1 block text-[9px] font-semibold uppercase tracking-widest text-white/35">
-                  Frase quemada <span className="font-normal normal-case text-white/20">- cambiala y se remonta</span>
+                  Subtitulos / frase quemada <span className="font-normal normal-case text-white/20">- cambiala y se remonta</span>
                 </label>
                 <textarea
                   value={frase}
                   onChange={(event) => setFrase(event.target.value)}
-                  rows={2}
+                  rows={4}
                   className="input-base w-full resize-none font-mono text-xs"
                 />
               </div>

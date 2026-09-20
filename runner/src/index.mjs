@@ -56,7 +56,7 @@ async function procesarPieza(pieza) {
     if (tipo === 2 && !pieza.frase_quemada) {
       pieza.frase_quemada = (await asignarFrase(supabase, pieza)) ?? "";
     }
-    const { outKey, rawKey } = await procesarTipo(tipo, pieza);
+    const { outKey, rawKey, fraseQuemada } = await procesarTipo(tipo, pieza);
     const ahora = new Date().toISOString();
     const { error } = await supabase
       .from("library_content")
@@ -65,6 +65,7 @@ async function procesarPieza(pieza) {
         estado_procesamiento: "listo",
         video_procesado_url: publicUrl(outKey),
         r2_key_original: pieza.r2_key_original ?? rawKey,
+        frase_quemada: fraseQuemada,
         error_mensaje: null,
         procesado_en: ahora,
         edicion_at: ahora,
