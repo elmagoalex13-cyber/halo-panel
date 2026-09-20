@@ -26,6 +26,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   const [vista, setVista] = useState<Vista>("pendiente");
   const [dias, setDias] = useState(0);
   const [cuenta, setCuenta] = useState("todas");
+  const [categoria, setCategoria] = useState("todas");
   const [orden, setOrden] = useState<"vistas" | "likes" | "comentarios" | "reciente">("vistas");
   const [enviando, setEnviando] = useState<ReferenciaVideo | null>(null);
   const [elegidas, setElegidas] = useState<string[]>([]);
@@ -34,6 +35,10 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const cuentas = useMemo(() => Array.from(new Set(videos.map((v) => v.cuenta_username).filter(Boolean))).sort() as string[], [videos]);
+  const categorias = useMemo(
+    () => Array.from(new Set(videos.map((v) => metricasDe(v).categoria).filter(Boolean))).sort() as string[],
+    [videos],
+  );
 
   const estadoDe = (v: ReferenciaVideo): Vista => (v.estado_triaje === "confirmado" ? "aprobado" : v.estado_triaje === "descartado" ? "descartado" : "pendiente");
 
@@ -42,6 +47,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
     return videos
       .filter((v) => estadoDe(v) === vista)
       .filter((v) => cuenta === "todas" || v.cuenta_username === cuenta)
+      .filter((v) => categoria === "todas" || metricasDe(v).categoria === categoria)
       .filter((v) => !limite || (v.fecha_publicacion && new Date(v.fecha_publicacion).getTime() >= limite))
       .sort((a, b) => {
         const ma = metricasDe(a);
@@ -51,7 +57,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
         if (orden === "reciente") return new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime();
         return mb.vistas - ma.vistas;
       });
-  }, [videos, vista, dias, cuenta, orden]);
+  }, [videos, vista, dias, cuenta, categoria, orden]);
 
   const conteo = (x: Vista) => videos.filter((v) => estadoDe(v) === x).length;
 
@@ -59,7 +65,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
     setVideos((prev) => prev.map((v) => (v.id === id ? { ...v, ...cambios } : v)));
   }
 
-  async function guardar(v: ReferenciaVideo, cambios: { formato_confirmado?: string | null; estado_triaje?: string }) {
+  async function guardar(v: ReferenciaVideo, cambios: Partial<Pick<ReferenciaVideo, "formato_confirmado" | "formato_propuesto" | "estado_triaje" | "frase_detectada" | "lo_que_pone" | "tags">>) {
     parchear(v.id, cambios as Partial<ReferenciaVideo>);
     await fetch(`/api/referencias/videos/${v.id}`, {
       method: "PATCH",
@@ -98,6 +104,30 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
     }
   }
 
+  async function guardarFrase(v: ReferenciaVideo) {
+    const m = metricasDe(v);
+    const frase = window.prompt("Frase que aparece en el video", v.frase_detectada ?? "");
+    if (!frase?.trim()) return;
+    const res = await fetch("/api/frases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        frase,
+        cancion_nombre: m.cancion ?? "",
+        cancion_artista: m.artista ?? "",
+        audio_id_ig: m.audioId ?? "",
+        puntuacion: 7,
+      }),
+    });
+    if (res.ok) {
+      await guardar(v, { frase_detectada: frase, formato_confirmado: "tipo2", formato_propuesto: "tipo2" });
+      setMsg({ ok: true, texto: "Frase guardada en el banco." });
+    } else {
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      setMsg({ ok: false, texto: j?.error ?? "No se pudo guardar la frase" });
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -126,6 +156,14 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
               </option>
             ))}
           </select>
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="input-base py-1.5 text-xs">
+            <option value="todas">Todos los tipos</option>
+            {categorias.map((c) => (
+              <option key={c} value={c}>
+                {labelCategoria(c)}
+              </option>
+            ))}
+          </select>
           <select value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} className="input-base py-1.5 text-xs">
             <option value="vistas">Más vistas</option>
             <option value="likes">Más likes</option>
@@ -134,6 +172,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
           </select>
         </div>
       </div>
+      {msg ? <p className={`rounded-xl border px-3 py-2 text-xs ${msg.ok ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-red-500/25 bg-red-500/10 text-red-300"}`}>{msg.texto}</p> : null}
 
       {visibles.length === 0 ? (
         <div className="grid min-h-[40vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 text-center text-sm text-white/35">
@@ -161,6 +200,10 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                   <span className="font-semibold text-white/80">@{v.cuenta_username ?? "?"}</span>
                   <span className="text-white/35">{v.fecha_publicacion ? formatDate(v.fecha_publicacion) : "—"}</span>
                 </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {m.categoria ? <span className="badge">{labelCategoria(m.categoria)}</span> : null}
+                  {m.cancion ? <span className="badge">{m.cancion}{m.artista ? ` · ${m.artista}` : ""}</span> : null}
+                </div>
 
                 <div className="grid grid-cols-2 gap-1.5 text-center">
                   <Metrica label="Visitas" valor={compacto(m.vistas)} />
@@ -170,6 +213,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                 </div>
 
                 {v.descripcion ? <p className="line-clamp-2 text-xs text-white/45">{v.descripcion}</p> : null}
+                {v.frase_detectada ? <p className="rounded-lg border border-[#8B5CF6]/20 bg-[#8B5CF6]/10 px-2 py-1.5 text-xs text-[#ddd6fe]">&quot;{v.frase_detectada}&quot;</p> : null}
 
                 {vista === "pendiente" ? (
                   <>
@@ -191,6 +235,14 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                       </div>
                     </div>
                     <div className="mt-auto flex gap-2">
+                      {m.categoria === "frases" ? (
+                        <button
+                          onClick={() => guardarFrase(v)}
+                          className="rounded-lg border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-3 py-2 text-sm font-semibold text-[#c4b5fd] transition hover:bg-[#8B5CF6]/20"
+                        >
+                          Guardar frase
+                        </button>
+                      ) : null}
                       <button
                         onClick={() => abrirEnvio(v)}
                         disabled={!tipo}
@@ -266,6 +318,14 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
       ) : null}
     </div>
   );
+}
+
+function labelCategoria(value: string) {
+  if (value === "frases") return "Frases + música";
+  if (value === "hablado") return "Contenido hablado";
+  if (value === "referencia") return "Referencia visual";
+  if (value === "general") return "General";
+  return value;
 }
 
 function Metrica({ label, valor, sub }: { label: string; valor: string; sub?: string }) {

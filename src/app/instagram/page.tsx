@@ -31,7 +31,7 @@ async function loadModelosActivos(): Promise<Modelo[]> {
   }
 }
 
-type VideoWithCuenta = ReferenciaVideo & { referencias_cuentas?: { username?: string | null } | null };
+type VideoWithCuenta = ReferenciaVideo & { referencias_cuentas?: { username?: string | null; categoria?: string | null } | null };
 
 async function loadReferenciasVideos(): Promise<ReferenciaVideo[]> {
   if (!canUseSupabase()) return [];
@@ -39,12 +39,13 @@ async function loadReferenciasVideos(): Promise<ReferenciaVideo[]> {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("referencias_videos")
-      .select("*, referencias_cuentas:cuenta_id(username)")
+      .select("*, referencias_cuentas:cuenta_id(username,categoria)")
       .order("fecha_publicacion", { ascending: false });
     if (error) return [];
     return ((data ?? []) as VideoWithCuenta[]).map((row) => ({
       ...row,
       cuenta_username: row.referencias_cuentas?.username ?? undefined,
+      cuenta_categoria: row.referencias_cuentas?.categoria ?? undefined,
     }));
   } catch {
     return [];

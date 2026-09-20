@@ -4,7 +4,7 @@ import type { ReferenciaVideo } from "@/types";
 export function metricasDe(v: ReferenciaVideo) {
   const meta: Record<string, string> = {};
   for (const t of v.tags ?? []) {
-    const m = t.match(/^m:([a-z]+)=(.*)$/);
+    const m = t.match(/^(?:m|meta):([a-z_]+)=(.*)$/);
     if (m) meta[m[1]] = m[2];
   }
   const vistas = Number(v.visitas) || 0;
@@ -21,6 +21,10 @@ export function metricasDe(v: ReferenciaVideo) {
     tasaComentarios: pct(comentarios),
     tasaCompartidos: pct(compartidos),
     codigo: meta.codigo ?? null,
+    categoria: meta.categoria ?? v.cuenta_categoria ?? null,
+    cancion: meta.cancion ?? null,
+    artista: meta.artista ?? null,
+    audioId: meta.audio_id ?? null,
   };
 }
 

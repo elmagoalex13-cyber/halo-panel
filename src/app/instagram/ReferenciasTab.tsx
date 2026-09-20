@@ -6,6 +6,13 @@ import { GlassCard } from "@/components/GlassCard";
 import { formatDate } from "@/lib/utils";
 import type { ReferenciaCuenta } from "@/types";
 
+const CATEGORIAS = [
+  { value: "frases", label: "Frases + música" },
+  { value: "hablado", label: "Contenido hablado" },
+  { value: "referencia", label: "Referencia visual" },
+  { value: "general", label: "General" },
+];
+
 export function ReferenciasTab({
   cuentas: initialCuentas,
 }: {
@@ -110,12 +117,18 @@ export function ReferenciasTab({
             placeholder="usuario_ig"
             className="input-base min-w-0"
           />
-          <input
+          <select
             value={form.categoria}
             onChange={(e) => setForm({ ...form, categoria: e.target.value })}
-            placeholder="Categoria / nicho"
             className="input-base min-w-0"
-          />
+          >
+            <option value="">Tipo de cuenta</option>
+            {CATEGORIAS.map((categoria) => (
+              <option key={categoria.value} value={categoria.value}>
+                {categoria.label}
+              </option>
+            ))}
+          </select>
           <input
             value={form.notas}
             onChange={(e) => setForm({ ...form, notas: e.target.value })}
@@ -181,7 +194,7 @@ export function ReferenciasTab({
                 </div>
               </div>
 
-              {cuenta.categoria ? <span className="badge mt-2.5 w-fit">{cuenta.categoria}</span> : null}
+              {cuenta.categoria ? <span className="badge mt-2.5 w-fit">{labelCategoria(cuenta.categoria)}</span> : null}
 
               <p className="mt-3 text-[11px] text-white/30">
                 Ultimo analisis: {cuenta.ultimo_scrape_at ? formatDate(cuenta.ultimo_scrape_at) : "pendiente (en cola)"}
@@ -211,7 +224,14 @@ export function ReferenciasTab({
             <div className="mt-4 flex flex-col gap-3">
               <label className="flex flex-col gap-1 text-xs text-[color:var(--text-secondary)]">
                 Categoria
-                <input value={editForm.categoria} onChange={(e) => setEditForm({ ...editForm, categoria: e.target.value })} className="input-base" />
+                <select value={editForm.categoria} onChange={(e) => setEditForm({ ...editForm, categoria: e.target.value })} className="input-base">
+                  <option value="">Sin tipo</option>
+                  {CATEGORIAS.map((categoria) => (
+                    <option key={categoria.value} value={categoria.value}>
+                      {categoria.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="flex flex-col gap-1 text-xs text-[color:var(--text-secondary)]">
                 Notas
@@ -236,4 +256,8 @@ export function ReferenciasTab({
       ) : null}
     </div>
   );
+}
+
+function labelCategoria(value: string) {
+  return CATEGORIAS.find((categoria) => categoria.value === value)?.label ?? value;
 }

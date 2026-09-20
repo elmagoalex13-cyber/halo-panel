@@ -73,7 +73,7 @@ export async function detectAudioStart(audioPath) {
       "-hide_banner",
       "-nostats",
       "-i", audioPath,
-      "-af", "silencedetect=noise=-32dB:d=0.03",
+      "-af", "silencedetect=noise=-28dB:d=0.02",
       "-f", "null",
       "-",
     ], { maxBuffer: 1024 * 1024 * 4 });

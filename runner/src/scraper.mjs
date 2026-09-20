@@ -37,7 +37,28 @@ export function analizar(reels, factor = config.scraperFactor) {
 
 /** Metricas extra que la tabla no tiene como columna: se guardan en tags como "m:clave=valor". */
 export function tagsMetricas(reel) {
-  return [`m:codigo=${reel.codigo}`, `m:comentarios=${reel.comentarios ?? 0}`, `m:compartidos=${reel.compartidos ?? 0}`];
+  const tags = [`m:codigo=${reel.codigo}`, `m:comentarios=${reel.comentarios ?? 0}`, `m:compartidos=${reel.compartidos ?? 0}`];
+  if (reel.audio?.titulo) tags.push(`meta:cancion=${limpiarTag(reel.audio.titulo)}`);
+  if (reel.audio?.artista) tags.push(`meta:artista=${limpiarTag(reel.audio.artista)}`);
+  if (reel.audio?.id) tags.push(`meta:audio_id=${limpiarTag(reel.audio.id)}`);
+  return tags;
+}
+
+function limpiarTag(value) {
+  return String(value).replace(/\s+/g, " ").replace(/[|\n\r]/g, " ").trim().slice(0, 120);
+}
+
+function categoriaDeCuenta(cuenta) {
+  return String(cuenta.categoria ?? "").trim().toLowerCase();
+}
+
+function fraseDesdeDescripcion(descripcion) {
+  const texto = String(descripcion ?? "").replace(/\s+/g, " ").trim();
+  if (!texto) return null;
+  const quoted = texto.match(/[“"']([^“"']{8,140})[”"']/)?.[1];
+  if (quoted) return quoted.trim();
+  const primeraLinea = texto.split(/[.!?]\s/)[0]?.trim();
+  return primeraLinea && primeraLinea.length >= 8 && primeraLinea.length <= 140 ? primeraLinea : null;
 }
 
 async function subirReel(username, reel) {
@@ -72,6 +93,7 @@ async function subirReel(username, reel) {
  */
 export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
   const username = cuenta.username.replace(/^@/, "");
+  const categoria = categoriaDeCuenta(cuenta);
   const reels = reelsInyectados ?? (await reelsDeCuenta(username, config.scraperMaxReels));
   const { mediana: med, umbral, analizados, virales } = analizar(reels);
 
@@ -83,6 +105,8 @@ export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
     if (yaGuardados.has(reel.codigo)) continue;
     try {
       const { videoKey, thumbUrl } = await subirReel(username, reel);
+      const tags = [`meta:categoria=${categoria || "general"}`, ...tagsMetricas(reel)];
+      const frase = categoria === "frases" ? fraseDesdeDescripcion(reel.descripcion) : null;
       const { error } = await supabase.from("referencias_videos").insert({
         cuenta_id: cuenta.id,
         video_url: videoKey,
@@ -90,7 +114,10 @@ export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
         descripcion: reel.descripcion ? String(reel.descripcion).slice(0, 1000) : null,
         visitas: reel.vistas,
         likes: reel.likes,
-        tags: tagsMetricas(reel),
+        tags,
+        frase_detectada: frase,
+        formato_propuesto: categoria === "frases" ? "tipo2" : null,
+        formato_confirmado: categoria === "frases" ? "tipo2" : null,
         fecha_publicacion: reel.fecha ? new Date(reel.fecha).toISOString() : null,
         estado_triaje: "pendiente",
       });
@@ -129,7 +156,7 @@ async function guardarEstadisticas(supabase, cuenta, { mediana: med, umbral, ana
 
 /** Cuentas activas (referencias_cuentas). Las que solo existen en cuentas_referencia se crean aqui. */
 export async function cuentasActivas(supabase) {
-  const { data: a } = await supabase.from("referencias_cuentas").select("id, username, ultimo_scrape_at, activa").eq("activa", true);
+  const { data: a } = await supabase.from("referencias_cuentas").select("id, username, categoria, ultimo_scrape_at, activa").eq("activa", true);
   const lista = a ?? [];
   const { data: b } = await supabase.from("cuentas_referencia").select("username").eq("activa", true);
   for (const extra of b ?? []) {

@@ -40,6 +40,7 @@ const num = (v) => Math.max(0, Number(v ?? 0) || 0);
 /** Item del feed de usuario (API interna): /api/v1/feed/user/<usuario>/username/ */
 export function parsearItemFeed(it) {
   const esVideo = it.media_type === 2 || Boolean(it.video_versions?.length);
+  const audio = audioDeItem(it);
   return {
     codigo: it.code ?? null,
     vistas: num(it.play_count ?? it.view_count ?? it.ig_play_count),
@@ -49,6 +50,7 @@ export function parsearItemFeed(it) {
     videoUrl: it.video_versions?.[0]?.url ?? null,
     miniatura: it.image_versions2?.candidates?.[0]?.url ?? null,
     descripcion: it.caption?.text ?? null,
+    audio,
     fecha: it.taken_at ? new Date(it.taken_at * 1000).toISOString() : null,
     esVideo,
   };
@@ -56,6 +58,7 @@ export function parsearItemFeed(it) {
 
 /** Nodo de web_profile_info (GraphQL web). */
 export function parsearNodoWeb(n) {
+  const audio = audioDeItem(n);
   return {
     codigo: n.shortcode ?? null,
     vistas: num(n.video_view_count ?? n.video_play_count),
@@ -65,8 +68,23 @@ export function parsearNodoWeb(n) {
     videoUrl: n.video_url ?? null,
     miniatura: n.display_url ?? n.thumbnail_src ?? null,
     descripcion: n.edge_media_to_caption?.edges?.[0]?.node?.text ?? null,
+    audio,
     fecha: n.taken_at_timestamp ? new Date(n.taken_at_timestamp * 1000).toISOString() : null,
     esVideo: Boolean(n.is_video),
+  };
+}
+
+function audioDeItem(it) {
+  const asset =
+    it.clips_metadata?.music_info?.music_asset_info ??
+    it.music_metadata?.music_info?.music_asset_info ??
+    it.audio_metadata ??
+    null;
+  if (!asset) return null;
+  return {
+    id: asset.audio_cluster_id ?? asset.id ?? asset.music_canonical_id ?? null,
+    titulo: asset.title ?? asset.song_name ?? asset.name ?? null,
+    artista: asset.display_artist ?? asset.artist_name ?? asset.author_username ?? null,
   };
 }
 
