@@ -2,10 +2,25 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import * as tus from "tus-js-client";
 import { Upload } from "lucide-react";
 
-const supabaseBrowser = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+type PresignResponse = {
+  provider: "supabase";
+  bucket: string;
+  path: string;
+  token: string;
+  key: string;
+  contentType: string;
+  uploadEndpoint: string | null;
+} | {
+  provider: "r2-multipart";
+  key: string;
+  uploadId: string;
+  partSize: number;
+  parts: { partNumber: number; url: string }[];
+  contentType: string;
+};
 
 export function SubirBoton({
   tipo,
@@ -28,21 +43,24 @@ export function SubirBoton({
     const pre = await fetch("/api/portal/presign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
     });
     if (!pre.ok) throw new Error(pre.status === 401 ? "Tu sesion ha caducado, vuelve a entrar" : "No se pudo preparar la subida");
-    const { bucket, path, token, key, contentType } = (await pre.json()) as { bucket: string; path: string; token: string; key: string; contentType: string };
+    const prepared = (await pre.json()) as PresignResponse;
 
-    onProgress(Math.max(1, Math.round(file.size * 0.03)));
-    const { error } = await supabaseBrowser.storage.from(bucket).uploadToSignedUrl(path, token, file, { contentType });
-    if (error) throw new Error(error.message || "La subida fallo, prueba otra vez");
-    onProgress(file.size);
+    if (prepared.provider === "r2-multipart") {
+      await subirConR2Multipart({ file, prepared, onProgress });
+    } else {
+      const { bucket, path, token, contentType, uploadEndpoint } = prepared;
+      if (!uploadEndpoint) throw new Error("No se pudo preparar la subida");
+      await subirConTus({ file, bucket, path, token, contentType, uploadEndpoint, onProgress });
+    }
 
     const reg = await fetch("/api/portal/subir", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        key,
+        key: prepared.key,
         filename: file.name,
         size: file.size,
         tipo,
@@ -137,4 +155,127 @@ export function SubirBoton({
       ) : null}
     </div>
   );
+}
+
+function subirConTus({
+  file,
+  bucket,
+  path,
+  token,
+  contentType,
+  uploadEndpoint,
+  onProgress,
+}: {
+  file: File;
+  bucket: string;
+  path: string;
+  token: string;
+  contentType: string;
+  uploadEndpoint: string;
+  onProgress: (loaded: number) => void;
+}) {
+  return new Promise<void>((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: uploadEndpoint,
+      retryDelays: [0, 1500, 3000, 6000, 10000, 20000],
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: 6 * 1024 * 1024,
+      metadata: {
+        bucketName: bucket,
+        objectName: path,
+        contentType,
+        cacheControl: "3600",
+      },
+      headers: {
+        apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        "x-signature": token,
+      },
+      onError: (error) => {
+        reject(new Error(error.message || "La subida fallo, prueba otra vez"));
+      },
+      onProgress: (bytesUploaded) => {
+        onProgress(bytesUploaded);
+      },
+      onSuccess: () => {
+        onProgress(file.size);
+        resolve();
+      },
+    });
+
+    upload.findPreviousUploads().then((previousUploads) => {
+      if (previousUploads.length) upload.resumeFromPreviousUpload(previousUploads[0]);
+      upload.start();
+    }).catch((error) => {
+      reject(error instanceof Error ? error : new Error("La subida fallo, prueba otra vez"));
+    });
+  });
+}
+
+async function subirConR2Multipart({
+  file,
+  prepared,
+  onProgress,
+}: {
+  file: File;
+  prepared: Extract<PresignResponse, { provider: "r2-multipart" }>;
+  onProgress: (loaded: number) => void;
+}) {
+  const loadedByPart = new Map<number, number>();
+  const uploadedParts: { partNumber: number; etag: string }[] = [];
+  let nextPart = 0;
+  const concurrency = Math.min(4, prepared.parts.length);
+
+  const report = (partNumber: number, loaded: number) => {
+    loadedByPart.set(partNumber, loaded);
+    onProgress(Array.from(loadedByPart.values()).reduce((acc, value) => acc + value, 0));
+  };
+
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (nextPart < prepared.parts.length) {
+        const part = prepared.parts[nextPart++];
+        const start = (part.partNumber - 1) * prepared.partSize;
+        const chunk = file.slice(start, Math.min(start + prepared.partSize, file.size), prepared.contentType);
+        const etag = await putPart(part.url, chunk, (loaded) => report(part.partNumber, loaded));
+        uploadedParts.push({ partNumber: part.partNumber, etag });
+        report(part.partNumber, chunk.size);
+      }
+    }),
+  );
+
+  const complete = await fetch("/api/portal/r2-complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: prepared.key, uploadId: prepared.uploadId, parts: uploadedParts }),
+  });
+  if (!complete.ok) {
+    const j = (await complete.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(j?.error ?? "No se pudo finalizar la subida");
+  }
+  onProgress(file.size);
+}
+
+function putPart(url: string, chunk: Blob, onProgress: (loaded: number) => void) {
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded);
+    };
+    xhr.onerror = () => reject(new Error("La conexion se corto durante la subida"));
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(`La subida fallo (${xhr.status})`));
+        return;
+      }
+      const etag = xhr.getResponseHeader("ETag");
+      if (!etag) {
+        reject(new Error("R2 no devolvio confirmacion de la parte subida"));
+        return;
+      }
+      resolve(etag);
+    };
+    xhr.send(chunk);
+  });
 }
