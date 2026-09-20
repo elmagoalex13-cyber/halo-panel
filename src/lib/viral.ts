@@ -11,6 +11,8 @@ export function metricasDe(v: ReferenciaVideo) {
   const likes = Number(v.likes) || 0;
   const comentarios = Number(meta.comentarios) || 0;
   const compartidos = Number(meta.compartidos) || 0;
+  const viralScore = Number(meta.viral_score) || 0;
+  const estiloScore = Number(meta.estilo_score) || 0;
   const pct = (n: number) => (vistas > 0 ? (n / vistas) * 100 : 0);
   return {
     vistas,
@@ -25,6 +27,8 @@ export function metricasDe(v: ReferenciaVideo) {
     cancion: meta.cancion ?? null,
     artista: meta.artista ?? null,
     audioId: meta.audio_id ?? null,
+    viralScore,
+    estiloScore,
   };
 }
 

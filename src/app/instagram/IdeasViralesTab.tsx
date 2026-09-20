@@ -27,7 +27,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   const [dias, setDias] = useState(0);
   const [cuenta, setCuenta] = useState("todas");
   const [categoria, setCategoria] = useState("todas");
-  const [orden, setOrden] = useState<"vistas" | "likes" | "comentarios" | "reciente">("vistas");
+  const [orden, setOrden] = useState<"score" | "vistas" | "likes" | "comentarios" | "reciente">("score");
   const [enviando, setEnviando] = useState<ReferenciaVideo | null>(null);
   const [elegidas, setElegidas] = useState<string[]>([]);
   const [nota, setNota] = useState("");
@@ -52,6 +52,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
       .sort((a, b) => {
         const ma = metricasDe(a);
         const mb = metricasDe(b);
+        if (orden === "score") return mb.viralScore - ma.viralScore;
         if (orden === "likes") return mb.likes - ma.likes;
         if (orden === "comentarios") return mb.comentarios - ma.comentarios;
         if (orden === "reciente") return new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime();
@@ -71,6 +72,17 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cambios),
+    });
+  }
+
+  async function marcarEstilo(v: ReferenciaVideo, esFraseMusica: boolean) {
+    const tags = (v.tags ?? []).filter((tag) => !tag.startsWith("label:frase_musica_"));
+    tags.push(esFraseMusica ? "label:frase_musica_si" : "label:frase_musica_no");
+    await guardar(v, {
+      tags,
+      formato_confirmado: esFraseMusica ? "tipo2" : v.formato_confirmado,
+      formato_propuesto: esFraseMusica ? "tipo2" : v.formato_propuesto,
+      estado_triaje: esFraseMusica ? v.estado_triaje : "descartado",
     });
   }
 
@@ -165,6 +177,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
             ))}
           </select>
           <select value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} className="input-base py-1.5 text-xs">
+            <option value="score">Mejor score</option>
             <option value="vistas">Más vistas</option>
             <option value="likes">Más likes</option>
             <option value="comentarios">Más comentarios</option>
@@ -206,10 +219,10 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                 </div>
 
                 <div className="grid grid-cols-2 gap-1.5 text-center">
+                  <Metrica label="Score" valor={m.viralScore ? m.viralScore.toFixed(1).replace(".", ",") : "n/d"} sub={m.estiloScore ? `estilo ${Math.round(m.estiloScore * 100)}%` : undefined} />
                   <Metrica label="Visitas" valor={compacto(m.vistas)} />
                   <Metrica label="Likes" valor={compacto(m.likes)} sub={pct(m.tasaLikes)} />
                   <Metrica label="Comentarios" valor={compacto(m.comentarios)} sub={pct(m.tasaComentarios)} />
-                  <Metrica label="Compartidos" valor={m.compartidos ? compacto(m.compartidos) : "n/d"} sub={m.compartidos ? pct(m.tasaCompartidos) : undefined} />
                 </div>
 
                 {v.descripcion ? <p className="line-clamp-2 text-xs text-white/45">{v.descripcion}</p> : null}
@@ -243,6 +256,14 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                           Guardar frase
                         </button>
                       ) : null}
+                      {m.categoria === "frases" ? (
+                        <button
+                          onClick={() => marcarEstilo(v, true)}
+                          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                        >
+                          Es estilo
+                        </button>
+                      ) : null}
                       <button
                         onClick={() => abrirEnvio(v)}
                         disabled={!tipo}
@@ -252,7 +273,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                         ✓ Aprobar
                       </button>
                       <button
-                        onClick={() => guardar(v, { estado_triaje: "descartado" })}
+                        onClick={() => (m.categoria === "frases" ? marcarEstilo(v, false) : guardar(v, { estado_triaje: "descartado" }))}
                         className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/50"
                       >
                         Descartar

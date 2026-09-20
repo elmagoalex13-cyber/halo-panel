@@ -35,9 +35,33 @@ export function analizar(reels, factor = config.scraperFactor) {
   return { mediana: med, umbral, analizados: validos.length, virales };
 }
 
+export function analizarFrasesMusica(reels, factor = config.scraperFactor) {
+  const validos = reels.filter((r) => r.codigo && r.vistas > 0);
+  const med = mediana(validos.map((r) => r.vistas));
+  const umbral = Math.round(med * factor);
+  const desde = Date.now() - config.scraperDias * 86400000;
+  const candidatos = validos
+    .filter((r) => r.esVideo && r.videoUrl && (!r.fecha || new Date(r.fecha).getTime() >= desde))
+    .map((reel) => {
+      const estilo = scoreEstiloFraseMusica(reel);
+      const viral = scoreViralidad(reel, med);
+      return { ...reel, estiloScore: estilo, viralScore: viral };
+    })
+    .filter((r) => r.vistas > umbral && r.estiloScore >= 0.45)
+    .sort((a, b) => b.viralScore - a.viralScore);
+  return { mediana: med, umbral, analizados: validos.length, virales: candidatos };
+}
+
 /** Metricas extra que la tabla no tiene como columna: se guardan en tags como "m:clave=valor". */
 export function tagsMetricas(reel) {
-  const tags = [`m:codigo=${reel.codigo}`, `m:comentarios=${reel.comentarios ?? 0}`, `m:compartidos=${reel.compartidos ?? 0}`];
+  const tags = [
+    `m:codigo=${reel.codigo}`,
+    `m:comentarios=${reel.comentarios ?? 0}`,
+    `m:compartidos=${reel.compartidos ?? 0}`,
+    `meta:tasa_comentarios=${ratio(reel.comentarios, reel.vistas).toFixed(5)}`,
+  ];
+  if (Number.isFinite(reel.estiloScore)) tags.push(`meta:estilo_score=${reel.estiloScore.toFixed(3)}`);
+  if (Number.isFinite(reel.viralScore)) tags.push(`meta:viral_score=${reel.viralScore.toFixed(3)}`);
   if (reel.audio?.titulo) tags.push(`meta:cancion=${limpiarTag(reel.audio.titulo)}`);
   if (reel.audio?.artista) tags.push(`meta:artista=${limpiarTag(reel.audio.artista)}`);
   if (reel.audio?.id) tags.push(`meta:audio_id=${limpiarTag(reel.audio.id)}`);
@@ -59,6 +83,37 @@ function fraseDesdeDescripcion(descripcion) {
   if (quoted) return quoted.trim();
   const primeraLinea = texto.split(/[.!?]\s/)[0]?.trim();
   return primeraLinea && primeraLinea.length >= 8 && primeraLinea.length <= 140 ? primeraLinea : null;
+}
+
+function ratio(n, d) {
+  return d > 0 ? Math.max(0, Number(n ?? 0) || 0) / d : 0;
+}
+
+function scoreViralidad(reel, medianaCuenta) {
+  const vistasRelativas = medianaCuenta > 0 ? reel.vistas / medianaCuenta : 1;
+  const tasaComentarios = ratio(reel.comentarios, reel.vistas);
+  const tasaLikes = ratio(reel.likes, reel.vistas);
+  const tasaCompartidos = ratio(reel.compartidos, reel.vistas);
+  return (
+    Math.log10(reel.vistas + 1) * 0.8 +
+    Math.min(vistasRelativas, 8) * 0.7 +
+    tasaComentarios * 260 +
+    tasaCompartidos * 80 +
+    tasaLikes * 12
+  );
+}
+
+function scoreEstiloFraseMusica(reel) {
+  const descripcion = String(reel.descripcion ?? "");
+  const textoLimpio = descripcion.replace(/#[\p{L}\p{N}_]+/gu, "").trim();
+  let score = 0;
+  if (reel.audio?.titulo || reel.audio?.id) score += 0.45;
+  if (fraseDesdeDescripcion(descripcion)) score += 0.25;
+  if (textoLimpio.length > 0 && textoLimpio.length <= 180) score += 0.1;
+  if (/[“"'].*[”"']/.test(descripcion)) score += 0.1;
+  if (/frase|pov|cuando|nadie|siempre|nunca|recuerda|mujer|hombre/i.test(descripcion)) score += 0.1;
+  if (descripcion.length > 600) score -= 0.15;
+  return Math.max(0, Math.min(1, score));
 }
 
 async function subirReel(username, reel) {
@@ -95,7 +150,9 @@ export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
   const username = cuenta.username.replace(/^@/, "");
   const categoria = categoriaDeCuenta(cuenta);
   const reels = reelsInyectados ?? (await reelsDeCuenta(username, config.scraperMaxReels));
-  const { mediana: med, umbral, analizados, virales } = analizar(reels);
+  const { mediana: med, umbral, analizados, virales } = categoria === "frases"
+    ? analizarFrasesMusica(reels)
+    : analizar(reels);
 
   const { data: existentes } = await supabase.from("referencias_videos").select("video_url").eq("cuenta_id", cuenta.id);
   const yaGuardados = new Set((existentes ?? []).map((v) => String(v.video_url ?? "").match(/([^/]+)\.mp4$/)?.[1]).filter(Boolean));
