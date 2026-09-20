@@ -29,6 +29,10 @@ export function metricasDe(v: ReferenciaVideo) {
     audioId: meta.audio_id ?? null,
     viralScore,
     estiloScore,
+    vision: meta.vision === "1",
+    visionConfianza: Number(meta.vision_confianza) || 0,
+    visionMotivo: meta.vision_motivo ?? null,
+    tipoVisual: meta.tipo_visual ?? null,
   };
 }
 

@@ -216,6 +216,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                 <div className="flex flex-wrap gap-1.5">
                   {m.categoria ? <span className="badge">{labelCategoria(m.categoria)}</span> : null}
                   {m.cancion ? <span className="badge">{m.cancion}{m.artista ? ` · ${m.artista}` : ""}</span> : null}
+                  {m.vision ? <span className="badge">Vision {Math.round(m.visionConfianza * 100)}%</span> : null}
                 </div>
 
                 <div className="grid grid-cols-2 gap-1.5 text-center">
@@ -226,6 +227,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                 </div>
 
                 {v.descripcion ? <p className="line-clamp-2 text-xs text-white/45">{v.descripcion}</p> : null}
+                {m.visionMotivo ? <p className="line-clamp-2 text-[11px] text-white/35">{m.visionMotivo}</p> : null}
                 {v.frase_detectada ? <p className="rounded-lg border border-[#8B5CF6]/20 bg-[#8B5CF6]/10 px-2 py-1.5 text-xs text-[#ddd6fe]">&quot;{v.frase_detectada}&quot;</p> : null}
 
                 {vista === "pendiente" ? (

@@ -30,6 +30,8 @@ export const config = {
   scraperFactor: parseFloat(process.env.SCRAPER_FACTOR ?? "1.5"),
   whisperBin: process.env.WHISPER_BIN,
   whisperModel: process.env.WHISPER_MODEL,
+  openaiKey: process.env.OPENAI_API_KEY,
+  openaiVisionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o-mini",
 };
 
 export function faltanVariables() {

@@ -15,6 +15,7 @@ import { config } from "./config.mjs";
 import { descargarUrl } from "./descarga.mjs";
 import { publicUrl, uploadToR2 } from "./r2.mjs";
 import { reelsDeCuenta } from "./instagram.mjs";
+import { analizarFraseMusicaVisual, visionDisponible } from "./vision.mjs";
 
 export function mediana(valores) {
   if (!valores.length) return 0;
@@ -116,13 +117,24 @@ function scoreEstiloFraseMusica(reel) {
   return Math.max(0, Math.min(1, score));
 }
 
-async function subirReel(username, reel) {
+async function subirReel(username, reel, { categoria = "general" } = {}) {
   const base = `referencias/${username}/${reel.codigo}`;
   const dir = path.join(config.tmpDir, "scraper");
   const mp4 = path.join(dir, `${reel.codigo}.mp4`);
   let thumbUrl = null;
+  let vision = null;
   try {
     await descargarUrl(reel.videoUrl, mp4);
+    if (categoria === "frases") {
+      vision = await analizarFraseMusicaVisual(mp4, {
+        descripcion: reel.descripcion,
+        cancion: reel.audio?.titulo,
+        artista: reel.audio?.artista,
+      });
+      if (vision && (!vision.es_frase_musica || Number(vision.confianza ?? 0) < 0.6)) {
+        return { descartadoPorVision: true, vision };
+      }
+    }
     await uploadToR2(mp4, `${base}.mp4`, "video/mp4");
     if (reel.miniatura) {
       const jpg = path.join(dir, `${reel.codigo}.jpg`);
@@ -139,7 +151,7 @@ async function subirReel(username, reel) {
   } finally {
     await rm(mp4, { force: true });
   }
-  return { videoKey: `${base}.mp4`, thumbUrl };
+  return { videoKey: `${base}.mp4`, thumbUrl, vision };
 }
 
 /**
@@ -161,9 +173,17 @@ export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
   for (const reel of virales) {
     if (yaGuardados.has(reel.codigo)) continue;
     try {
-      const { videoKey, thumbUrl } = await subirReel(username, reel);
+      const { videoKey, thumbUrl, vision, descartadoPorVision } = await subirReel(username, reel, { categoria });
+      if (descartadoPorVision) {
+        console.log(`[scraper] @${username}/${reel.codigo}: descartado por vision (${vision?.motivo ?? "sin motivo"})`);
+        continue;
+      }
       const tags = [`meta:categoria=${categoria || "general"}`, ...tagsMetricas(reel)];
-      const frase = categoria === "frases" ? fraseDesdeDescripcion(reel.descripcion) : null;
+      if (visionDisponible()) tags.push("meta:vision=1");
+      if (vision?.confianza != null) tags.push(`meta:vision_confianza=${Number(vision.confianza).toFixed(3)}`);
+      if (vision?.motivo) tags.push(`meta:vision_motivo=${limpiarTag(vision.motivo)}`);
+      if (vision?.tipo_visual) tags.push(`meta:tipo_visual=${limpiarTag(vision.tipo_visual)}`);
+      const frase = categoria === "frases" ? (vision?.frase_visible?.trim() || fraseDesdeDescripcion(reel.descripcion)) : null;
       const { error } = await supabase.from("referencias_videos").insert({
         cuenta_id: cuenta.id,
         video_url: videoKey,
