@@ -1,0 +1,274 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Archive, CheckCircle2, Clock3, Mail, MessageCircle, Phone, Save, Trash2, UserRound } from "lucide-react";
+import type { Lead, LeadEstado } from "@/types";
+
+const TABS: Array<{ estado: LeadEstado; label: string }> = [
+  { estado: "nuevo", label: "Nuevos" },
+  { estado: "contactado", label: "Contactados" },
+  { estado: "captado", label: "Captados" },
+  { estado: "futuro", label: "Para futuro" },
+  { estado: "descartado", label: "Descartados" },
+];
+
+const ESTADO_LABEL: Record<LeadEstado, string> = {
+  nuevo: "Nuevo",
+  contactado: "Contactado",
+  captado: "Captado",
+  futuro: "Para futuro",
+  descartado: "Descartado",
+  eliminado: "Eliminado",
+};
+
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
+}
+
+function whatsappHref(value?: string | null) {
+  const digits = value?.replace(/\D/g, "");
+  return digits ? `https://wa.me/${digits}` : null;
+}
+
+function instagramHref(value?: string | null) {
+  const text = value?.trim();
+  if (!text) return null;
+  if (/^https?:\/\//i.test(text)) return text;
+  const user = text.replace(/^@/, "");
+  return `https://instagram.com/${user}`;
+}
+
+function statusClass(estado: LeadEstado) {
+  if (estado === "captado") return "badge-aprobado";
+  if (estado === "contactado") return "badge-aprobacion";
+  if (estado === "futuro") return "badge-clasificando";
+  if (estado === "descartado" || estado === "eliminado") return "badge-rechazado";
+  return "badge-recibido";
+}
+
+export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
+  const [leads, setLeads] = useState(initialLeads);
+  const [active, setActive] = useState<LeadEstado>("nuevo");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [draftNotes, setDraftNotes] = useState<Record<string, string>>(() =>
+    Object.fromEntries(initialLeads.map((lead) => [lead.id, lead.notas ?? ""])),
+  );
+
+  const counts = useMemo(() => {
+    return leads.reduce<Record<LeadEstado, number>>(
+      (acc, lead) => {
+        acc[lead.estado] += 1;
+        return acc;
+      },
+      { nuevo: 0, contactado: 0, captado: 0, futuro: 0, descartado: 0, eliminado: 0 },
+    );
+  }, [leads]);
+
+  const visible = leads.filter((lead) => lead.estado === active);
+
+  async function updateLead(id: string, body: Record<string, unknown>) {
+    setSavingId(id);
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setLeads((current) =>
+        current.map((lead) => {
+          if (lead.id !== id) return lead;
+          const estado = (body.eliminar_datos ? "eliminado" : body.estado ?? lead.estado) as LeadEstado;
+          return {
+            ...lead,
+            estado,
+            notas: typeof body.notas === "string" ? body.notas : lead.notas,
+            seguimiento_at: typeof body.seguimiento_at === "string" ? body.seguimiento_at : lead.seguimiento_at,
+            nombre: body.eliminar_datos ? null : lead.nombre,
+            email: body.eliminar_datos ? null : lead.email,
+            whatsapp: body.eliminar_datos ? null : lead.whatsapp,
+            instagram: body.eliminar_datos ? null : lead.instagram,
+            pais: body.eliminar_datos ? null : lead.pais,
+          };
+        }),
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm text-[color:var(--text-secondary)]">Recepcion de formularios desde la web</p>
+          <h1 className="mt-2 font-display text-4xl font-semibold text-white">Leads</h1>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          {TABS.map((tab) => (
+            <button
+              key={tab.estado}
+              type="button"
+              onClick={() => setActive(tab.estado)}
+              className={`min-h-11 rounded-xl border px-3 py-2 text-left text-sm transition ${
+                active === tab.estado
+                  ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/15 text-white"
+                  : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:bg-white/[0.06]"
+              }`}
+            >
+              <span className="block font-semibold">{tab.label}</span>
+              <span className="text-xs text-white/40">{counts[tab.estado]} pendientes</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        {TABS.map((tab) => (
+          <div key={tab.estado} className="glass-card p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/35">{tab.label}</p>
+            <p className="mt-2 font-display text-3xl font-semibold text-white">{counts[tab.estado]}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 space-y-4">
+        {visible.length === 0 ? (
+          <div className="glass-card p-8 text-center text-sm text-white/40">No hay leads en este estado.</div>
+        ) : null}
+
+        {visible.map((lead) => {
+          const wa = whatsappHref(lead.whatsapp);
+          const ig = instagramHref(lead.instagram);
+          const notes = draftNotes[lead.id] ?? "";
+          return (
+            <article key={lead.id} className="glass-card overflow-hidden">
+              <div className="grid gap-0 xl:grid-cols-[1fr_360px]">
+                <div className="p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-display text-xl font-semibold text-white">{lead.nombre ?? "Lead sin datos"}</h2>
+                        <span className={`badge ${statusClass(lead.estado)}`}>{ESTADO_LABEL[lead.estado]}</span>
+                        <span className="badge">{lead.pais ?? "-"}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-white/35">Entró el {formatDate(lead.created_at)} · {lead.origen}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {wa ? (
+                        <a href={wa} target="_blank" rel="noreferrer" className="btn-secondary inline-flex min-h-10 items-center gap-2 px-3 text-sm">
+                          <Phone className="h-4 w-4" />
+                          WhatsApp
+                        </a>
+                      ) : null}
+                      {lead.email ? (
+                        <a href={`mailto:${lead.email}`} className="btn-secondary inline-flex min-h-10 items-center gap-2 px-3 text-sm">
+                          <Mail className="h-4 w-4" />
+                          Email
+                        </a>
+                      ) : null}
+                      {ig ? (
+                        <a href={ig} target="_blank" rel="noreferrer" className="btn-secondary inline-flex min-h-10 items-center gap-2 px-3 text-sm">
+                          <UserRound className="h-4 w-4" />
+                          Perfil
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <Info label="Experiencia" value={lead.experiencia} />
+                    <Info label="Ingresos" value={lead.ingresos} />
+                    <Info label="WhatsApp" value={lead.whatsapp} />
+                    <Info label="Instagram" value={lead.instagram} />
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-white/[0.08] bg-black/20 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-white/35">Necesita mejorar</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {lead.necesidades.length ? lead.necesidades.map((item) => <span key={item} className="badge">{item}</span>) : <span className="text-sm text-white/35">Sin necesidades marcadas</span>}
+                    </div>
+                    {lead.otro_mensaje ? <p className="mt-3 text-sm leading-6 text-white/70">{lead.otro_mensaje}</p> : null}
+                  </div>
+
+                  <div className="mt-5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/35" htmlFor={`notes-${lead.id}`}>
+                      Notas internas
+                    </label>
+                    <textarea
+                      id={`notes-${lead.id}`}
+                      value={notes}
+                      onChange={(event) => setDraftNotes((current) => ({ ...current, [lead.id]: event.target.value }))}
+                      className="input-base mt-2 min-h-24 resize-y"
+                      placeholder="Qué se habló, si responde, objeciones, potencial, siguiente paso..."
+                    />
+                  </div>
+                </div>
+
+                <aside className="border-t border-white/[0.08] bg-white/[0.02] p-5 xl:border-l xl:border-t-0">
+                  <div className="space-y-2">
+                    <ActionButton icon={Save} label="Guardar nota" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { notas: notes })} />
+                    <ActionButton icon={MessageCircle} label="Marcar contactado" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "contactado", notas: notes })} />
+                    <ActionButton icon={CheckCircle2} label="Captar / guardar" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "captado", notas: notes })} tone="success" />
+                    <ActionButton icon={Clock3} label="Para futuro" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "futuro", notas: notes })} />
+                    <ActionButton icon={Archive} label="Descartar" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "descartado", notas: notes })} tone="warning" />
+                    <ActionButton icon={Trash2} label="Eliminar datos" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { eliminar_datos: true })} tone="danger" />
+                  </div>
+
+                  <div className="mt-5 space-y-2 rounded-xl border border-white/[0.08] bg-black/20 p-4 text-xs text-white/40">
+                    <p>Pagina: {lead.page_url ?? "-"}</p>
+                    <p>Referrer: {lead.referrer ?? "-"}</p>
+                    <p>Privacidad: {lead.acepta_privacidad ? "Aceptada" : "No aceptada"}</p>
+                  </div>
+                </aside>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+      <p className="text-xs text-white/35">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-white/80">{value || "-"}</p>
+    </div>
+  );
+}
+
+function ActionButton({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  tone = "default",
+}: {
+  icon: typeof Save;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "default" | "success" | "warning" | "danger";
+}) {
+  const classes = {
+    default: "border-white/[0.1] bg-white/[0.04] text-white/75 hover:bg-white/[0.07]",
+    success: "border-emerald-400/25 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15",
+    warning: "border-amber-300/25 bg-amber-300/10 text-amber-100 hover:bg-amber-300/15",
+    danger: "border-red-400/25 bg-red-400/10 text-red-200 hover:bg-red-400/15",
+  }[tone];
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex min-h-11 w-full items-center gap-3 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-50 ${classes}`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}

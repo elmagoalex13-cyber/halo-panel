@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
+  { href: "/leads", label: "Leads", icon: "◇", leadsBadge: true },
   { href: "/asignar", label: "Asignar vídeos", icon: "⇪" },
   { href: "/instagram", label: "Instagram", icon: "◎" },
   { href: "/landings", label: "Landings", icon: "◇" },
@@ -19,9 +20,10 @@ const NAV = [
 
 interface SidebarProps {
   pendingAprobacion?: number;
+  pendingLeads?: number;
 }
 
-export function Sidebar({ pendingAprobacion = 0 }: SidebarProps) {
+export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -56,7 +58,7 @@ export function Sidebar({ pendingAprobacion = 0 }: SidebarProps) {
       </div>
       <nav style={{ flex: 1, padding: "16px 0", overflowY: "auto" }}>
         <div style={{ padding: "0 12px", display: "flex", flexDirection: "column", gap: "2px" }}>
-          {NAV.map(({ href, label, icon, badge }) => {
+          {NAV.map(({ href, label, icon, badge, leadsBadge }) => {
             const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
             return (
               <Link
@@ -93,6 +95,22 @@ export function Sidebar({ pendingAprobacion = 0 }: SidebarProps) {
                     }}
                   >
                     {pendingAprobacion > 99 ? "99+" : pendingAprobacion}
+                  </span>
+                ) : null}
+                {leadsBadge && pendingLeads > 0 ? (
+                  <span
+                    style={{
+                      backgroundColor: "#06B6D4",
+                      color: "white",
+                      fontSize: "10px",
+                      fontWeight: "700",
+                      padding: "2px 6px",
+                      borderRadius: "99px",
+                      minWidth: "18px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {pendingLeads > 99 ? "99+" : pendingLeads}
                   </span>
                 ) : null}
               </Link>

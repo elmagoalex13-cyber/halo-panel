@@ -247,3 +247,33 @@ export type LandingStats = Landing & {
   conversion_rate: number;
   ultima_actividad?: string | null;
 };
+
+export type LeadEstado = "nuevo" | "contactado" | "captado" | "futuro" | "descartado" | "eliminado";
+
+export type Lead = {
+  id: string;
+  estado: LeadEstado;
+  nombre?: string | null;
+  email?: string | null;
+  whatsapp?: string | null;
+  instagram?: string | null;
+  pais?: string | null;
+  experiencia?: string | null;
+  ingresos?: string | null;
+  necesidades: string[];
+  otro_mensaje?: string | null;
+  acepta_privacidad: boolean;
+  origen: string;
+  landing_slug?: string | null;
+  page_url?: string | null;
+  referrer?: string | null;
+  user_agent?: string | null;
+  notas?: string | null;
+  ultimo_contacto_at?: string | null;
+  seguimiento_at?: string | null;
+  captado_at?: string | null;
+  descartado_at?: string | null;
+  eliminado_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};

@@ -19,14 +19,28 @@ async function getApprovalCount() {
   }
 }
 
+async function getNewLeadsCount() {
+  if (!canUseSupabase()) return 0;
+  try {
+    const supabase = createAdminClient();
+    const { count } = await supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("estado", "nuevo");
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function PanelLayout({ children }: { children: React.ReactNode }) {
-  const approvalCount = await getApprovalCount();
+  const [approvalCount, newLeadsCount] = await Promise.all([getApprovalCount(), getNewLeadsCount()]);
   // Aprobadas sin programar (p. ej. de antes de activar Publer): se programan en segundo plano
   if (publerActivo() && canUseSupabase()) after(() => programarPendientes(createAdminClient()));
 
   return (
     <div className="min-h-screen pb-20 md:pb-0">
-      <Sidebar pendingAprobacion={approvalCount} />
+      <Sidebar pendingAprobacion={approvalCount} pendingLeads={newLeadsCount} />
       <main className="px-4 py-6 md:ml-[224px] md:px-8 lg:px-10">
         <div className="mx-auto max-w-7xl">{children}</div>
       </main>
