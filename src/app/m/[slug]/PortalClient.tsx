@@ -39,7 +39,7 @@ const TEXTO_ENCARGO: Record<number, string> = {
   4: "Mira la referencia y sube tu version.",
 };
 
-function VideoReferencia({ r }: { r: Referencia }) {
+function VideoReferencia({ r, grande = false }: { r: Referencia; grande?: boolean }) {
   return (
     <div className="overflow-hidden rounded-2xl bg-black ring-1 ring-white/10">
       {r.video ? (
@@ -49,7 +49,7 @@ function VideoReferencia({ r }: { r: Referencia }) {
           controls
           playsInline
           preload="metadata"
-          className="mx-auto aspect-[9/16] max-h-[60vh] w-full object-contain"
+          className={`mx-auto aspect-[9/16] w-full object-contain ${grande ? "max-h-[72vh]" : "max-h-[60vh]"}`}
         />
       ) : (
         <div className="grid aspect-[9/16] max-h-[40vh] w-full place-items-center p-4 text-center text-sm text-white/40">
@@ -75,15 +75,15 @@ function ModalVideo({
 }) {
   if (!pendiente?.referencia) return null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
-      <div className="w-full max-w-sm space-y-3">
-        <div className="flex items-center justify-between">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center py-4">
+        <div className="mb-3 flex items-center justify-between">
           <span className="badge">{NOMBRE_TIPO[pendiente.tipo]}</span>
           <button type="button" onClick={onClose} className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white">
             Cerrar
           </button>
         </div>
-        <VideoReferencia r={pendiente.referencia} />
+        <VideoReferencia key={pendiente.id} r={pendiente.referencia} grande />
         {pendiente.instrucciones ? <p className="rounded-xl bg-white/[0.08] px-3 py-2 text-sm text-white/80">{pendiente.instrucciones}</p> : null}
       </div>
     </div>
@@ -178,20 +178,11 @@ function TarjetaVideoPedido({ p, onOpen }: { p: Pendiente; onOpen: (p: Pendiente
         onClick={() => onOpen(p)}
         className="group relative block aspect-[9/16] w-full overflow-hidden rounded-xl bg-black text-left ring-1 ring-white/10"
       >
-        {p.referencia?.video ? (
-          <video
-            src={p.referencia.video}
-            poster={p.referencia.thumb ?? undefined}
-            muted
-            playsInline
-            preload="metadata"
-            className="h-full w-full object-cover"
-          />
-        ) : p.referencia?.thumb ? (
+        {p.referencia?.thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.referencia.thumb} alt="" className="h-full w-full object-cover" />
         ) : (
-          <span className="grid h-full w-full place-items-center px-2 text-center text-xs text-white/40">Ver video</span>
+          <span className="grid h-full w-full place-items-center px-2 text-center text-xs text-white/40">Tocar para ver</span>
         )}
         <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 text-[11px] font-semibold text-white">
           Tocar para ver
