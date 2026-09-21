@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SubirBoton } from "./SubirBoton";
 
@@ -76,6 +77,72 @@ function Seccion({ titulo, sub, children }: { titulo: string; sub?: string; chil
   );
 }
 
+function CompletarBoton({ encargoId }: { encargoId: string }) {
+  const router = useRouter();
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function completar() {
+    setCargando(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/portal/encargo-completar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ encargo_id: encargoId }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(j?.error ?? "No se pudo completar");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo completar");
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  return (
+    <div>
+      <button type="button" onClick={completar} disabled={cargando} className="btn-secondary h-11 w-full text-sm disabled:opacity-60">
+        {cargando ? "Marcando..." : "Marcar completado"}
+      </button>
+      {error ? <p className="mt-2 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+    </div>
+  );
+}
+
+function TarjetaPendiente({ p }: { p: Pendiente }) {
+  const esReferencia = p.tipo === 4;
+  const tieneVideoPedido = Boolean(p.referencia);
+
+  return (
+    <article className="space-y-3 rounded-3xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-4">
+      <div className="flex items-center justify-between">
+        <span className="badge">{NOMBRE_TIPO[p.tipo]}</span>
+        {p.fecha_limite ? <span className="text-xs text-white/40">Para el {new Date(p.fecha_limite).toLocaleDateString("es-ES")}</span> : null}
+      </div>
+      <p className="text-sm text-white/55">{TEXTO_ENCARGO[p.tipo] ?? "Sube el video pedido."}</p>
+      {p.referencia ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">{esReferencia ? "Referencia que debes imitar" : "Video pedido"}</p>
+          <VideoReferencia r={p.referencia} />
+        </div>
+      ) : null}
+      {p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
+      {p.instrucciones ? <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white/80">{p.instrucciones}</p> : null}
+      {esReferencia ? (
+        <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta="Subir mi imitacion" />
+      ) : tieneVideoPedido ? (
+        <CompletarBoton encargoId={p.id} />
+      ) : (
+        <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta="Subir video" />
+      )}
+    </article>
+  );
+}
+
 export function PortalClient({
   nombre,
   pendientes,
@@ -87,6 +154,13 @@ export function PortalClient({
   entregas: Entrega[];
 }) {
   const router = useRouter();
+  const pendientesPorTipo = useMemo(
+    () =>
+      [1, 2, 3, 4]
+        .map((tipo) => ({ tipo, items: pendientes.filter((p) => p.tipo === tipo) }))
+        .filter((grupo) => grupo.items.length > 0),
+    [pendientes],
+  );
 
   async function salir() {
     await fetch("/api/portal/logout", { method: "POST" });
@@ -114,28 +188,16 @@ export function PortalClient({
             No tienes videos pendientes ahora mismo.
           </p>
         ) : (
-          pendientes.map((p) => (
-            <article key={p.id} className="space-y-3 rounded-3xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-4">
-              <div className="flex items-center justify-between">
-                <span className="badge">{NOMBRE_TIPO[p.tipo]}</span>
-                {p.fecha_limite ? (
-                  <span className="text-xs text-white/40">Para el {new Date(p.fecha_limite).toLocaleDateString("es-ES")}</span>
-                ) : null}
+          <div className="space-y-5">
+            {pendientesPorTipo.map((grupo) => (
+              <div key={grupo.tipo} className="space-y-3">
+                <h3 className="font-display text-base font-semibold text-white">{NOMBRE_TIPO[grupo.tipo]}</h3>
+                {grupo.items.map((p) => (
+                  <TarjetaPendiente key={p.id} p={p} />
+                ))}
               </div>
-              <p className="text-sm text-white/55">{TEXTO_ENCARGO[p.tipo] ?? "Sube el video pedido."}</p>
-              {p.referencia ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
-                    {p.tipo === 4 ? "Referencia que debes imitar" : "Video pedido"}
-                  </p>
-                  <VideoReferencia r={p.referencia} />
-                </div>
-              ) : null}
-              {p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
-              {p.instrucciones ? <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white/80">{p.instrucciones}</p> : null}
-              <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta={p.tipo === 4 ? "Subir mi imitacion" : "Subir video"} />
-            </article>
-          ))
+            ))}
+          </div>
         )}
       </Seccion>
 
