@@ -24,6 +24,7 @@ export function BancoReferenciasSection({
   const [filtroCuenta, setFiltroCuenta] = useState("all");
   const [selected, setSelected] = useState<BancoReferenciaVideo | null>(null);
   const [modeloId, setModeloId] = useState("");
+  const [tipo, setTipo] = useState("4");
   const [instrucciones, setInstrucciones] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -46,6 +47,7 @@ export function BancoReferenciasSection({
   function openEnviar(video: BancoReferenciaVideo) {
     setSelected(video);
     setModeloId("");
+    setTipo(video.frase ? "2" : "4");
     setInstrucciones("");
     setEnviado(false);
   }
@@ -61,6 +63,8 @@ export function BancoReferenciasSection({
           modelo_id: modeloId,
           banco_id: selected.id,
           url_referencia_ig: selected.url_referencia,
+          descripcion: selected.frase,
+          tipo_video: `tipo${tipo}`,
           instrucciones: instrucciones || null,
         }),
       });
@@ -175,6 +179,12 @@ export function BancoReferenciasSection({
                     {m.nombre}
                   </option>
                 ))}
+              </select>
+              <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="input-base">
+                <option value="1">Tipo 1 - Hablando</option>
+                <option value="2">Tipo 2 - Caption / gesto</option>
+                <option value="3">Tipo 3 - Parar imagen</option>
+                <option value="4">Tipo 4 - Imitar referencia</option>
               </select>
               <textarea
                 value={instrucciones}
