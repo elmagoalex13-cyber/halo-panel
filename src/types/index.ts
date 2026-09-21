@@ -210,3 +210,40 @@ export type VaultEntry = {
   modelo_id?: string | null;
   created_at: string;
 };
+
+export type LandingEventType = "pageview" | "click";
+
+export type Landing = {
+  id: string;
+  nombre: string;
+  slug: string;
+  public_url: string;
+  landing_key: string;
+  activa: boolean;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type LandingEvent = {
+  id: string;
+  landing_id: string;
+  landing_slug: string;
+  event_type: LandingEventType;
+  label?: string | null;
+  destination?: string | null;
+  session_id: string;
+  referrer?: string | null;
+  page?: string | null;
+  url?: string | null;
+  user_agent?: string | null;
+  occurred_at: string;
+  created_at: string;
+};
+
+export type LandingStats = Landing & {
+  visitas_totales: number;
+  visitantes_unicos: number;
+  clicks_onlyfans: number;
+  conversion_rate: number;
+  ultima_actividad?: string | null;
+};

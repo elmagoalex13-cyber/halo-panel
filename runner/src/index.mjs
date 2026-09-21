@@ -117,7 +117,7 @@ setInterval(ciclo, config.pollMs);
 
 // Referencias asignadas por URL: se descargan a R2 para que la modelo (y el editor) las vean
 setTimeout(() => descargarReferenciasPendientes(supabase), 5000);
-setInterval(() => descargarReferenciasPendientes(supabase), 60000);
+setInterval(() => descargarReferenciasPendientes(supabase), 10000);
 
 // Scraper propio de cuentas de referencia (cada SCRAPER_HORAS; sin sesion de Instagram suele fallar)
 console.log(`Scraper de referencias activo (cuentas cada ${config.scraperHoras}h, umbral viral x${config.scraperFactor} la mediana, sesion IG: ${config.igSessionId ? "si" : "NO"})`);

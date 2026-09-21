@@ -123,13 +123,15 @@ export function PortalClient({
                 ) : null}
               </div>
               <p className="text-sm text-white/55">{TEXTO_ENCARGO[p.tipo] ?? "Sube el video pedido."}</p>
-              {p.tipo === 4 && p.referencia ? (
+              {p.referencia ? (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Referencia que debes imitar</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">
+                    {p.tipo === 4 ? "Referencia que debes imitar" : "Video pedido"}
+                  </p>
                   <VideoReferencia r={p.referencia} />
                 </div>
               ) : null}
-              {p.tipo === 4 && p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
+              {p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
               {p.instrucciones ? <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white/80">{p.instrucciones}</p> : null}
               <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta={p.tipo === 4 ? "Subir mi imitacion" : "Subir video"} />
             </article>

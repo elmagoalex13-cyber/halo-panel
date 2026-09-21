@@ -160,12 +160,32 @@ a {
   color: rgba(255,255,255,0.9);
   padding: 0.5rem 0.75rem;
   backdrop-filter: blur(10px);
+  color-scheme: dark;
 }
 
 .input-base:focus {
   border-color: rgba(139, 92, 246, 0.5);
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   outline: none;
+}
+
+select,
+select.input,
+select.input-base {
+  color-scheme: dark;
+  background-color: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+select option {
+  background-color: #151620;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+select option:checked,
+select option:hover {
+  background-color: #2b2450;
+  color: #ffffff;
 }
 
 .badge {

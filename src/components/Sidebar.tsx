@@ -8,6 +8,7 @@ const NAV = [
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
   { href: "/asignar", label: "Asignar vídeos", icon: "⇪" },
   { href: "/instagram", label: "Instagram", icon: "◎" },
+  { href: "/landings", label: "Landings", icon: "◇" },
   { href: "/modelos", label: "Modelos", icon: "◉" },
   { href: "/frases", label: "Frases", icon: "✦" },
   { href: "/facturacion", label: "Facturación", icon: "◎" },

@@ -14,6 +14,7 @@ export type EncargoRow = {
   modelo: string;
   url: string | null;
   descargado: boolean;
+  tieneReferencia: boolean;
 };
 
 export function AsignarClient({ modelos, encargos }: { modelos: { id: string; nombre: string }[]; encargos: EncargoRow[] }) {
@@ -155,7 +156,7 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
                 <span className="w-28 shrink-0 font-medium text-white">{e.modelo}</span>
                 <span className="badge shrink-0">Tipo {e.tipo}</span>
                 <span className="min-w-0 flex-1 truncate font-code text-xs text-white/50">{e.url ?? "—"}</span>
-                {!e.descargado ? <span className="text-[11px] text-amber-300">descargando…</span> : null}
+                {e.tieneReferencia && !e.descargado ? <span className="text-[11px] text-amber-300">descargando…</span> : null}
                 <span className={`badge shrink-0 ${e.estado === "entregado" ? "badge-aprobado" : "badge-editando"}`}>
                   {e.estado === "entregado" ? "Entregado" : "Pendiente"}
                 </span>

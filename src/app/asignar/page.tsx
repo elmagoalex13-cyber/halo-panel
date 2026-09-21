@@ -35,6 +35,7 @@ async function cargar() {
     modelo: f.modelo?.nombre ?? "—",
     url: f.referencia?.url_original ?? null,
     descargado: Boolean(f.referencia?.url_r2),
+    tieneReferencia: Boolean(f.referencia),
   }));
   return { modelos: (m.data ?? []) as { id: string; nombre: string }[], encargos };
 }
