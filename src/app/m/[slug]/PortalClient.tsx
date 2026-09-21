@@ -25,12 +25,13 @@ export type Entrega = {
   recibido_at: string;
 };
 
-const TIPOS = [
-  { tipo: 1, titulo: "Hablando", desc: "Grabate hablando a camara. Le pondremos los subtitulos." },
-  { tipo: 2, titulo: "Caption / Gesto", desc: "Un gesto o escena corta. Nosotros anadimos la frase." },
-  { tipo: 3, titulo: "Parar imagen", desc: "El reto de parar la imagen: nosotros congelamos el momento del trigger." },
-];
 const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Parar imagen", 4: "Con referencia" };
+const TABS = [
+  { tipo: 1, titulo: "Hablado", desc: "Videos hablando a camara con subtitulos.", etiquetaSubida: "Subir hablado" },
+  { tipo: 2, titulo: "Frases + musica", desc: "Gestos o escenas cortas para frase y musica.", etiquetaSubida: "Subir gesto" },
+  { tipo: 3, titulo: "Parar imagen", desc: "Videos para editar con congelado.", etiquetaSubida: "Subir video" },
+  { tipo: 4, titulo: "Referencias", desc: "Videos concretos que debes imitar.", etiquetaSubida: "Subir imitacion" },
+] as const;
 const TEXTO_ENCARGO: Record<number, string> = {
   1: "Grabate hablando a camara. Le pondremos los subtitulos.",
   2: "Graba un gesto o escena corta. Nosotros anadimos la frase y la musica.",
@@ -143,6 +144,20 @@ function TarjetaPendiente({ p }: { p: Pendiente }) {
   );
 }
 
+function SubidaLibre({ tipo }: { tipo: number }) {
+  const tab = TABS.find((t) => t.tipo === tipo);
+  if (!tab || tipo === 4) return null;
+  return (
+    <article className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+      <div>
+        <h3 className="font-semibold text-white">Subir {tab.titulo.toLowerCase()}</h3>
+        <p className="text-sm text-white/45">{tab.desc}</p>
+      </div>
+      <SubirBoton tipo={tipo} etiqueta={tab.etiquetaSubida} />
+    </article>
+  );
+}
+
 export function PortalClient({
   nombre,
   pendientes,
@@ -154,13 +169,10 @@ export function PortalClient({
   entregas: Entrega[];
 }) {
   const router = useRouter();
-  const pendientesPorTipo = useMemo(
-    () =>
-      [1, 2, 3, 4]
-        .map((tipo) => ({ tipo, items: pendientes.filter((p) => p.tipo === tipo) }))
-        .filter((grupo) => grupo.items.length > 0),
-    [pendientes],
-  );
+  const [tabActiva, setTabActiva] = useState(1);
+  const conteos = useMemo(() => Object.fromEntries(TABS.map((tab) => [tab.tipo, pendientes.filter((p) => p.tipo === tab.tipo).length])), [pendientes]);
+  const pendientesActivos = useMemo(() => pendientes.filter((p) => p.tipo === tabActiva), [pendientes, tabActiva]);
+  const tab = TABS.find((t) => t.tipo === tabActiva) ?? TABS[0];
 
   async function salir() {
     await fetch("/api/portal/logout", { method: "POST" });
@@ -179,40 +191,54 @@ export function PortalClient({
         </button>
       </header>
 
-      <Seccion
-        titulo={`Tus videos pendientes${pendientes.length ? ` (${pendientes.length})` : ""}`}
-        sub="Videos que te hemos pedido. Sube uno o varios archivos en el apartado que corresponda."
-      >
-        {pendientes.length === 0 ? (
-          <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/40">
-            No tienes videos pendientes ahora mismo.
-          </p>
-        ) : (
-          <div className="space-y-5">
-            {pendientesPorTipo.map((grupo) => (
-              <div key={grupo.tipo} className="space-y-3">
-                <h3 className="font-display text-base font-semibold text-white">{NOMBRE_TIPO[grupo.tipo]}</h3>
-                {grupo.items.map((p) => (
-                  <TarjetaPendiente key={p.id} p={p} />
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </Seccion>
+      <Seccion titulo="Tus videos" sub="Entra en cada apartado para ver lo pendiente y subir el contenido correcto.">
+        <div className="grid grid-cols-2 gap-2">
+          {TABS.map((item) => {
+            const activo = item.tipo === tabActiva;
+            const count = conteos[item.tipo] ?? 0;
+            return (
+              <button
+                key={item.tipo}
+                type="button"
+                onClick={() => setTabActiva(item.tipo)}
+                className={`flex min-h-16 items-center justify-between gap-2 rounded-2xl border px-3 py-2 text-left transition ${
+                  activo ? "border-[#8B5CF6]/70 bg-[#8B5CF6]/20 text-white" : "border-white/10 bg-white/[0.04] text-white/55"
+                }`}
+              >
+                <span className="min-w-0 text-sm font-semibold leading-tight">{item.titulo}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${count ? "bg-amber-400 text-black" : "bg-white/10 text-white/45"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-      <Seccion titulo="Subir videos libres" sub="Puedes seleccionar todos los videos que quieras a la vez.">
-        {TIPOS.map((t) => (
-          <article key={t.tipo} className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+        <div className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-white">
-                {t.tipo}. {t.titulo}
-              </h3>
-              <p className="text-sm text-white/45">{t.desc}</p>
+              <h2 className="font-display text-xl font-semibold text-white">{tab.titulo}</h2>
+              <p className="text-sm text-white/45">{tab.desc}</p>
             </div>
-            <SubirBoton tipo={t.tipo} />
-          </article>
-        ))}
+            <span className="shrink-0 rounded-full bg-[#8B5CF6]/20 px-2.5 py-1 text-xs font-semibold text-[#ddd6fe]">
+              {conteos[tab.tipo] ?? 0} pendientes
+            </span>
+          </div>
+
+          {pendientesActivos.length ? (
+            <div className="space-y-3">
+              {pendientesActivos.map((p) => (
+                <TarjetaPendiente key={p.id} p={p} />
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/40">
+              No tienes videos pendientes en este apartado.
+            </p>
+          )}
+
+          {tab.tipo === 4 ? null : <SubidaLibre tipo={tab.tipo} />}
+        </div>
       </Seccion>
 
       {entregas.length > 0 ? (
