@@ -12,7 +12,7 @@ import { promisify } from "util";
 import { mkdir } from "fs/promises";
 import path from "path";
 import { config } from "./config.mjs";
-import { getDuration } from "./ffmpeg.mjs";
+import { ENCODE_AUDIO_ARGS, ENCODE_VIDEO_ARGS, getDuration } from "./ffmpeg.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -37,7 +37,7 @@ export function paramsSpoofer() {
 /** Cadena de filtros ffmpeg para unos parametros dados. */
 export function filtroSpoofer(p) {
   return [
-    "scale=1080:1920:force_original_aspect_ratio=increase",
+    "scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos",
     "crop=1080:1920",
     `scale=iw*${p.zoom}:ih*${p.zoom}`,
     "crop=1080:1920",
@@ -65,8 +65,8 @@ export async function spoofear(entrada, salida, params = paramsSpoofer()) {
       "-i", entrada,
       "-t", String(duracion.toFixed(3)),
       "-vf", filtroSpoofer(params),
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-      "-c:a", "aac", "-b:a", "128k",
+      ...ENCODE_VIDEO_ARGS,
+      ...ENCODE_AUDIO_ARGS,
       "-map_metadata", "-1",
       "-movflags", "+faststart",
       salida,

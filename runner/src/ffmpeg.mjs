@@ -9,6 +9,18 @@ import { config } from "./config.mjs";
 
 const FFMPEG = config.ffmpeg;
 const FFPROBE = config.ffprobe;
+export const ENCODE_VIDEO_ARGS = [
+  "-c:v", "libx264",
+  "-preset", "slow",
+  "-crf", "17",
+  "-profile:v", "high",
+  "-pix_fmt", "yuv420p",
+  "-colorspace", "bt709",
+  "-color_primaries", "bt709",
+  "-color_trc", "bt709",
+  "-color_range", "tv",
+];
+export const ENCODE_AUDIO_ARGS = ["-c:a", "aac", "-b:a", "192k"];
 
 function hasTrim(trim) {
   return Number.isFinite(trim?.start) || Number.isFinite(trim?.end);
@@ -47,17 +59,62 @@ export async function getDuration(videoPath) {
   return parseFloat(stream?.duration ?? info.format?.duration ?? "0");
 }
 
+async function getVideoColorInfo(videoPath) {
+  try {
+    const { stdout } = await execFileAsync(FFPROBE, [
+      "-v", "quiet",
+      "-print_format", "json",
+      "-show_streams",
+      videoPath,
+    ]);
+    const info = JSON.parse(stdout);
+    const stream = info.streams?.find((s) => s.codec_type === "video") ?? {};
+    return {
+      transfer: stream.color_transfer,
+      primaries: stream.color_primaries,
+      space: stream.color_space,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function needsHdrTonemap(videoPath) {
+  const info = await getVideoColorInfo(videoPath);
+  return (
+    info.transfer === "smpte2084" ||
+    info.transfer === "arib-std-b67" ||
+    info.primaries === "bt2020" ||
+    info.space === "bt2020nc"
+  );
+}
+
 /**
  * Base de filtros comunes: reframe a 9:16 centrado, escalar a 1080×1920.
  * @param {object} opts
  * @param {boolean} [opts.zoom] - Si aplicar zoom suave (spoofer)
  * @param {number} [opts.zoomFactor] - Factor de zoom (default 1.03)
  */
-function buildVideoFilter({ zoom = false, zoomFactor = 1.03 } = {}) {
+function buildVideoFilter({ zoom = false, zoomFactor = 1.03, hdr = false } = {}) {
   const scale = zoom
-    ? `scale=iw*${zoomFactor}:ih*${zoomFactor},crop=1080:1920`
-    : `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920`;
-  return scale;
+    ? `scale=iw*${zoomFactor}:ih*${zoomFactor}:flags=lanczos,crop=1080:1920`
+    : `scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920`;
+  if (!hdr) return `${scale},format=yuv420p`;
+  return [
+    "zscale=t=linear:npl=100",
+    "format=gbrpf32le",
+    "zscale=p=bt709",
+    "tonemap=tonemap=hable:desat=0",
+    "zscale=t=bt709:m=bt709:r=tv",
+    scale,
+    "format=yuv420p",
+  ].join(",");
+}
+
+function pushEncodeArgs(args, { shortest = false, faststart = true } = {}) {
+  args.push(...ENCODE_VIDEO_ARGS, ...ENCODE_AUDIO_ARGS);
+  if (faststart) args.push("-movflags", "+faststart");
+  if (shortest) args.push("-shortest");
 }
 
 /**
@@ -70,9 +127,10 @@ function buildVideoFilter({ zoom = false, zoomFactor = 1.03 } = {}) {
  */
 export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
+  const hdr = await needsHdrTonemap(inputPath);
   const vf = [
     buildVideoTrimFilter(trim),
-    buildVideoFilter(),
+    buildVideoFilter({ hdr }),
     assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null,
   ].filter(Boolean).join(",");
   const af = buildAudioTrimFilter(trim);
@@ -82,13 +140,8 @@ export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {})
     "-vf", vf,
   );
   if (af) args.push("-af", af);
-  args.push(
-    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-    "-c:a", "aac", "-b:a", "128k",
-    "-movflags", "+faststart",
-    "-pix_fmt", "yuv420p",
-    outputPath,
-  );
+  pushEncodeArgs(args);
+  args.push(outputPath);
 
   await execFileAsync(FFMPEG, args);
 }
@@ -103,6 +156,7 @@ export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {})
  */
 export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
+  const hdr = await needsHdrTonemap(inputPath);
 
   const textFilter = frase
     ? `,drawtext=text='${frase.replace(/'/g, "\\'").replace(/:/g, "\\:")}':` +
@@ -112,21 +166,15 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath }
       `enable='between(t,0,duration)'`
     : "";
 
-  const vf = buildVideoFilter() + textFilter;
+  const vf = buildVideoFilter({ hdr }) + textFilter;
 
   const args = ["-y", "-i", inputPath];
   if (audioRefPath) {
     args.push("-i", audioRefPath, "-map", "0:v", "-map", "1:a");
   }
-  args.push(
-    "-vf", vf,
-    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-    "-c:a", "aac", "-b:a", "128k",
-    "-movflags", "+faststart",
-    "-pix_fmt", "yuv420p",
-    "-shortest",
-    outputPath
-  );
+  args.push("-vf", vf);
+  pushEncodeArgs(args, { shortest: true });
+  args.push(outputPath);
 
   await execFileAsync(FFMPEG, args);
 }
@@ -142,19 +190,17 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath }
  */
 export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration = 2, { trim } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
+  const hdr = await needsHdrTonemap(inputPath);
 
   const mainPath = outputPath.replace(".mp4", "_main.mp4");
   const mainArgs = ["-y", "-i", inputPath];
   const trimVf = buildVideoTrimFilter(trim);
   const trimAf = buildAudioTrimFilter(trim);
-  if (trimVf) mainArgs.push("-vf", trimVf);
+  const mainVf = [trimVf, hdr ? buildVideoFilter({ hdr }) : null].filter(Boolean).join(",");
+  if (mainVf) mainArgs.push("-vf", mainVf);
   if (trimAf) mainArgs.push("-af", trimAf);
-  mainArgs.push(
-    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-    "-c:a", "aac", "-b:a", "128k",
-    "-pix_fmt", "yuv420p",
-    mainPath,
-  );
+  pushEncodeArgs(mainArgs, { faststart: false });
+  mainArgs.push(mainPath);
   await execFileAsync(FFMPEG, mainArgs);
 
   const duration = await getDuration(mainPath);
@@ -169,9 +215,8 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
            `tpad=stop_mode=clone:stop_duration=${freezeDuration}`,
     "-af", `atrim=start=${freezeStart},asetpts=PTS-STARTPTS,` +
            `apad=pad_dur=${freezeDuration}`,
-    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-    "-c:a", "aac", "-b:a", "128k",
-    "-pix_fmt", "yuv420p",
+    ...ENCODE_VIDEO_ARGS,
+    ...ENCODE_AUDIO_ARGS,
     tmpFreeze,
   ]);
 
@@ -186,10 +231,9 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
     "-f", "concat", "-safe", "0",
     "-i", concatList,
     "-vf", vf,
-    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-    "-c:a", "aac", "-b:a", "128k",
+    ...ENCODE_VIDEO_ARGS,
+    ...ENCODE_AUDIO_ARGS,
     "-movflags", "+faststart",
-    "-pix_fmt", "yuv420p",
     outputPath,
   ]);
 }
@@ -207,6 +251,7 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
  */
 export async function renderTipo4(inputPath, refPath, outputPath, assPath = null, { trim } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
+  const hdr = await needsHdrTonemap(inputPath);
 
   const refDuration = await getDuration(refPath);
   const maxDuration = Number.isFinite(trim?.end) && Number.isFinite(trim?.start)
@@ -217,7 +262,7 @@ export async function renderTipo4(inputPath, refPath, outputPath, assPath = null
     : { start: 0, end: maxDuration };
 
   // Recortar el bruto a la duración de referencia y aplicar mismo tratamiento
-  const vfParts = [buildVideoTrimFilter(inputTrim), buildVideoFilter()].filter(Boolean);
+  const vfParts = [buildVideoTrimFilter(inputTrim), buildVideoFilter({ hdr })].filter(Boolean);
   if (assPath) {
     vfParts.push(`ass='${assPath.replace(/'/g, "\\'")}'`);
   }
@@ -229,13 +274,8 @@ export async function renderTipo4(inputPath, refPath, outputPath, assPath = null
     "-vf", vf,
   );
   if (af) args.push("-af", af);
-  args.push(
-    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-    "-c:a", "aac", "-b:a", "128k",
-    "-movflags", "+faststart",
-    "-pix_fmt", "yuv420p",
-    outputPath,
-  );
+  pushEncodeArgs(args);
+  args.push(outputPath);
 
   await execFileAsync(FFMPEG, args);
 }
