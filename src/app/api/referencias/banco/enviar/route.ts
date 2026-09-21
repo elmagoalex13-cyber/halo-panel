@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const tipoVideo = `tipo${tipoMatch?.[0] ?? "4"}`;
     const url = body.url_referencia_ig?.trim() || null;
 
-    if (tipoVideo !== "tipo4") {
+    if (tipoVideo !== "tipo4" && !url) {
       const instrucciones = body.instrucciones ?? body.descripcion ?? null;
       const query = supabase
         .from("encargos")

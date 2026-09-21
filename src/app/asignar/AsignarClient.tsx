@@ -28,6 +28,7 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
 
   const lista = urls.split(/[\s,]+/).filter(Boolean);
   const exigeReferencia = tipo === 4;
+  const tieneUrls = lista.length > 0;
   const alternar = (id: string) => setElegidas((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   async function asignar() {
@@ -43,7 +44,7 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
       if (!res.ok) throw new Error(j.error ?? "Error");
       setMsg({
         ok: true,
-        texto: exigeReferencia
+        texto: tieneUrls
           ? `${j.encargos} asignación(es) creada(s) con ${j.urls} URL(s)${j.ya_asignados ? ` · ${j.ya_asignados} ya estaban asignadas` : ""}. El runner las descarga en menos de 1 minuto.`
           : `${j.encargos} encargo(s) creado(s) para el portal${j.ya_asignados ? ` · ${j.ya_asignados} ya existían` : ""}.`,
       });
@@ -68,7 +69,7 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
       <GlassCard className="space-y-5 p-5">
         <div>
           <label className="mb-1.5 block text-sm font-semibold text-white">
-            URLs de referencia {exigeReferencia ? "" : <span className="font-normal text-white/35">(solo para tipo 4)</span>}
+            URLs de video {exigeReferencia ? <span className="font-normal text-white/35">(obligatorio para tipo 4)</span> : <span className="font-normal text-white/35">(opcional)</span>}
           </label>
           <textarea
             value={urls}
@@ -76,10 +77,9 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
             rows={5}
             placeholder={"Una URL por línea (o separadas por espacios/comas)\nhttps://www.instagram.com/reel/XXXX/\nhttps://www.instagram.com/reel/YYYY/"}
             className="input-base w-full resize-y font-code text-xs"
-            disabled={!exigeReferencia}
           />
           <p className="mt-1 text-xs text-white/35">
-            {exigeReferencia ? `${lista.length} URL detectada(s)` : "Para hablado, frases con musica y parar imagen no hace falta referencia."}
+            {lista.length} URL detectada(s). En tipo 1, 2 y 3 puedes dejarlo vacio para crear solo una tarea.
           </p>
         </div>
 

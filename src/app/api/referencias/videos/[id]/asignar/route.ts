@@ -3,8 +3,8 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-// Aprueba un video viral del scraper. Tipo 4 se asigna como referencia para imitar; tipos 1-3
-// crean encargos simples en el portal sin obligar a la modelo a usar ese video como referencia.
+// Aprueba un video viral del scraper. Si el video tiene archivo descargado, la modelo lo ve
+// en su portal; si no, solo los tipos 1-3 pueden caer a una tarea simple sin video.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = (await req.json().catch(() => ({}))) as { modelo_id?: string; modelo_ids?: string[]; tipo?: number; instrucciones?: string | null };
@@ -25,8 +25,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (tipo === 4 && !video.video_url) return NextResponse.json({ error: "El video no tiene archivo descargado" }, { status: 409 });
 
     const username = (video.referencias_cuentas as unknown as { username?: string } | null)?.username ?? null;
-    const codigo = String(video.video_url).match(/([^/]+)\.mp4$/)?.[1];
-    const permalink = codigo ? `https://www.instagram.com/reel/${codigo}/` : String(video.video_url);
+    const codigo = video.video_url ? String(video.video_url).match(/([^/]+)\.mp4$/)?.[1] : null;
+    const permalink = video.video_url ? (codigo ? `https://www.instagram.com/reel/${codigo}/` : String(video.video_url)) : null;
 
     // cuenta en cuentas_referencia (para referencias.cuenta_ref_id)
     let cuentaRefId: string | null = null;
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const tipoVideo = `tipo${tipo}`;
     let referenciaId: string | null = null;
-    if (tipo === 4) {
+    if (permalink && video.video_url) {
       const { data: existente } = await supabase.from("referencias").select("id").eq("url_original", permalink).maybeSingle();
       if (existente) {
         referenciaId = existente.id;

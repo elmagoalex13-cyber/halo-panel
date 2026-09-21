@@ -3,8 +3,8 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-// Crea encargos para una o varias modelos. Tipo 4 usa URL de referencia; tipos 1-3 son
-// encargos simples para pedir hablado, gesto/frase o parar imagen sin video de referencia.
+// Crea encargos para una o varias modelos. Si se pasan URLs, la modelo ve esos videos
+// en su portal; si no, los tipos 1-3 son tareas simples sin video asociado.
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     urls?: string[] | string;
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     let encargosCreados = 0;
     let yaAsignados = 0;
 
-    if (tipo !== 4) {
+    if (tipo !== 4 && urls.length === 0) {
       const instrucciones = body.instrucciones?.trim() || null;
       for (const modeloId of modelos) {
         const query = supabase
