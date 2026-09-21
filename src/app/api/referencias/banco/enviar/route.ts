@@ -27,6 +27,35 @@ export async function POST(req: NextRequest) {
     const tipoVideo = `tipo${tipoMatch?.[0] ?? "4"}`;
     const url = body.url_referencia_ig?.trim() || null;
 
+    if (tipoVideo !== "tipo4") {
+      const instrucciones = body.instrucciones ?? body.descripcion ?? null;
+      const query = supabase
+        .from("encargos")
+        .select("id")
+        .eq("modelo_id", body.modelo_id)
+        .eq("tipo_video", tipoVideo)
+        .is("referencia_id", null)
+        .neq("estado", "entregado");
+      const { data: previo } = await (instrucciones ? query.eq("instrucciones", instrucciones) : query.is("instrucciones", null)).maybeSingle();
+      if (previo) return NextResponse.json({ ok: true, data: previo, ya_asignado: true });
+
+      const { data, error } = await supabase
+        .from("encargos")
+        .insert({
+          modelo_id: body.modelo_id,
+          referencia_id: null,
+          tipo_video: tipoVideo,
+          pagina_url: null,
+          instrucciones,
+          estado: "pendiente",
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return NextResponse.json({ ok: true, data });
+    }
+
     let referenciaId: string | null = null;
     if (body.banco_id) {
       const { data: refPorId } = await supabase.from("referencias").select("id").eq("id", body.banco_id).maybeSingle();

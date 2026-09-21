@@ -3,9 +3,8 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-// Asigna videos por URL (uno o muchos) a una o varias modelos. Cada URL entra al banco de
-// referencias (`referencias`) y cada modelo recibe un encargo (`encargos`) que ve en su portal.
-// El runner descarga el video a R2 en menos de un minuto.
+// Crea encargos para una o varias modelos. Tipo 4 usa URL de referencia; tipos 1-3 son
+// encargos simples para pedir hablado, gesto/frase o parar imagen sin video de referencia.
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     urls?: string[] | string;
@@ -24,9 +23,9 @@ export async function POST(req: NextRequest) {
   const tipo = Number(body.tipo);
   const modelos = Array.from(new Set(body.modelo_ids ?? []));
 
-  if (!urls.length) return NextResponse.json({ error: "Pega al menos una URL" }, { status: 400 });
-  if (invalidas.length) return NextResponse.json({ error: `URL no valida: ${invalidas[0]}` }, { status: 400 });
   if (![1, 2, 3, 4].includes(tipo)) return NextResponse.json({ error: "Elige el tipo de video (1-4)" }, { status: 400 });
+  if (tipo === 4 && !urls.length) return NextResponse.json({ error: "Pega al menos una URL de referencia" }, { status: 400 });
+  if (invalidas.length) return NextResponse.json({ error: `URL no valida: ${invalidas[0]}` }, { status: 400 });
   if (!modelos.length) return NextResponse.json({ error: "Elige al menos una modelo" }, { status: 400 });
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
@@ -36,6 +35,34 @@ export async function POST(req: NextRequest) {
     let referenciasNuevas = 0;
     let encargosCreados = 0;
     let yaAsignados = 0;
+
+    if (tipo !== 4) {
+      const instrucciones = body.instrucciones?.trim() || null;
+      for (const modeloId of modelos) {
+        const query = supabase
+          .from("encargos")
+          .select("id")
+          .eq("modelo_id", modeloId)
+          .eq("tipo_video", tipoVideo)
+          .is("referencia_id", null)
+          .neq("estado", "entregado");
+        const { data: previo } = await (instrucciones ? query.eq("instrucciones", instrucciones) : query.is("instrucciones", null)).maybeSingle();
+        if (previo) {
+          yaAsignados++;
+          continue;
+        }
+        const { error } = await supabase.from("encargos").insert({
+          modelo_id: modeloId,
+          referencia_id: null,
+          tipo_video: tipoVideo,
+          estado: "pendiente",
+          instrucciones,
+        });
+        if (error) throw error;
+        encargosCreados++;
+      }
+      return NextResponse.json({ ok: true, urls: 0, referencias_nuevas: 0, encargos: encargosCreados, ya_asignados: yaAsignados });
+    }
 
     for (const url of urls) {
       const { data: existente } = await supabase.from("referencias").select("id").eq("url_original", url).maybeSingle();

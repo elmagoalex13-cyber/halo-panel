@@ -3,9 +3,8 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-// Aprueba un video viral del scraper: lo etiqueta con un tipo (1-4), lo mete en el banco de
-// referencias (`referencias`) y se lo asigna a una modelo (`encargos`), que lo vera en su portal
-// como "video pendiente" con la referencia y el boton de subir su version.
+// Aprueba un video viral del scraper. Tipo 4 se asigna como referencia para imitar; tipos 1-3
+// crean encargos simples en el portal sin obligar a la modelo a usar ese video como referencia.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = (await req.json().catch(() => ({}))) as { modelo_id?: string; modelo_ids?: string[]; tipo?: number; instrucciones?: string | null };
@@ -23,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq("id", id)
       .single();
     if (vErr || !video) return NextResponse.json({ error: "Video no encontrado" }, { status: 404 });
-    if (!video.video_url) return NextResponse.json({ error: "El video no tiene archivo descargado" }, { status: 409 });
+    if (tipo === 4 && !video.video_url) return NextResponse.json({ error: "El video no tiene archivo descargado" }, { status: 409 });
 
     const username = (video.referencias_cuentas as unknown as { username?: string } | null)?.username ?? null;
     const codigo = String(video.video_url).match(/([^/]+)\.mp4$/)?.[1];
@@ -40,41 +39,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    // referencia en el banco (se reutiliza si ya existe)
     const tipoVideo = `tipo${tipo}`;
     let referenciaId: string | null = null;
-    const { data: existente } = await supabase.from("referencias").select("id").eq("url_original", permalink).maybeSingle();
-    if (existente) {
-      referenciaId = existente.id;
-      await supabase.from("referencias").update({ tipo_video: tipoVideo, activa: true, updated_at: new Date().toISOString() }).eq("id", existente.id);
-    } else {
-      const { data: ref, error: rErr } = await supabase
-        .from("referencias")
-        .insert({
-          cuenta_ref_id: cuentaRefId,
-          url_original: permalink,
-          url_r2: video.video_url,
-          thumbnail_url: video.thumbnail_url,
-          descripcion: video.descripcion,
-          tipo_video: tipoVideo,
-          activa: true,
-        })
-        .select("id")
-        .single();
-      if (rErr || !ref) throw rErr ?? new Error("No se pudo crear la referencia");
-      referenciaId = ref.id;
+    if (tipo === 4) {
+      const { data: existente } = await supabase.from("referencias").select("id").eq("url_original", permalink).maybeSingle();
+      if (existente) {
+        referenciaId = existente.id;
+        await supabase.from("referencias").update({ tipo_video: tipoVideo, activa: true, updated_at: new Date().toISOString() }).eq("id", existente.id);
+      } else {
+        const { data: ref, error: rErr } = await supabase
+          .from("referencias")
+          .insert({
+            cuenta_ref_id: cuentaRefId,
+            url_original: permalink,
+            url_r2: video.video_url,
+            thumbnail_url: video.thumbnail_url,
+            descripcion: video.descripcion,
+            tipo_video: tipoVideo,
+            activa: true,
+          })
+          .select("id")
+          .single();
+        if (rErr || !ref) throw rErr ?? new Error("No se pudo crear la referencia");
+        referenciaId = ref.id;
+      }
     }
 
-    // un encargo por modelo (si ya tiene uno pendiente con esta referencia, no se duplica)
     const encargoIds: string[] = [];
     for (const modeloId of modelos) {
-      const { data: previo } = await supabase
+      const query = supabase
         .from("encargos")
         .select("id")
         .eq("modelo_id", modeloId)
-        .eq("referencia_id", referenciaId)
-        .neq("estado", "entregado")
-        .maybeSingle();
+        .eq("tipo_video", tipoVideo)
+        .neq("estado", "entregado");
+      const { data: previo } = await (referenciaId ? query.eq("referencia_id", referenciaId) : query.is("referencia_id", null)).maybeSingle();
       if (previo) {
         encargoIds.push(previo.id);
         continue;

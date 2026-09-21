@@ -30,11 +30,11 @@ const TIPOS = [
   { tipo: 3, titulo: "Parar imagen", desc: "El reto de parar la imagen: nosotros congelamos el momento del trigger." },
 ];
 const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Parar imagen", 4: "Con referencia" };
-const TEXTO_REFERENCIA: Record<number, string> = {
-  1: "Referencia para grabar hablando",
-  2: "Referencia de gesto y estilo",
-  3: "Referencia para el momento de parar imagen",
-  4: "Referencia que debes imitar",
+const TEXTO_ENCARGO: Record<number, string> = {
+  1: "Grabate hablando a camara. Le pondremos los subtitulos.",
+  2: "Graba un gesto o escena corta. Nosotros anadimos la frase y la musica.",
+  3: "Graba un video para que podamos hacer la edicion de parar imagen.",
+  4: "Mira la referencia y sube tu version.",
 };
 
 function VideoReferencia({ r }: { r: Referencia }) {
@@ -122,13 +122,14 @@ export function PortalClient({
                   <span className="text-xs text-white/40">Para el {new Date(p.fecha_limite).toLocaleDateString("es-ES")}</span>
                 ) : null}
               </div>
-              {p.referencia ? (
+              <p className="text-sm text-white/55">{TEXTO_ENCARGO[p.tipo] ?? "Sube el video pedido."}</p>
+              {p.tipo === 4 && p.referencia ? (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">{TEXTO_REFERENCIA[p.tipo] ?? "Referencia"}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">Referencia que debes imitar</p>
                   <VideoReferencia r={p.referencia} />
                 </div>
               ) : null}
-              {p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
+              {p.tipo === 4 && p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
               {p.instrucciones ? <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white/80">{p.instrucciones}</p> : null}
               <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta={p.tipo === 4 ? "Subir mi imitacion" : "Subir video"} />
             </article>

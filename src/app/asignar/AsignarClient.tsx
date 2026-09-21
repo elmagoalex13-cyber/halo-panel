@@ -26,6 +26,7 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const lista = urls.split(/[\s,]+/).filter(Boolean);
+  const exigeReferencia = tipo === 4;
   const alternar = (id: string) => setElegidas((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   async function asignar() {
@@ -41,7 +42,9 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
       if (!res.ok) throw new Error(j.error ?? "Error");
       setMsg({
         ok: true,
-        texto: `${j.encargos} asignación(es) creada(s) con ${j.urls} URL(s)${j.ya_asignados ? ` · ${j.ya_asignados} ya estaban asignadas` : ""}. El runner las descarga en menos de 1 minuto.`,
+        texto: exigeReferencia
+          ? `${j.encargos} asignación(es) creada(s) con ${j.urls} URL(s)${j.ya_asignados ? ` · ${j.ya_asignados} ya estaban asignadas` : ""}. El runner las descarga en menos de 1 minuto.`
+          : `${j.encargos} encargo(s) creado(s) para el portal${j.ya_asignados ? ` · ${j.ya_asignados} ya existían` : ""}.`,
       });
       setUrls("");
       setNota("");
@@ -63,15 +66,20 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
     <div className="space-y-6">
       <GlassCard className="space-y-5 p-5">
         <div>
-          <label className="mb-1.5 block text-sm font-semibold text-white">URLs de los vídeos</label>
+          <label className="mb-1.5 block text-sm font-semibold text-white">
+            URLs de referencia {exigeReferencia ? "" : <span className="font-normal text-white/35">(solo para tipo 4)</span>}
+          </label>
           <textarea
             value={urls}
             onChange={(e) => setUrls(e.target.value)}
             rows={5}
             placeholder={"Una URL por línea (o separadas por espacios/comas)\nhttps://www.instagram.com/reel/XXXX/\nhttps://www.instagram.com/reel/YYYY/"}
             className="input-base w-full resize-y font-code text-xs"
+            disabled={!exigeReferencia}
           />
-          <p className="mt-1 text-xs text-white/35">{lista.length} URL detectada(s)</p>
+          <p className="mt-1 text-xs text-white/35">
+            {exigeReferencia ? `${lista.length} URL detectada(s)` : "Para hablado, frases con musica y parar imagen no hace falta referencia."}
+          </p>
         </div>
 
         <div>
@@ -127,8 +135,8 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
         <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Instrucciones para la modelo (opcional)" className="input-base w-full" />
 
         <div className="flex flex-wrap items-center gap-3">
-          <button onClick={asignar} disabled={cargando || !lista.length || !elegidas.length} className="btn-primary px-5 py-2.5 text-sm disabled:opacity-40">
-            {cargando ? "Asignando..." : `Asignar ${lista.length || ""} vídeo(s)`}
+          <button onClick={asignar} disabled={cargando || (exigeReferencia && !lista.length) || !elegidas.length} className="btn-primary px-5 py-2.5 text-sm disabled:opacity-40">
+            {cargando ? "Asignando..." : exigeReferencia ? `Asignar ${lista.length || ""} vídeo(s)` : "Crear encargo"}
           </button>
           {msg ? <p className={`text-sm ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>{msg.texto}</p> : null}
         </div>
