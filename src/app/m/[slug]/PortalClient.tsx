@@ -66,6 +66,30 @@ function VideoReferencia({ r }: { r: Referencia }) {
   );
 }
 
+function ModalVideo({
+  pendiente,
+  onClose,
+}: {
+  pendiente: Pendiente | null;
+  onClose: () => void;
+}) {
+  if (!pendiente?.referencia) return null;
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+      <div className="w-full max-w-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="badge">{NOMBRE_TIPO[pendiente.tipo]}</span>
+          <button type="button" onClick={onClose} className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white">
+            Cerrar
+          </button>
+        </div>
+        <VideoReferencia r={pendiente.referencia} />
+        {pendiente.instrucciones ? <p className="rounded-xl bg-white/[0.08] px-3 py-2 text-sm text-white/80">{pendiente.instrucciones}</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function Seccion({ titulo, sub, children }: { titulo: string; sub?: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
@@ -144,6 +168,48 @@ function TarjetaPendiente({ p }: { p: Pendiente }) {
   );
 }
 
+function TarjetaVideoPedido({ p, onOpen }: { p: Pendiente; onOpen: (p: Pendiente) => void }) {
+  const esReferencia = p.tipo === 4;
+
+  return (
+    <article className="space-y-2 rounded-2xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-2">
+      <button
+        type="button"
+        onClick={() => onOpen(p)}
+        className="group relative block aspect-[9/16] w-full overflow-hidden rounded-xl bg-black text-left ring-1 ring-white/10"
+      >
+        {p.referencia?.video ? (
+          <video
+            src={p.referencia.video}
+            poster={p.referencia.thumb ?? undefined}
+            muted
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+          />
+        ) : p.referencia?.thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.referencia.thumb} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="grid h-full w-full place-items-center px-2 text-center text-xs text-white/40">Ver video</span>
+        )}
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 text-[11px] font-semibold text-white">
+          Tocar para ver
+        </span>
+      </button>
+      <div className="space-y-1">
+        <span className="badge text-[10px]">{NOMBRE_TIPO[p.tipo]}</span>
+        {p.instrucciones ? <p className="line-clamp-2 text-xs text-white/55">{p.instrucciones}</p> : null}
+      </div>
+      {esReferencia ? (
+        <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta="Subir imitacion" />
+      ) : (
+        <CompletarBoton encargoId={p.id} />
+      )}
+    </article>
+  );
+}
+
 function SubidaLibre({ tipo }: { tipo: number }) {
   const tab = TABS.find((t) => t.tipo === tipo);
   if (!tab || tipo === 4) return null;
@@ -170,8 +236,11 @@ export function PortalClient({
 }) {
   const router = useRouter();
   const [tabActiva, setTabActiva] = useState(1);
+  const [videoAbierto, setVideoAbierto] = useState<Pendiente | null>(null);
   const conteos = useMemo(() => Object.fromEntries(TABS.map((tab) => [tab.tipo, pendientes.filter((p) => p.tipo === tab.tipo).length])), [pendientes]);
   const pendientesActivos = useMemo(() => pendientes.filter((p) => p.tipo === tabActiva), [pendientes, tabActiva]);
+  const pendientesConVideo = useMemo(() => pendientesActivos.filter((p) => p.referencia), [pendientesActivos]);
+  const pendientesSinVideo = useMemo(() => pendientesActivos.filter((p) => !p.referencia), [pendientesActivos]);
   const tab = TABS.find((t) => t.tipo === tabActiva) ?? TABS[0];
 
   async function salir() {
@@ -226,10 +295,21 @@ export function PortalClient({
           </div>
 
           {pendientesActivos.length ? (
-            <div className="space-y-3">
-              {pendientesActivos.map((p) => (
-                <TarjetaPendiente key={p.id} p={p} />
-              ))}
+            <div className="space-y-4">
+              {pendientesConVideo.length ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {pendientesConVideo.map((p) => (
+                    <TarjetaVideoPedido key={p.id} p={p} onOpen={setVideoAbierto} />
+                  ))}
+                </div>
+              ) : null}
+              {pendientesSinVideo.length ? (
+                <div className="space-y-3">
+                  {pendientesSinVideo.map((p) => (
+                    <TarjetaPendiente key={p.id} p={p} />
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/40">
@@ -240,6 +320,8 @@ export function PortalClient({
           {tab.tipo === 4 ? null : <SubidaLibre tipo={tab.tipo} />}
         </div>
       </Seccion>
+
+      <ModalVideo pendiente={videoAbierto} onClose={() => setVideoAbierto(null)} />
 
       {entregas.length > 0 ? (
         <Seccion titulo="Tus videos subidos">
