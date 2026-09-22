@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { programarPendientes, publerActivo } from "@/lib/publer";
+import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { Sidebar } from "@/components/Sidebar";
 import { syncRunnerResultados } from "@/lib/runnerSync";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
@@ -40,6 +41,7 @@ export async function PanelLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen pb-20 md:pb-0">
+      <RealtimeRefresh fallbackSegundos={8} />
       <Sidebar pendingAprobacion={approvalCount} pendingLeads={newLeadsCount} />
       <main className="px-4 py-6 md:ml-[224px] md:px-8 lg:px-10">
         <div className="mx-auto max-w-7xl">{children}</div>

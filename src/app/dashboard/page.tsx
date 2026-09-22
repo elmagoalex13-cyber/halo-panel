@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { AtSign, CheckCircle2, Clapperboard, Clock3, TrendingUp, UserCheck, Users, Wallet } from "lucide-react";
 import { publerActivo } from "@/lib/publer";
-import { AutoRefresh } from "@/components/AutoRefresh";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { GlassCard } from "@/components/GlassCard";
 import { PanelLayout } from "@/components/PanelLayout";
@@ -176,7 +175,6 @@ export default async function DashboardPage({
 
   return (
     <PanelLayout>
-      <AutoRefresh segundos={30} />
       <div className="mb-8">
         <p className="text-sm text-[color:var(--text-secondary)]">{saludo} 👋</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Panel de Administracion</h1>

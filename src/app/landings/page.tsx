@@ -1,5 +1,4 @@
 import { BarChart3, CalendarDays, MousePointerClick, Percent, Users } from "lucide-react";
-import { AutoRefresh } from "@/components/AutoRefresh";
 import { GlassCard } from "@/components/GlassCard";
 import { PanelLayout } from "@/components/PanelLayout";
 import { StatTile } from "@/components/StatTile";
@@ -230,7 +229,6 @@ export default async function LandingsPage({
 
   return (
     <PanelLayout>
-      <AutoRefresh segundos={10} />
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm text-[color:var(--text-secondary)]">Tracking real de landings externas</p>
