@@ -73,6 +73,7 @@ export function MesaClient({
   const [changeVideoError, setChangeVideoError] = useState<string | null>(null);
   const [captionLoading, setCaptionLoading] = useState(false);
   const [captionError, setCaptionError] = useState<string | null>(null);
+  const [quickLoadingId, setQuickLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     setRows(initialRows);
@@ -157,6 +158,45 @@ export function MesaClient({
     [selected, caption, correcciones, frase, currentEstado, router, closePopup],
   );
 
+  const quickAct = useCallback(
+    async (row: VideoRow, accion: "aprobar" | "descartar") => {
+      setQuickLoadingId(`${row.id}:${accion}`);
+      setActionMessage(null);
+      try {
+        const res = await fetch("/api/aprobacion/accion", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: row.id,
+            accion,
+            caption: row.caption,
+            correcciones: row.correcciones,
+            frase_quemada: row.frase_quemada,
+          }),
+        });
+
+        if (!res.ok) {
+          const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+          setActionMessage(payload?.error ?? "No se pudo guardar la accion.");
+          return;
+        }
+
+        const payload = (await res.json()) as { estado?: string; programacion?: Programacion };
+        const nuevoEstado = payload.estado ?? (accion === "aprobar" ? "aprobado" : "rechazado");
+        setRows((prev) =>
+          nuevoEstado === currentEstado
+            ? prev.map((item) => (item.id === row.id ? { ...item, estado: nuevoEstado } : item))
+            : prev.filter((item) => item.id !== row.id),
+        );
+        setActionMessage(accion === "aprobar" ? mensajeAprobado(payload.programacion) : "Video descartado.");
+        router.refresh();
+      } finally {
+        setQuickLoadingId(null);
+      }
+    },
+    [currentEstado, router],
+  );
+
 
   async function generarCaption() {
     if (!selected) return;
@@ -233,13 +273,20 @@ export function MesaClient({
         <div className="max-h-[calc(100vh-230px)] overflow-y-auto rounded-2xl border border-white/[0.08] bg-white/[0.025]">
           {filteredRows.map((row) => {
             const url = videoEditado(row);
+            const canQuickReview = row.estado === "en_aprobacion";
+            const approveLoading = quickLoadingId === `${row.id}:aprobar`;
+            const discardLoading = quickLoadingId === `${row.id}:descartar`;
             return (
-              <button
+              <div
                 key={row.id}
-                onClick={() => openPopup(row)}
                 className="group grid w-full grid-cols-[58px_1fr] gap-3 border-b border-white/[0.06] p-3 text-left transition-all duration-150 last:border-b-0 hover:border-[#8B5CF6]/35 hover:bg-white/[0.055] sm:grid-cols-[68px_1fr_auto] sm:gap-4 sm:p-4"
               >
-                <div className="relative h-24 w-[54px] overflow-hidden rounded-xl bg-black ring-1 ring-white/[0.08] sm:h-28 sm:w-[63px]">
+                <button
+                  type="button"
+                  onClick={() => openPopup(row)}
+                  className="relative h-24 w-[54px] overflow-hidden rounded-xl bg-black text-left ring-1 ring-white/[0.08] sm:h-28 sm:w-[63px]"
+                  aria-label={`Revisar ${row.titulo ?? row.id}`}
+                >
                   {url ? (
                     <video
                       src={url}
@@ -258,9 +305,9 @@ export function MesaClient({
                       </svg>
                     </div>
                   </div>
-                </div>
+                </button>
 
-                <div className="min-w-0 self-center">
+                <button type="button" onClick={() => openPopup(row)} className="min-w-0 self-center text-left">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-semibold text-white/90 sm:text-base">{row.titulo ?? `#${row.id.slice(-6)}`}</p>
                     <span className={`badge px-2 py-0.5 text-[9px] sm:hidden ${ESTADO_BADGE[row.estado] ?? "badge"}`}>
@@ -280,9 +327,9 @@ export function MesaClient({
                   {(row.caption || row.frase_quemada) ? (
                     <p className="mt-2 line-clamp-1 text-xs text-white/35">{row.caption || row.frase_quemada}</p>
                   ) : null}
-                </div>
+                </button>
 
-                <div className="hidden min-w-32 self-center text-right sm:block">
+                <div className="col-span-2 flex flex-wrap items-center justify-end gap-2 self-center sm:col-span-1 sm:min-w-44">
                   <span className={`badge px-2.5 py-1 text-[9px] ${ESTADO_BADGE[row.estado] ?? "badge"}`}>
                     {row.estado === "aprobado" ? (row.programado_at ? "Programado" : "Sin programar") : estadoLabel(row.estado)}
                   </span>
@@ -291,11 +338,35 @@ export function MesaClient({
                       {new Date(row.programado_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   ) : null}
-                  <p className="mt-3 text-xs font-semibold text-[#8B5CF6] opacity-75 transition-opacity group-hover:opacity-100">
+                  {canQuickReview ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => quickAct(row, "aprobar")}
+                        disabled={Boolean(quickLoadingId)}
+                        className="rounded-lg border border-emerald-500/35 bg-emerald-500/12 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400/70 hover:bg-emerald-500/20 disabled:opacity-40"
+                      >
+                        {approveLoading ? "..." : "✓ Aprobar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => quickAct(row, "descartar")}
+                        disabled={Boolean(quickLoadingId)}
+                        className="rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:border-red-400/70 hover:bg-red-500/20 disabled:opacity-40"
+                      >
+                        {discardLoading ? "..." : "Descartar"}
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => openPopup(row)}
+                    className="text-xs font-semibold text-[#8B5CF6] opacity-75 transition-opacity group-hover:opacity-100"
+                  >
                     Revisar
-                  </p>
+                  </button>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
