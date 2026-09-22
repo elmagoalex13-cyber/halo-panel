@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, readdir, writeFile } from "fs/promises";
 import path from "path";
 
 const execFileAsync = promisify(execFile);
@@ -138,6 +138,63 @@ function escapeFilterValue(value) {
   return String(value).replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'");
 }
 
+async function detectFaceTextPlacement(inputPath, workDir, hdr = false) {
+  const framesDir = path.join(workDir, "face-frames");
+  await mkdir(framesDir, { recursive: true });
+
+  try {
+    const duration = await getDuration(inputPath);
+    const fps = duration > 0 ? Math.min(0.5, 3 / duration) : 0.25;
+    await execFileAsync(FFMPEG, [
+      "-y",
+      "-i", inputPath,
+      "-vf", `${buildVideoFilter({ hdr })},fps=${fps}`,
+      "-frames:v", "4",
+      path.join(framesDir, "frame_%02d.jpg"),
+    ], { maxBuffer: 1024 * 1024 * 4 });
+
+    const frames = (await readdir(framesDir))
+      .filter((file) => /\.(jpe?g|png)$/i.test(file))
+      .map((file) => path.join(framesDir, file));
+    if (!frames.length) return "center";
+
+    const script = `
+import json, sys
+try:
+    import cv2
+except Exception:
+    print(json.dumps({"placement": "center"}))
+    sys.exit(0)
+
+ys = []
+for image_path in sys.argv[1:]:
+    image = cv2.imread(image_path)
+    if image is None:
+        continue
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    faces = cascade.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=4, minSize=(80, 80))
+    if len(faces) == 0:
+        continue
+    x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+    ys.append((y + h / 2) / image.shape[0])
+
+if not ys:
+    placement = "center"
+else:
+    avg = sum(ys) / len(ys)
+    placement = "top" if avg > 0.54 else "center"
+print(json.dumps({"placement": placement}))
+`;
+
+    const { stdout } = await execFileAsync("python3", ["-c", script, ...frames], { maxBuffer: 1024 * 1024 });
+    const result = JSON.parse(stdout.trim() || "{}");
+    return result.placement === "top" ? "top" : "center";
+  } catch {
+    return "center";
+  }
+}
+
 /**
  * Tipo 1: hablando a cámara → subtítulos Whisper quemados.
  * @param {string} inputPath
@@ -178,6 +235,7 @@ export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {})
 export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   const hdr = await needsHdrTonemap(inputPath);
+  const placement = await detectFaceTextPlacement(inputPath, path.dirname(outputPath), hdr);
   const textPath = path.join(path.dirname(outputPath), "frase_tipo2.txt");
 
   let textFilter = "";
@@ -185,9 +243,9 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath }
     await writeFile(textPath, wrapText(frase), "utf-8");
     textFilter =
       `,drawtext=textfile='${escapeFilterValue(textPath)}':` +
-      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:` +
+      `font='DejaVu Sans\\,Noto Color Emoji\\,Noto Emoji\\,Symbola':` +
       `fontsize=72:fontcolor=white:borderw=4:bordercolor=black:line_spacing=10:` +
-      `x=(w-text_w)/2:y=h-text_h-220`;
+      `x=(w-text_w)/2:y=${placement === "top" ? "220" : "(h-text_h)/2"}`;
   }
 
   const vf = buildVideoFilter({ hdr }) + textFilter;
