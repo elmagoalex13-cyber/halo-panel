@@ -117,7 +117,7 @@ function pushEncodeArgs(args, { shortest = false, faststart = true } = {}) {
   if (shortest) args.push("-shortest");
 }
 
-function wrapText(text = "", maxChars = 22) {
+function wrapWords(text = "", maxChars = 24) {
   const words = String(text).trim().split(/\s+/).filter(Boolean);
   const lines = [];
   let line = "";
@@ -131,11 +131,64 @@ function wrapText(text = "", maxChars = 22) {
     }
   }
   if (line) lines.push(line);
-  return lines.slice(0, 5).join("\n");
+  return lines;
 }
 
 function escapeFilterValue(value) {
   return String(value).replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'");
+}
+
+function escapeAssText(value) {
+  return String(value)
+    .replace(/\{/g, "\\{")
+    .replace(/\}/g, "\\}")
+    .replace(/\r?\n/g, "\\N");
+}
+
+function formatAssTime(seconds) {
+  const sec = Math.max(0, seconds);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const cs = Math.round((sec % 1) * 100);
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
+}
+
+function layoutTipo2Text(text = "") {
+  const clean = String(text).replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+
+  const slashParts = clean.split(/\s+\/\s+/).map((part) => part.trim()).filter(Boolean);
+  if (slashParts.length >= 3) {
+    const [first, ...rest] = slashParts;
+    return [
+      ...wrapWords(first, 26),
+      ...rest.flatMap((part) => wrapWords(part, 28)),
+    ].slice(0, 6).join("\n");
+  }
+
+  return wrapWords(clean, 27).slice(0, 5).join("\n");
+}
+
+async function writeTipo2Ass(filePath, text, { placement = "center", duration = 60 } = {}) {
+  const alignment = placement === "top" ? 8 : 5;
+  const marginV = placement === "top" ? 210 : 0;
+  const body = layoutTipo2Text(text);
+  const ass = `[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Viral,Noto Sans,74,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4.5,0,${alignment},74,74,${marginV},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,${formatAssTime(duration)},Viral,,0,0,0,,${escapeAssText(body)}
+`;
+  await writeFile(filePath, ass, "utf-8");
 }
 
 async function detectFaceTextPlacement(inputPath, workDir, hdr = false) {
@@ -225,7 +278,7 @@ export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {})
 }
 
 /**
- * Tipo 2: caption/frase superpuesta (drawtext) + audio de referencia opcional.
+ * Tipo 2: caption/frase superpuesta + audio de referencia opcional.
  * @param {string} inputPath
  * @param {string} outputPath
  * @param {object} opts
@@ -236,19 +289,16 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath }
   await mkdir(path.dirname(outputPath), { recursive: true });
   const hdr = await needsHdrTonemap(inputPath);
   const placement = await detectFaceTextPlacement(inputPath, path.dirname(outputPath), hdr);
-  const textPath = path.join(path.dirname(outputPath), "frase_tipo2.txt");
+  const assPath = path.join(path.dirname(outputPath), "frase_tipo2.ass");
 
-  let textFilter = "";
+  const vfParts = [buildVideoFilter({ hdr })];
   if (frase?.trim()) {
-    await writeFile(textPath, wrapText(frase), "utf-8");
-    textFilter =
-      `,drawtext=textfile='${escapeFilterValue(textPath)}':` +
-      `font='DejaVu Sans\\,Noto Color Emoji\\,Noto Emoji\\,Symbola':` +
-      `fontsize=72:fontcolor=white:borderw=4:bordercolor=black:line_spacing=10:` +
-      `x=(w-text_w)/2:y=${placement === "top" ? "220" : "(h-text_h)/2"}`;
+    const duration = await getDuration(inputPath);
+    await writeTipo2Ass(assPath, frase, { placement, duration: Math.max(1, duration) });
+    vfParts.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
   }
 
-  const vf = buildVideoFilter({ hdr }) + textFilter;
+  const vf = vfParts.join(",");
 
   const args = ["-y", "-i", inputPath];
   if (audioRefPath) {
