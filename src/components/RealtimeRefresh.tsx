@@ -26,6 +26,10 @@ function canUseBrowserRealtime() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
 
+function hasOpenModal() {
+  return Boolean(document.querySelector('[role="dialog"], [aria-modal="true"]'));
+}
+
 /** Refresca los datos server-rendered del panel ante cambios de BD, con polling como respaldo. */
 export function RealtimeRefresh({ fallbackSegundos = 8 }: { fallbackSegundos?: number }) {
   const router = useRouter();
@@ -35,6 +39,7 @@ export function RealtimeRefresh({ fallbackSegundos = 8 }: { fallbackSegundos?: n
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState !== "visible") return;
+      if (hasOpenModal()) return;
       const now = Date.now();
       if (now - lastRefreshAt.current < 1200) return;
       lastRefreshAt.current = now;
