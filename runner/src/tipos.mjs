@@ -97,7 +97,7 @@ export async function procesarTipo(tipo, pieza) {
           audioRef = undefined;
         }
       }
-      await renderTipo2(rawPath, outPath, { frase: pieza.frase_quemada ?? "", audioRefPath: audioRef });
+      await renderTipo2(rawPath, outPath, { frase: pieza.frase_quemada ?? "", audioRefPath: audioRef, layout_json: pieza.layout_json ?? null });
       fraseQuemada = pieza.frase_quemada ?? "";
     } else if (tipo === 3) {
       const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "");

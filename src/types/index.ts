@@ -122,6 +122,7 @@ export type ReferenciaVideo = {
   estado_triaje?: EstadoTriaje;
   confirmado_at?: string | null;
   cuenta_categoria?: string | null;
+  layout_json?: unknown | null;
 };
 
 export type LibraryContent = {

@@ -170,9 +170,75 @@ function layoutTipo2Text(text = "") {
   return wrapWords(clean, 27).slice(0, 5).join("\n");
 }
 
+
+function hexToAssColor(hex = "#FFFFFF") {
+  const h = String(hex).replace("#", "").padEnd(6, "0");
+  const r = h.slice(0, 2);
+  const g = h.slice(2, 4);
+  const b = h.slice(4, 6);
+  return `&H00${b}${g}${r}`.toUpperCase();
+}
+
+function posicionToAssParams(posicion = "center") {
+  const map = {
+    "top-left":      { alignment: 7, marginV: 150 },
+    "top-center":    { alignment: 8, marginV: 150 },
+    "top-right":     { alignment: 9, marginV: 150 },
+    "mid-left":      { alignment: 4, marginV: 150 },
+    "mid-center":    { alignment: 5, marginV: 150 },
+    "center":        { alignment: 5, marginV: 150 },
+    "mid-right":     { alignment: 6, marginV: 150 },
+    "bottom-left":   { alignment: 1, marginV: 150 },
+    "bottom-center": { alignment: 2, marginV: 150 },
+    "bottom":        { alignment: 2, marginV: 150 },
+    "bottom-right":  { alignment: 3, marginV: 150 },
+  };
+  return map[posicion] ?? { alignment: 5, marginV: 150 };
+}
+
+/**
+ * Genera un fichero ASS con múltiples bloques de texto posicionados independientemente.
+ * Cada bloque tiene su propio estilo (color, negrita, posición).
+ */
+async function writeTipo2AssMulti(filePath, bloques, { duration = 60 } = {}) {
+  const styleLines = [];
+  const dialogueLines = [];
+
+  for (let i = 0; i < bloques.length; i++) {
+    const b = bloques[i];
+    const { alignment, marginV } = posicionToAssParams(b.posicion);
+    const color = hexToAssColor(b.color ?? "#FFFFFF");
+    const bold = b.negrita ? -1 : 0;
+    const fontsize = b.fontsize ?? 72;
+
+    styleLines.push(
+      `Style: Bloque${i},Noto Sans,${fontsize},${color},&H000000FF,&H00000000,&H80000000,${bold},0,0,0,100,100,0,0,1,4.5,0,${alignment},80,80,${marginV},1`
+    );
+    dialogueLines.push(
+      `Dialogue: 0,0:00:00.00,${formatAssTime(duration)},Bloque${i},,0,0,0,,${escapeAssText(b.texto ?? "")}`
+    );
+  }
+
+  const ass = `[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+${styleLines.join("\n")}
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+${dialogueLines.join("\n")}
+`;
+  await writeFile(filePath, ass, "utf-8");
+}
+
 async function writeTipo2Ass(filePath, text, { placement = "center", duration = 60 } = {}) {
-  const alignment = placement === "top" ? 8 : 5;
-  const marginV = placement === "top" ? 210 : 0;
+  const alignment = placement === "top" ? 8 : placement === "bottom" ? 2 : 5;
+  const marginV = 150;
   const body = layoutTipo2Text(text);
   const ass = `[Script Info]
 ScriptType: v4.00+
@@ -182,7 +248,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Viral,Noto Sans,74,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4.5,0,${alignment},74,74,${marginV},1
+Style: Viral,Noto Sans,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4.5,0,${alignment},74,74,${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -236,13 +302,13 @@ if not ys:
     placement = "center"
 else:
     avg = sum(ys) / len(ys)
-    placement = "top" if avg > 0.54 else "center"
+    placement = "bottom" if avg < 0.5 else "top"
 print(json.dumps({"placement": placement}))
 `;
 
     const { stdout } = await execFileAsync("python3", ["-c", script, ...frames], { maxBuffer: 1024 * 1024 });
     const result = JSON.parse(stdout.trim() || "{}");
-    return result.placement === "top" ? "top" : "center";
+    return ["top", "bottom", "center"].includes(result.placement) ? result.placement : "center";
   } catch {
     return "center";
   }
@@ -284,15 +350,24 @@ export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {})
  * @param {object} opts
  * @param {string} [opts.frase] - Texto a quemar en el vídeo
  * @param {string} [opts.audioRefPath] - Ruta del audio de referencia (si existe)
+ * @param {{ bloques?: Array<{ texto?: string; posicion?: string; color?: string; negrita?: boolean; fontsize?: number }> }} [opts.layout_json]
  */
-export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath } = {}) {
+export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath, layout_json } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   const hdr = await needsHdrTonemap(inputPath);
-  const placement = await detectFaceTextPlacement(inputPath, path.dirname(outputPath), hdr);
   const assPath = path.join(path.dirname(outputPath), "frase_tipo2.ass");
 
   const vfParts = [buildVideoFilter({ hdr })];
-  if (frase?.trim()) {
+  const hasLayoutJson = Array.isArray(layout_json?.bloques) && layout_json.bloques.length > 0;
+
+  if (hasLayoutJson) {
+    // layout_json explícito: genera múltiples bloques posicionados
+    const duration = await getDuration(inputPath);
+    await writeTipo2AssMulti(assPath, layout_json.bloques, { duration: Math.max(1, duration) });
+    vfParts.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
+  } else if (frase?.trim()) {
+    // Fallback: un bloque centrado con detección de cara (comportamiento anterior)
+    const placement = await detectFaceTextPlacement(inputPath, path.dirname(outputPath), hdr);
     const duration = await getDuration(inputPath);
     await writeTipo2Ass(assPath, frase, { placement, duration: Math.max(1, duration) });
     vfParts.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);

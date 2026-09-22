@@ -10,6 +10,26 @@ export function visionDisponible() {
   return Boolean(config.openaiKey);
 }
 
+export async function analizarLayoutTexto(videoPath) {
+  const framesDir = path.join(path.dirname(videoPath), "layout-frames");
+  await rm(framesDir, { recursive: true, force: true });
+  await mkdir(framesDir, { recursive: true });
+
+  try {
+    const frames = await extraerFramesLayout(videoPath, framesDir);
+    for (const frame of frames) {
+      const bloques = await leerBloquesConTesseract(frame);
+      if (bloques.length) return { version: 1, origen: "tesseract", bloques };
+    }
+    return null;
+  } catch (err) {
+    console.warn(`[vision] no se pudo extraer layout OCR de ${path.basename(videoPath)}: ${err.message}`);
+    return null;
+  } finally {
+    await rm(framesDir, { recursive: true, force: true });
+  }
+}
+
 export async function analizarFraseMusicaVisual(videoPath, contexto = {}) {
   if (!visionDisponible()) return null;
 
@@ -29,6 +49,104 @@ export async function analizarFraseMusicaVisual(videoPath, contexto = {}) {
   } finally {
     await rm(framesDir, { recursive: true, force: true });
   }
+}
+
+async function extraerFramesLayout(videoPath, outputDir) {
+  const pattern = path.join(outputDir, "layout-%02d.png");
+  await execFileAsync(config.ffmpeg, [
+    "-y",
+    "-i", videoPath,
+    "-vf", "fps=1/2,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+    "-frames:v", "4",
+    pattern,
+  ], { maxBuffer: 1024 * 1024 * 8 });
+
+  const files = await readdir(outputDir);
+  return files
+    .filter((file) => /^layout-\d+\.png$/.test(file))
+    .sort()
+    .map((file) => path.join(outputDir, file));
+}
+
+async function leerBloquesConTesseract(imagePath) {
+  let stdout = "";
+  try {
+    ({ stdout } = await execFileAsync("tesseract", [
+      imagePath,
+      "stdout",
+      "--psm", "6",
+      "-l", "spa+eng",
+      "tsv",
+    ], { maxBuffer: 1024 * 1024 * 4 }));
+  } catch {
+    return [];
+  }
+
+  const rows = stdout
+    .split(/\r?\n/)
+    .slice(1)
+    .map((line) => line.split("\t"))
+    .filter((cols) => cols.length >= 12)
+    .map((cols) => ({
+      level: Number(cols[0]),
+      block: cols[2],
+      par: cols[3],
+      line: cols[4],
+      left: Number(cols[6]),
+      top: Number(cols[7]),
+      width: Number(cols[8]),
+      height: Number(cols[9]),
+      conf: Number(cols[10]),
+      text: cols.slice(11).join("\t").trim(),
+    }))
+    .filter((row) => row.level === 5 && row.conf >= 35 && row.text);
+
+  const lineas = new Map();
+  for (const row of rows) {
+    const key = `${row.block}:${row.par}:${row.line}`;
+    const actual = lineas.get(key) ?? { words: [], left: row.left, top: row.top, right: row.left + row.width, bottom: row.top + row.height };
+    actual.words.push(row.text);
+    actual.left = Math.min(actual.left, row.left);
+    actual.top = Math.min(actual.top, row.top);
+    actual.right = Math.max(actual.right, row.left + row.width);
+    actual.bottom = Math.max(actual.bottom, row.top + row.height);
+    lineas.set(key, actual);
+  }
+
+  const bloques = Array.from(lineas.values())
+    .map((linea) => ({
+      texto: linea.words.join(" ").replace(/\s+/g, " ").trim(),
+      posicion: posicionDesdeCaja(linea),
+      color: "#FFFFFF",
+      negrita: true,
+      fontsize: 72,
+    }))
+    .filter((bloque) => bloque.texto.length >= 3);
+
+  return unirBloquesCercanos(bloques).slice(0, 5);
+}
+
+function posicionDesdeCaja({ left, top, right, bottom }) {
+  const cx = (left + right) / 2;
+  const cy = (top + bottom) / 2;
+  const x = cx < 360 ? "left" : cx > 720 ? "right" : "center";
+  if (cy < 640) return `top-${x}`;
+  if (cy > 1280) return `bottom-${x}`;
+  return x === "center" ? "center" : `mid-${x}`;
+}
+
+function unirBloquesCercanos(bloques) {
+  if (bloques.length <= 1) return bloques;
+  const grupos = [];
+  for (const bloque of bloques) {
+    const ultimo = grupos.at(-1);
+    if (ultimo && ultimo.posicion === bloque.posicion && ultimo.texto.length + bloque.texto.length < 180) {
+      ultimo.texto = `${ultimo.texto}\n${bloque.texto}`;
+    } else {
+      grupos.push({ ...bloque });
+    }
+  }
+  return grupos;
 }
 
 async function extraerFrames(videoPath, outputDir) {

@@ -5,7 +5,7 @@
 export async function asignarFrase(supabase, pieza) {
   const { data, error } = await supabase
     .from("banco_frases_canciones")
-    .select("id, frase, cancion_nombre, cancion_artista, veces_usada, puntuacion")
+    .select("id, frase, cancion_nombre, cancion_artista, veces_usada, puntuacion, layout_json")
     .eq("activa", true)
     .order("veces_usada", { ascending: true })
     .order("puntuacion", { ascending: false })
@@ -16,9 +16,9 @@ export async function asignarFrase(supabase, pieza) {
   const notas = f.cancion_nombre && f.cancion_nombre !== "Sin cancion" ? `Audio sugerido: ${f.cancion_nombre}${f.cancion_artista ? " - " + f.cancion_artista : ""}` : null;
   await supabase
     .from("library_content")
-    .update({ frase_quemada: f.frase, ...(notas ? { notas_editor: notas } : {}) })
+    .update({ frase_quemada: f.frase, layout_json: f.layout_json ?? null, ...(notas ? { notas_editor: notas } : {}) })
     .eq("id", pieza.id);
   await supabase.from("banco_frases_canciones").update({ veces_usada: (f.veces_usada ?? 0) + 1 }).eq("id", f.id);
   await supabase.from("banco_frases_usos").insert({ frase_id: f.id, cuenta_id: pieza.cuenta_id ?? null, pieza_id: pieza.id });
-  return f.frase;
+  return { frase: f.frase, layout_json: f.layout_json ?? null };
 }

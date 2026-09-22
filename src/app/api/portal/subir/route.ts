@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
       recibido_at: ahora,
       reparto_at: ahora,
       frase_quemada: frase?.frase ?? "",
+      layout_json: frase?.layout_json ?? null,
       notas_editor: [instrucciones, frase?.nota].filter(Boolean).join(" | ") || null,
       caption: "",
       correcciones: "",

@@ -15,7 +15,7 @@ import { config } from "./config.mjs";
 import { descargarUrl } from "./descarga.mjs";
 import { publicUrl, uploadToR2 } from "./r2.mjs";
 import { reelsDeCuenta } from "./instagram.mjs";
-import { analizarFraseMusicaVisual, visionDisponible } from "./vision.mjs";
+import { analizarFraseMusicaVisual, analizarLayoutTexto, visionDisponible } from "./vision.mjs";
 
 export function mediana(valores) {
   if (!valores.length) return 0;
@@ -123,9 +123,11 @@ async function subirReel(username, reel, { categoria = "general" } = {}) {
   const mp4 = path.join(dir, `${reel.codigo}.mp4`);
   let thumbUrl = null;
   let vision = null;
+  let layout = null;
   try {
     await descargarUrl(reel.videoUrl, mp4);
     if (categoria === "frases") {
+      layout = await analizarLayoutTexto(mp4);
       vision = await analizarFraseMusicaVisual(mp4, {
         descripcion: reel.descripcion,
         cancion: reel.audio?.titulo,
@@ -151,7 +153,7 @@ async function subirReel(username, reel, { categoria = "general" } = {}) {
   } finally {
     await rm(mp4, { force: true });
   }
-  return { videoKey: `${base}.mp4`, thumbUrl, vision };
+  return { videoKey: `${base}.mp4`, thumbUrl, vision, layout };
 }
 
 /**
@@ -173,7 +175,7 @@ export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
   for (const reel of virales) {
     if (yaGuardados.has(reel.codigo)) continue;
     try {
-      const { videoKey, thumbUrl, vision, descartadoPorVision } = await subirReel(username, reel, { categoria });
+      const { videoKey, thumbUrl, vision, layout, descartadoPorVision } = await subirReel(username, reel, { categoria });
       if (descartadoPorVision) {
         console.log(`[scraper] @${username}/${reel.codigo}: descartado por vision (${vision?.motivo ?? "sin motivo"})`);
         continue;
@@ -193,6 +195,7 @@ export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
         likes: reel.likes,
         tags,
         frase_detectada: frase,
+        layout_json: layout,
         formato_propuesto: categoria === "frases" ? "tipo2" : null,
         formato_confirmado: categoria === "frases" ? "tipo2" : null,
         fecha_publicacion: reel.fecha ? new Date(reel.fecha).toISOString() : null,

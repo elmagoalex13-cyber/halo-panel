@@ -129,6 +129,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
         cancion_artista: m.artista ?? "",
         audio_id_ig: m.audioId ?? "",
         puntuacion: 7,
+        layout_json: v.layout_json ?? null,
       }),
     });
     if (res.ok) {

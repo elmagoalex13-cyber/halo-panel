@@ -3,21 +3,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /** La BD exige cancion_nombre; las frases sin cancion usan este valor. */
 export const SIN_CANCION = "Sin cancion";
 
-export type FraseElegida = { id: string; frase: string; nota: string | null };
+export type FraseElegida = { id: string; frase: string; nota: string | null; layout_json: unknown | null };
 
 /** Frase activa menos usada del banco (a igualdad, la de mayor puntuacion). */
 export async function elegirFrase(supabase: SupabaseClient): Promise<FraseElegida | null> {
   const { data, error } = await supabase
     .from("banco_frases_canciones")
-    .select("id, frase, cancion_nombre, cancion_artista")
+    .select("id, frase, cancion_nombre, cancion_artista, layout_json")
     .eq("activa", true)
     .order("veces_usada", { ascending: true })
     .order("puntuacion", { ascending: false })
     .limit(1);
   if (error || !data?.length) return null;
-  const f = data[0] as { id: string; frase: string; cancion_nombre: string | null; cancion_artista: string | null };
+  const f = data[0] as { id: string; frase: string; cancion_nombre: string | null; cancion_artista: string | null; layout_json: unknown | null };
   const nota = f.cancion_nombre && f.cancion_nombre !== SIN_CANCION ? `Audio sugerido: ${f.cancion_nombre}${f.cancion_artista ? " - " + f.cancion_artista : ""}` : null;
-  return { id: f.id, frase: f.frase, nota };
+  return { id: f.id, frase: f.frase, nota, layout_json: f.layout_json ?? null };
 }
 
 export async function registrarUsoFrase(supabase: SupabaseClient, fraseId: string, piezaId: string, cuentaId: string | null) {

@@ -12,6 +12,7 @@ type Cuerpo = {
   audio_id_ig?: string | null;
   puntuacion?: number;
   activa?: boolean;
+  layout_json?: unknown | null;
 };
 
 function limpiar(b: Cuerpo) {
@@ -22,6 +23,7 @@ function limpiar(b: Cuerpo) {
   if (b.audio_id_ig !== undefined) fila.audio_id_ig = b.audio_id_ig?.trim() || null;
   if (b.puntuacion !== undefined) fila.puntuacion = Math.min(10, Math.max(0, Math.round(Number(b.puntuacion) || 0)));
   if (b.activa !== undefined) fila.activa = Boolean(b.activa);
+  if (b.layout_json !== undefined) fila.layout_json = b.layout_json && typeof b.layout_json === "object" ? b.layout_json : null;
   return fila;
 }
 

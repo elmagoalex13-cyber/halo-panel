@@ -54,7 +54,9 @@ async function procesarPieza(pieza) {
   console.log(`[runner] pieza ${pieza.id} tipo ${tipo}`);
   try {
     if (tipo === 2 && !pieza.frase_quemada) {
-      pieza.frase_quemada = (await asignarFrase(supabase, pieza)) ?? "";
+      const asignado = await asignarFrase(supabase, pieza);
+      pieza.frase_quemada = asignado?.frase ?? "";
+      pieza.layout_json = asignado?.layout_json ?? null;
     }
     const { outKey, rawKey, fraseQuemada } = await procesarTipo(tipo, pieza);
     const ahora = new Date().toISOString();
@@ -91,7 +93,7 @@ async function ciclo() {
     await liberarAtascadas();
     const { data: piezas, error } = await supabase
       .from("library_content")
-      .select("id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada")
+      .select("id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada, layout_json")
       .eq("estado", "editando")
       .eq("estado_procesamiento", "pendiente")
       .order("recibido_at", { ascending: true })
