@@ -2,14 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { Archive, CheckCircle2, Clock3, Mail, MessageCircle, Phone, Save, Trash2, UserRound } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { Lead, LeadEstado } from "@/types";
 
-const TABS: Array<{ estado: LeadEstado; label: string }> = [
-  { estado: "nuevo", label: "Nuevos" },
-  { estado: "contactado", label: "Contactados" },
-  { estado: "captado", label: "Captados" },
-  { estado: "futuro", label: "Para futuro" },
-  { estado: "descartado", label: "Descartados" },
+const TABS: Array<{ estado: LeadEstado; label: string; hint: string; icon: LucideIcon; tone: "violet" | "cyan" | "emerald" | "amber" | "red" }> = [
+  { estado: "nuevo", label: "Nuevos", hint: "Sin tocar", icon: Clock3, tone: "violet" },
+  { estado: "contactado", label: "Contactados", hint: "Ya hablaste", icon: MessageCircle, tone: "cyan" },
+  { estado: "captado", label: "Captados", hint: "Se quedan", icon: CheckCircle2, tone: "emerald" },
+  { estado: "futuro", label: "Para futuro", hint: "Interesa luego", icon: Archive, tone: "amber" },
+  { estado: "descartado", label: "Descartados", hint: "No encaja", icon: Trash2, tone: "red" },
 ];
 
 const ESTADO_LABEL: Record<LeadEstado, string> = {
@@ -45,6 +46,37 @@ function statusClass(estado: LeadEstado) {
   if (estado === "futuro") return "badge-clasificando";
   if (estado === "descartado" || estado === "eliminado") return "badge-rechazado";
   return "badge-recibido";
+}
+
+function tabTone(tone: "violet" | "cyan" | "emerald" | "amber" | "red", active: boolean) {
+  const tones = {
+    violet: active
+      ? "border-[#8B5CF6]/70 bg-[#8B5CF6]/18 text-white shadow-[0_0_28px_rgba(139,92,246,0.18)]"
+      : "border-[#8B5CF6]/18 bg-[#8B5CF6]/[0.04] text-white/65 hover:bg-[#8B5CF6]/[0.08]",
+    cyan: active
+      ? "border-cyan-400/60 bg-cyan-400/15 text-white shadow-[0_0_28px_rgba(34,211,238,0.14)]"
+      : "border-cyan-400/15 bg-cyan-400/[0.035] text-white/65 hover:bg-cyan-400/[0.07]",
+    emerald: active
+      ? "border-emerald-400/60 bg-emerald-400/15 text-white shadow-[0_0_28px_rgba(52,211,153,0.14)]"
+      : "border-emerald-400/15 bg-emerald-400/[0.035] text-white/65 hover:bg-emerald-400/[0.07]",
+    amber: active
+      ? "border-amber-300/60 bg-amber-300/15 text-white shadow-[0_0_28px_rgba(252,211,77,0.12)]"
+      : "border-amber-300/15 bg-amber-300/[0.035] text-white/65 hover:bg-amber-300/[0.07]",
+    red: active
+      ? "border-red-400/60 bg-red-400/15 text-white shadow-[0_0_28px_rgba(248,113,113,0.12)]"
+      : "border-red-400/15 bg-red-400/[0.035] text-white/65 hover:bg-red-400/[0.07]",
+  };
+  return tones[tone];
+}
+
+function iconTone(tone: "violet" | "cyan" | "emerald" | "amber" | "red") {
+  return {
+    violet: "bg-[#8B5CF6]/18 text-[#C4B5FD]",
+    cyan: "bg-cyan-400/15 text-cyan-200",
+    emerald: "bg-emerald-400/15 text-emerald-200",
+    amber: "bg-amber-300/15 text-amber-100",
+    red: "bg-red-400/15 text-red-200",
+  }[tone];
 }
 
 export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
@@ -105,32 +137,50 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
           <p className="text-sm text-[color:var(--text-secondary)]">Recepcion de formularios desde la web</p>
           <h1 className="mt-2 font-display text-4xl font-semibold text-white">Leads</h1>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex">
-          {TABS.map((tab) => (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const selected = active === tab.estado;
+            return (
             <button
               key={tab.estado}
               type="button"
               onClick={() => setActive(tab.estado)}
-              className={`min-h-11 rounded-xl border px-3 py-2 text-left text-sm transition ${
-                active === tab.estado
-                  ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/15 text-white"
-                  : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:bg-white/[0.06]"
-              }`}
+              className={`min-h-20 rounded-2xl border p-3 text-left transition ${tabTone(tab.tone, selected)}`}
             >
-              <span className="block font-semibold">{tab.label}</span>
-              <span className="text-xs text-white/40">{counts[tab.estado]} pendientes</span>
+              <span className="flex items-center justify-between gap-3">
+                <span className={`grid h-8 w-8 place-items-center rounded-xl ${iconTone(tab.tone)}`}>
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="font-display text-2xl font-semibold text-white">{counts[tab.estado]}</span>
+              </span>
+              <span className="mt-2 block font-semibold">{tab.label}</span>
+              <span className="mt-0.5 block text-xs text-white/40">{tab.hint}</span>
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        {TABS.map((tab) => (
-          <div key={tab.estado} className="glass-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/35">{tab.label}</p>
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          const total = Math.max(1, leads.filter((lead) => lead.estado !== "eliminado").length);
+          const pct = Math.round((counts[tab.estado] / total) * 100);
+          return (
+          <div key={tab.estado} className={`rounded-2xl border p-4 ${tabTone(tab.tone, active === tab.estado)}`}>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/35">{tab.label}</p>
+              <Icon className="h-4 w-4 text-white/45" />
+            </div>
             <p className="mt-2 font-display text-3xl font-semibold text-white">{counts[tab.estado]}</p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+              <div className="h-full rounded-full bg-white/60" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="mt-2 text-[11px] text-white/35">{pct}% del total</p>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-6 space-y-4">

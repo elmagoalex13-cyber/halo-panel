@@ -34,6 +34,13 @@ const ESTADO_BADGE: Record<string, string> = {
 };
 
 const videoUrl = urlR2;
+const TIPO_FILTROS = [
+  { value: "todos", label: "Todos los tipos" },
+  { value: "tipo1", label: "Hablando" },
+  { value: "tipo2", label: "Frases + musica" },
+  { value: "tipo3", label: "Parar imagen" },
+  { value: "tipo4", label: "Referencias" },
+] as const;
 
 type Programacion =
   | { ok: true; programado_at: string; trial: boolean; cuenta: string }
@@ -69,11 +76,13 @@ export function MesaClient({
   const [originalOpen, setOriginalOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [modeloFiltro, setModeloFiltro] = useState("todos");
+  const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [changeLoading, setChangeLoading] = useState(false);
   const [changeVideoError, setChangeVideoError] = useState<string | null>(null);
   const [captionLoading, setCaptionLoading] = useState(false);
   const [captionError, setCaptionError] = useState<string | null>(null);
   const [quickLoadingId, setQuickLoadingId] = useState<string | null>(null);
+  const [quickRehacer, setQuickRehacer] = useState<{ row: VideoRow; nota: string } | null>(null);
 
   useEffect(() => {
     setRows(initialRows);
@@ -85,8 +94,13 @@ export function MesaClient({
 
   const modeloNombres = useMemo(() => Array.from(new Set(rows.map((row) => row.modelo_nombre))).sort(), [rows]);
   const filteredRows = useMemo(
-    () => (modeloFiltro === "todos" ? rows : rows.filter((row) => row.modelo_nombre === modeloFiltro)),
-    [rows, modeloFiltro],
+    () =>
+      rows.filter((row) => {
+        const modeloOk = modeloFiltro === "todos" || row.modelo_nombre === modeloFiltro;
+        const tipoOk = tipoFiltro === "todos" || row.tipo_video === tipoFiltro;
+        return modeloOk && tipoOk;
+      }),
+    [rows, modeloFiltro, tipoFiltro],
   );
 
   const closePopup = useCallback(() => {
@@ -159,7 +173,7 @@ export function MesaClient({
   );
 
   const quickAct = useCallback(
-    async (row: VideoRow, accion: "aprobar" | "descartar") => {
+    async (row: VideoRow, accion: "aprobar" | "descartar" | "rehacer", notaRehacer?: string) => {
       setQuickLoadingId(`${row.id}:${accion}`);
       setActionMessage(null);
       try {
@@ -170,7 +184,7 @@ export function MesaClient({
             id: row.id,
             accion,
             caption: row.caption,
-            correcciones: row.correcciones,
+            correcciones: accion === "rehacer" ? (notaRehacer ?? row.correcciones ?? "") : row.correcciones,
             frase_quemada: row.frase_quemada,
           }),
         });
@@ -182,13 +196,15 @@ export function MesaClient({
         }
 
         const payload = (await res.json()) as { estado?: string; programacion?: Programacion };
-        const nuevoEstado = payload.estado ?? (accion === "aprobar" ? "aprobado" : "rechazado");
+        const nuevoEstado = payload.estado ?? (accion === "aprobar" ? "aprobado" : accion === "rehacer" ? "editando" : "rechazado");
         setRows((prev) =>
           nuevoEstado === currentEstado
             ? prev.map((item) => (item.id === row.id ? { ...item, estado: nuevoEstado } : item))
             : prev.filter((item) => item.id !== row.id),
         );
-        setActionMessage(accion === "aprobar" ? mensajeAprobado(payload.programacion) : "Video descartado.");
+        setActionMessage(
+          accion === "aprobar" ? mensajeAprobado(payload.programacion) : accion === "rehacer" ? "Video enviado a Rehacer IA." : "Video descartado.",
+        );
         router.refresh();
       } finally {
         setQuickLoadingId(null);
@@ -262,6 +278,17 @@ export function MesaClient({
               </option>
             ))}
           </select>
+          <select
+            value={tipoFiltro}
+            onChange={(event) => setTipoFiltro(event.target.value)}
+            className="input-base min-w-40 py-1.5 text-xs"
+          >
+            {TIPO_FILTROS.map((tipo) => (
+              <option key={tipo.value} value={tipo.value}>
+                {tipo.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -276,6 +303,7 @@ export function MesaClient({
             const canQuickReview = row.estado === "en_aprobacion";
             const approveLoading = quickLoadingId === `${row.id}:aprobar`;
             const discardLoading = quickLoadingId === `${row.id}:descartar`;
+            const remakeLoading = quickLoadingId === `${row.id}:rehacer`;
             return (
               <div
                 key={row.id}
@@ -355,6 +383,14 @@ export function MesaClient({
                         className="rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:border-red-400/70 hover:bg-red-500/20 disabled:opacity-40"
                       >
                         {discardLoading ? "..." : "Descartar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickRehacer({ row, nota: row.correcciones ?? "" })}
+                        disabled={Boolean(quickLoadingId)}
+                        className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:border-amber-300/70 hover:bg-amber-400/20 disabled:opacity-40"
+                      >
+                        {remakeLoading ? "..." : "Rehacer"}
                       </button>
                     </>
                   ) : null}
@@ -668,6 +704,63 @@ export function MesaClient({
                   x Descartar <kbd className="rounded bg-red-900/40 px-1.5 text-[9px] font-normal">X</kbd>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {quickRehacer ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+          <div className="w-full max-w-lg rounded-2xl border border-white/[0.1] bg-[#101018] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-display text-lg font-semibold text-white">Rehacer video</p>
+                <p className="mt-1 text-xs text-white/40">{quickRehacer.row.titulo ?? quickRehacer.row.id}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickRehacer(null)}
+                className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-white/45 hover:text-white"
+                aria-label="Cerrar"
+              >
+                x
+              </button>
+            </div>
+            <label className="mt-4 block text-[10px] font-semibold uppercase tracking-widest text-white/35">
+              Nota opcional para el runner
+            </label>
+            <textarea
+              value={quickRehacer.nota}
+              onChange={(event) => setQuickRehacer((current) => current ? { ...current, nota: event.target.value } : current)}
+              rows={4}
+              className="input-base mt-2 w-full resize-none text-sm"
+              placeholder="Ej: subir el texto, cambiar frase, recortar mejor, usar otra versión..."
+            />
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                disabled={Boolean(quickLoadingId)}
+                onClick={async () => {
+                  const row = quickRehacer.row;
+                  setQuickRehacer(null);
+                  await quickAct(row, "rehacer", "");
+                }}
+                className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07] disabled:opacity-40"
+              >
+                Rehacer sin nota
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(quickLoadingId)}
+                onClick={async () => {
+                  const { row, nota } = quickRehacer;
+                  setQuickRehacer(null);
+                  await quickAct(row, "rehacer", nota);
+                }}
+                className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400 disabled:opacity-40"
+              >
+                Enviar con nota
+              </button>
             </div>
           </div>
         </div>
