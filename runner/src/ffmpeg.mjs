@@ -117,6 +117,27 @@ function pushEncodeArgs(args, { shortest = false, faststart = true } = {}) {
   if (shortest) args.push("-shortest");
 }
 
+function wrapText(text = "", maxChars = 22) {
+  const words = String(text).trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && next.length > maxChars) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 5).join("\n");
+}
+
+function escapeFilterValue(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'");
+}
+
 /**
  * Tipo 1: hablando a cámara → subtítulos Whisper quemados.
  * @param {string} inputPath
@@ -157,14 +178,17 @@ export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {})
 export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   const hdr = await needsHdrTonemap(inputPath);
+  const textPath = path.join(path.dirname(outputPath), "frase_tipo2.txt");
 
-  const textFilter = frase
-    ? `,drawtext=text='${frase.replace(/'/g, "\\'").replace(/:/g, "\\:")}':` +
+  let textFilter = "";
+  if (frase?.trim()) {
+    await writeFile(textPath, wrapText(frase), "utf-8");
+    textFilter =
+      `,drawtext=textfile='${escapeFilterValue(textPath)}':` +
       `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:` +
-      `fontsize=72:fontcolor=white:borderw=4:bordercolor=black:` +
-      `x=(w-text_w)/2:y=h-text_h-120:` +
-      `enable='between(t,0,duration)'`
-    : "";
+      `fontsize=72:fontcolor=white:borderw=4:bordercolor=black:line_spacing=10:` +
+      `x=(w-text_w)/2:y=h-text_h-220`;
+  }
 
   const vf = buildVideoFilter({ hdr }) + textFilter;
 
