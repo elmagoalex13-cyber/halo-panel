@@ -74,6 +74,7 @@ export function ModelosClient({
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [cuentaDrafts, setCuentaDrafts] = useState<Record<string, CuentaDraft>>({});
+  const [cuentaErrors, setCuentaErrors] = useState<Record<string, string>>({});
   const [metricoolModal, setMetricoolModal] = useState<CuentaInstagram | null>(null);
   const [metricoolBlogId, setMetricoolBlogId] = useState("");
   const [metricoolSaving, setMetricoolSaving] = useState(false);
@@ -152,6 +153,7 @@ export function ModelosClient({
     const draft = cuentaDrafts[modeloId] ?? { red_social: "instagram", username: "" };
     const username = draft.username.trim();
     if (!username) return;
+    setCuentaErrors((prev) => ({ ...prev, [modeloId]: "" }));
     const res = await fetch(`/api/modelos/${modeloId}/cuentas`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -161,6 +163,8 @@ export function ModelosClient({
     if (res.ok && payload.data) {
       setCuentas((prev) => [...prev, payload.data as CuentaInstagram]);
       setCuentaDrafts((prev) => ({ ...prev, [modeloId]: { ...draft, username: "" } }));
+    } else {
+      setCuentaErrors((prev) => ({ ...prev, [modeloId]: payload.error ?? "No se pudo añadir la cuenta" }));
     }
   }
 
@@ -393,6 +397,7 @@ export function ModelosClient({
                     Anadir
                   </button>
                 </div>
+                {cuentaErrors[modelo.id] ? <p className="mt-1.5 text-xs text-red-300">{cuentaErrors[modelo.id]}</p> : null}
               </div>
 
               {modelo.portal_token ? (
