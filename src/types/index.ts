@@ -30,11 +30,13 @@ export type Modelo = {
 };
 
 export type MetricoolEstado = "conectada" | "no_conectada" | "error";
+export type SocialNetwork = "instagram" | "twitter" | "tiktok";
 
 export type CuentaInstagram = {
   id: string;
   modelo_id: string;
   modelo_nombre?: string;
+  red_social?: SocialNetwork;
   username: string;
   url?: string | null;
   activa: boolean;

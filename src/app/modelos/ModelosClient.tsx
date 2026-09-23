@@ -9,7 +9,7 @@ import { CreatorConfigSummary } from "./CreatorConfigSummary";
 import { CreatorConfigWizard } from "./CreatorConfigWizard";
 import { PortalAccesoButton } from "./PortalAccesoButton";
 import { emptyCreatorConfig } from "@/lib/creatorConfig";
-import type { CreatorConfig, CuentaInstagram, MetricoolEstado, Modelo } from "@/types";
+import type { CreatorConfig, CuentaInstagram, MetricoolEstado, Modelo, SocialNetwork } from "@/types";
 
 const METRICOOL_DOT: Record<MetricoolEstado, string> = {
   conectada: "bg-emerald-400",
@@ -26,6 +26,33 @@ const METRICOOL_TITLE: Record<MetricoolEstado, string> = {
 type ModalState = { mode: "create" } | { mode: "edit"; modelo: Modelo } | null;
 
 const emptyForm = { nombre: "", nombre_real: "", email: "", telefono: "", notas: "", porcentaje_comision: 70 };
+
+const SOCIAL_LABEL: Record<SocialNetwork, string> = {
+  instagram: "Instagram",
+  twitter: "Twitter / X",
+  tiktok: "TikTok",
+};
+
+const SOCIAL_PREFIX: Record<SocialNetwork, string> = {
+  instagram: "@",
+  twitter: "@",
+  tiktok: "@",
+};
+
+const SOCIAL_PLACEHOLDER: Record<SocialNetwork, string> = {
+  instagram: "usuario_ig",
+  twitter: "usuario_x",
+  tiktok: "usuario_tiktok",
+};
+
+type CuentaDraft = { red_social: SocialNetwork; username: string };
+
+function redCuenta(cuenta: CuentaInstagram): SocialNetwork {
+  const url = cuenta.url ?? "";
+  if (/tiktok\.com/i.test(url)) return "tiktok";
+  if (/(twitter\.com|x\.com)/i.test(url)) return "twitter";
+  return cuenta.red_social ?? "instagram";
+}
 
 export function ModelosClient({
   modelos: initialModelos,
@@ -46,7 +73,7 @@ export function ModelosClient({
   const [modal, setModal] = useState<ModalState>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [cuentaDrafts, setCuentaDrafts] = useState<Record<string, string>>({});
+  const [cuentaDrafts, setCuentaDrafts] = useState<Record<string, CuentaDraft>>({});
   const [metricoolModal, setMetricoolModal] = useState<CuentaInstagram | null>(null);
   const [metricoolBlogId, setMetricoolBlogId] = useState("");
   const [metricoolSaving, setMetricoolSaving] = useState(false);
@@ -122,17 +149,18 @@ export function ModelosClient({
   }
 
   async function addCuenta(modeloId: string) {
-    const username = (cuentaDrafts[modeloId] ?? "").trim();
+    const draft = cuentaDrafts[modeloId] ?? { red_social: "instagram", username: "" };
+    const username = draft.username.trim();
     if (!username) return;
     const res = await fetch(`/api/modelos/${modeloId}/cuentas`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username }),
+      body: JSON.stringify({ username, red_social: draft.red_social }),
     });
     const payload = await res.json();
     if (res.ok && payload.data) {
       setCuentas((prev) => [...prev, payload.data as CuentaInstagram]);
-      setCuentaDrafts((prev) => ({ ...prev, [modeloId]: "" }));
+      setCuentaDrafts((prev) => ({ ...prev, [modeloId]: { ...draft, username: "" } }));
     }
   }
 
@@ -217,6 +245,7 @@ export function ModelosClient({
         {modelos.map((modelo) => {
           const pipelineCount = pipelineByModelo[modelo.id] ?? 0;
           const cuentasModelo = cuentasPorModelo[modelo.id] ?? [];
+          const draftCuenta = cuentaDrafts[modelo.id] ?? { red_social: "instagram" as SocialNetwork, username: "" };
           const config = creatorConfigs[modelo.id];
           const isExpanded = expandedId === modelo.id;
 
@@ -247,7 +276,7 @@ export function ModelosClient({
 
               <div className="mt-6 grid grid-cols-2 gap-3">
                 <Metric label="Pipeline" value={pipelineCount.toString()} />
-                <Metric label="Cuentas IG" value={cuentasModelo.length.toString()} />
+                <Metric label="Redes" value={cuentasModelo.length.toString()} />
               </div>
 
               <div className="mt-5">
@@ -289,14 +318,15 @@ export function ModelosClient({
 
               <div className="mt-5 flex-1">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-                  <AtSign className="h-3.5 w-3.5" /> Cuentas Instagram
+                  <AtSign className="h-3.5 w-3.5" /> Redes sociales
                 </p>
                 <div className="flex flex-col gap-1.5">
                   {cuentasModelo.length === 0 ? (
-                    <p className="text-xs text-[color:var(--text-muted)]">Sin cuentas todavia</p>
+                    <p className="text-xs text-[color:var(--text-muted)]">Sin redes todavia</p>
                   ) : (
                     cuentasModelo.map((cuenta) => {
                       const estado = cuenta.metricool_estado ?? "no_conectada";
+                      const red = redCuenta(cuenta);
                       return (
                         <div
                           key={cuenta.id}
@@ -307,30 +337,56 @@ export function ModelosClient({
                             className="flex-1 truncate text-left font-code hover:text-white"
                             title="Cambiar activa/pausada"
                           >
-                            @{cuenta.username}
+                            {SOCIAL_PREFIX[red]}{cuenta.username}
                           </button>
+                          <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-white/45">
+                            {SOCIAL_LABEL[red]}
+                          </span>
                           <span className={cuenta.activa ? "text-emerald-400" : "text-white/30"}>{cuenta.activa ? "Activa" : "Pausada"}</span>
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${METRICOOL_DOT[estado]}`} title={METRICOOL_TITLE[estado]} />
-                          <button
-                            onClick={() => openMetricool(cuenta)}
-                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 text-white/50 transition hover:border-white/25 hover:text-white"
-                            title="Conectar con Metricool"
-                          >
-                            <Plug className="h-3.5 w-3.5" />
-                          </button>
+                          {red === "instagram" ? (
+                            <>
+                              <span className={`h-2 w-2 shrink-0 rounded-full ${METRICOOL_DOT[estado]}`} title={METRICOOL_TITLE[estado]} />
+                              <button
+                                onClick={() => openMetricool(cuenta)}
+                                className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 text-white/50 transition hover:border-white/25 hover:text-white"
+                                title="Conectar con Metricool"
+                              >
+                                <Plug className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          ) : null}
                         </div>
                       );
                     })
                   )}
                 </div>
-                <div className="mt-2 flex gap-1.5">
+                <div className="mt-2 grid grid-cols-[118px_1fr_auto] gap-1.5">
+                  <select
+                    value={draftCuenta.red_social}
+                    onChange={(event) =>
+                      setCuentaDrafts((prev) => ({
+                        ...prev,
+                        [modelo.id]: { ...draftCuenta, red_social: event.target.value as SocialNetwork },
+                      }))
+                    }
+                    className="input-base py-1.5 text-xs"
+                  >
+                    <option value="instagram">Instagram</option>
+                    <option value="twitter">Twitter / X</option>
+                    <option value="tiktok">TikTok</option>
+                  </select>
                   <input
-                    value={cuentaDrafts[modelo.id] ?? ""}
-                    onChange={(event) => setCuentaDrafts((prev) => ({ ...prev, [modelo.id]: event.target.value }))}
+                    value={draftCuenta.username}
+                    onChange={(event) =>
+                      setCuentaDrafts((prev) => ({
+                        ...prev,
+                        [modelo.id]: { ...draftCuenta, username: event.target.value },
+                      }))
+                    }
                     onKeyDown={(event) => {
                       if (event.key === "Enter") addCuenta(modelo.id);
                     }}
-                    placeholder="usuario_ig"
+                    placeholder={SOCIAL_PLACEHOLDER[draftCuenta.red_social]}
                     className="input-base flex-1 py-1.5 text-xs"
                   />
                   <button onClick={() => addCuenta(modelo.id)} className="btn-secondary px-3 py-1.5 text-xs">

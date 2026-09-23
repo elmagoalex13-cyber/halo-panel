@@ -3,13 +3,20 @@ import type { CuentaIGDemo, CuentaInstagram } from "@/types";
 
 type CuentaRow = CuentaInstagram & { seguidores?: number | null; modelos?: { nombre?: string | null } | null };
 
+function esInstagram(row: CuentaRow) {
+  if (row.red_social) return row.red_social === "instagram";
+  return !row.url || /instagram\.com/i.test(row.url);
+}
+
 export async function loadCuentasInstagramReales(): Promise<Array<CuentaInstagram & { seguidores?: number | null }>> {
   if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase.from("cuentas_instagram").select("*, modelos(nombre)").order("username");
     if (error) return [];
-    return ((data ?? []) as CuentaRow[]).map((row) => ({ ...row, modelo_nombre: row.modelos?.nombre ?? row.modelo_nombre ?? "" }));
+    return ((data ?? []) as CuentaRow[])
+      .filter(esInstagram)
+      .map((row) => ({ ...row, red_social: "instagram", modelo_nombre: row.modelos?.nombre ?? row.modelo_nombre ?? "" }));
   } catch {
     return [];
   }

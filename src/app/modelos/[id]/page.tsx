@@ -4,7 +4,7 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { CreatorConfigSummary } from "../CreatorConfigSummary";
 import { PortalAccesoButton } from "../PortalAccesoButton";
-import type { CreatorConfig } from "@/types";
+import type { CreatorConfig, SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 
 export const revalidate = 0;
@@ -20,9 +20,24 @@ const ESTADO_BADGE: Record<string, string> = {
   rechazado: "badge-rechazado",
 };
 
+const SOCIAL_LABEL: Record<SocialNetwork, string> = {
+  instagram: "Instagram",
+  twitter: "Twitter / X",
+  tiktok: "TikTok",
+};
+
+function inferSocial(redSocial?: SocialNetwork | null, url?: string | null): SocialNetwork {
+  if (redSocial) return redSocial;
+  if (/tiktok\.com/i.test(url ?? "")) return "tiktok";
+  if (/(twitter\.com|x\.com)/i.test(url ?? "")) return "twitter";
+  return "instagram";
+}
+
 type CuentaDetail = {
   id: string;
   username: string;
+  red_social?: SocialNetwork | null;
+  url?: string | null;
   seguidores?: number | null;
   activa?: boolean | null;
   publicadosMes: number;
@@ -77,7 +92,7 @@ async function getModeloDetail(id: string) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
   const [{ data: modelo }, { data: cuentas }, { data: pipeline }, { data: ultimasPublicaciones }, { data: facturacionHistorica }, { data: config }, { data: encargos }, { data: conteo }] = await Promise.all([
     supabase.from("modelos").select("*").eq("id", id).single(),
-    supabase.from("cuentas_instagram").select("id, username, seguidores, activa").eq("modelo_id", id),
+    supabase.from("cuentas_instagram").select("*").eq("modelo_id", id),
     supabase.from("library_content").select("id, titulo, tipo_video, estado, recibido_at").eq("modelo_id", id).not("estado", "in", "(publicado,archivado)").order("recibido_at", { ascending: false }).limit(20),
     supabase.from("library_content").select("id, titulo, tipo_video, publicado_at, cuenta_id, cuentas_instagram(username)").eq("modelo_id", id).eq("estado", "publicado").order("publicado_at", { ascending: false }).limit(15),
     supabase.from("facturacion_modelos").select("periodo_inicio, ingresos_brutos, comision_agencia, suscriptores_activos").eq("modelo_id", id).order("periodo_inicio", { ascending: false }).limit(6),
@@ -111,8 +126,9 @@ async function getModeloDetail(id: string) {
     pipeline: (pipeline ?? []) as PipelineRow[],
     ultimasPublicaciones: (ultimasPublicaciones ?? []) as unknown as PublicacionRow[],
     facturacion: (facturacionHistorica ?? []) as FacturacionRow[],
-    cuentas: ((cuentas ?? []) as Array<{ id: string; username: string; seguidores?: number | null; activa?: boolean | null }>).map((cuenta) => ({
+    cuentas: ((cuentas ?? []) as Array<{ id: string; username: string; red_social?: SocialNetwork | null; url?: string | null; seguidores?: number | null; activa?: boolean | null }>).map((cuenta) => ({
       ...cuenta,
+      red_social: inferSocial(cuenta.red_social, cuenta.url),
       publicadosMes: pubMesByCuenta[cuenta.id] || 0,
       lastPublished: lastPubByCuenta[cuenta.id] || null,
       diasSinPublicar: lastPubByCuenta[cuenta.id] ? Math.floor((now.getTime() - new Date(lastPubByCuenta[cuenta.id]).getTime()) / 86400000) : null,
@@ -209,17 +225,27 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
         ) : null}
 
         <div>
-          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Cuentas Instagram</h2>
+          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Redes sociales</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {cuentas.map((cuenta) => {
               const urgencia = cuenta.diasSinPublicar === null ? "unknown" : cuenta.diasSinPublicar >= 7 ? "critical" : cuenta.diasSinPublicar >= 4 ? "warning" : "ok";
+              const red = cuenta.red_social ?? "instagram";
               return (
                 <div key={cuenta.id} className={`card flex flex-col gap-3 ${urgencia === "critical" ? "border-red-500/30" : urgencia === "warning" ? "border-amber-500/30" : ""}`}>
                   <div className="flex items-center justify-between">
-                    <div className="font-mono font-semibold text-halo-text">@{cuenta.username}</div>
-                    <span className={`badge text-xs ${urgencia === "critical" ? "bg-red-500/15 text-red-400" : urgencia === "warning" ? "bg-amber-500/15 text-amber-400" : urgencia === "ok" ? "bg-green-500/15 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>
-                      {cuenta.diasSinPublicar === null ? "Sin datos" : cuenta.diasSinPublicar === 0 ? "Publico hoy" : `${cuenta.diasSinPublicar}d sin publicar`}
-                    </span>
+                    <div>
+                      <div className="font-mono font-semibold text-halo-text">@{cuenta.username}</div>
+                      <div className="mt-1 text-xs text-halo-subtle">{SOCIAL_LABEL[red]}</div>
+                    </div>
+                    {red === "instagram" ? (
+                      <span className={`badge text-xs ${urgencia === "critical" ? "bg-red-500/15 text-red-400" : urgencia === "warning" ? "bg-amber-500/15 text-amber-400" : urgencia === "ok" ? "bg-green-500/15 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>
+                        {cuenta.diasSinPublicar === null ? "Sin datos" : cuenta.diasSinPublicar === 0 ? "Publico hoy" : `${cuenta.diasSinPublicar}d sin publicar`}
+                      </span>
+                    ) : (
+                      <span className={`badge text-xs ${cuenta.activa ? "bg-green-500/15 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>
+                        {cuenta.activa ? "Activa" : "Pausada"}
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded bg-halo-muted/40 p-2"><div className={`font-mono text-lg font-bold ${cuenta.publicadosMes < 4 ? "text-red-400" : "text-halo-text"}`}>{cuenta.publicadosMes}</div><div className="text-xs text-halo-subtle">Publicados (mes)</div></div>

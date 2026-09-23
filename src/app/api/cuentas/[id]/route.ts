@@ -5,7 +5,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await req.json();
-    const allowed = ["username", "url", "activa", "metricool_blog_id", "metricool_estado"] as const;
+    const allowed = ["username", "url", "activa", "metricool_blog_id", "metricool_estado", "red_social"] as const;
     const payload: Record<string, unknown> = {};
     for (const key of allowed) {
       if (key in body) payload[key] = body[key];
