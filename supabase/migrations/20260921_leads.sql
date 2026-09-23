@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS leads (
   page_url text,
   referrer text,
   user_agent text,
+  adjuntos jsonb NOT NULL DEFAULT '[]'::jsonb,
   notas text,
   ultimo_contacto_at timestamptz,
   seguimiento_at timestamptz,
@@ -45,6 +46,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS landing_slug text;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS page_url text;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS referrer text;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS user_agent text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS adjuntos jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS notas text;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS ultimo_contacto_at timestamptz;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS seguimiento_at timestamptz;

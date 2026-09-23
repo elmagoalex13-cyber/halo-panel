@@ -17,6 +17,7 @@ type LeadPayload = {
   page_url?: unknown;
   referrer?: unknown;
   user_agent?: unknown;
+  adjuntos?: unknown;
 };
 
 const corsHeaders = {
@@ -47,6 +48,32 @@ function asStringArray(value: unknown) {
     .map((item) => asString(item, 160))
     .filter((item): item is string => Boolean(item))
     .slice(0, 20);
+}
+
+function asAdjuntos(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const raw = item as Record<string, unknown>;
+      const url = asString(raw.url, 1200);
+      const key = asString(raw.key, 500);
+      const name = asString(raw.name, 240);
+      const contentType = asString(raw.contentType, 160);
+      const kind = asString(raw.kind, 20);
+      const size = Number(raw.size);
+      if (!url || !key || !name || !contentType) return null;
+      return {
+        url,
+        key,
+        name,
+        contentType,
+        kind: kind === "video" ? "video" : "image",
+        size: Number.isFinite(size) && size > 0 ? Math.round(size) : null,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .slice(0, 80);
 }
 
 function isAuthorized(req: NextRequest) {
@@ -106,6 +133,7 @@ export async function POST(req: NextRequest) {
         page_url: getPageUrl(req, body),
         referrer: asString(body.referrer, 1000) ?? req.headers.get("referer"),
         user_agent: asString(body.user_agent, 1000) ?? req.headers.get("user-agent"),
+        adjuntos: asAdjuntos(body.adjuntos),
       })
       .select("id")
       .single();

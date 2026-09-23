@@ -269,6 +269,7 @@ export type Lead = {
   page_url?: string | null;
   referrer?: string | null;
   user_agent?: string | null;
+  adjuntos?: LeadAdjunto[];
   notas?: string | null;
   ultimo_contacto_at?: string | null;
   seguimiento_at?: string | null;
@@ -277,4 +278,13 @@ export type Lead = {
   eliminado_at?: string | null;
   created_at: string;
   updated_at?: string | null;
+};
+
+export type LeadAdjunto = {
+  url: string;
+  key: string;
+  name: string;
+  contentType: string;
+  kind: "image" | "video";
+  size?: number | null;
 };

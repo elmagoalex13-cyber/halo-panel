@@ -45,6 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         instagram: null,
         pais: null,
         otro_mensaje: null,
+        adjuntos: [],
         notas: null,
         eliminado_at: now,
       });

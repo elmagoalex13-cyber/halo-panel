@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Archive, CheckCircle2, Clock3, Mail, MessageCircle, Phone, Save, Trash2, UserRound } from "lucide-react";
+import { Archive, CheckCircle2, Clock3, ExternalLink, ImageIcon, Mail, MessageCircle, Phone, Save, Trash2, UserRound, Video } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Lead, LeadEstado } from "@/types";
 
@@ -46,6 +46,13 @@ function statusClass(estado: LeadEstado) {
   if (estado === "futuro") return "badge-clasificando";
   if (estado === "descartado" || estado === "eliminado") return "badge-rechazado";
   return "badge-recibido";
+}
+
+function formatBytes(value?: number | null) {
+  if (!value) return "";
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(value >= 100 * 1024 * 1024 ? 0 : 1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
 }
 
 function tabTone(tone: "violet" | "cyan" | "emerald" | "amber" | "red", active: boolean) {
@@ -241,6 +248,43 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
                     </div>
                     {lead.otro_mensaje ? <p className="mt-3 text-sm leading-6 text-white/70">{lead.otro_mensaje}</p> : null}
                   </div>
+
+                  {lead.adjuntos?.length ? (
+                    <div className="mt-5 rounded-xl border border-white/[0.08] bg-black/20 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-white/35">Fotos y videos</p>
+                        <span className="badge">{lead.adjuntos.length} archivo{lead.adjuntos.length === 1 ? "" : "s"}</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
+                        {lead.adjuntos.map((adjunto) => (
+                          <a
+                            key={adjunto.key}
+                            href={adjunto.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03] transition hover:border-[#8B5CF6]/50 hover:bg-white/[0.06]"
+                          >
+                            <div className="aspect-[4/5] bg-black/35">
+                              {adjunto.kind === "image" ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={adjunto.url} alt={adjunto.name} className="h-full w-full object-cover" loading="lazy" />
+                              ) : (
+                                <video src={adjunto.url} className="h-full w-full object-cover" preload="metadata" muted playsInline />
+                              )}
+                            </div>
+                            <div className="flex items-start gap-2 p-2.5">
+                              {adjunto.kind === "image" ? <ImageIcon className="mt-0.5 h-4 w-4 shrink-0 text-white/45" /> : <Video className="mt-0.5 h-4 w-4 shrink-0 text-white/45" />}
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-semibold text-white/75">{adjunto.name}</p>
+                                <p className="mt-0.5 text-[11px] text-white/35">{formatBytes(adjunto.size)}</p>
+                              </div>
+                              <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-white/30 transition group-hover:text-white/70" />
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="mt-5">
                     <label className="text-xs font-semibold uppercase tracking-wider text-white/35" htmlFor={`notes-${lead.id}`}>
