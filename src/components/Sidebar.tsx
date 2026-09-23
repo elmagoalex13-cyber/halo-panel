@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
@@ -25,6 +25,13 @@ interface SidebarProps {
 
 export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
 
   return (
     <aside
@@ -119,6 +126,23 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
         </div>
       </nav>
       <div style={{ padding: "16px 20px", borderTop: "1px solid #1E2030" }}>
+        <button
+          onClick={logout}
+          style={{
+            width: "100%",
+            marginBottom: "12px",
+            border: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(255,255,255,0.03)",
+            color: "#A1A4B8",
+            borderRadius: "8px",
+            padding: "8px 10px",
+            fontSize: "12px",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Salir
+        </button>
         <div style={{ color: "#6B6E85", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase" }}>
           v2.0 · Halo Agency
         </div>
