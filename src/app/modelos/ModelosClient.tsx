@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AtSign, ChevronDown, ChevronUp, Pencil, Plug, Plus } from "lucide-react";
+import { AtSign, ChevronDown, ChevronUp, Pencil, Plug, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/Badge";
 import { GlassCard } from "@/components/GlassCard";
 import { CreatorConfigSummary } from "./CreatorConfigSummary";
@@ -46,6 +46,7 @@ const SOCIAL_PLACEHOLDER: Record<SocialNetwork, string> = {
 };
 
 type CuentaDraft = { red_social: SocialNetwork; username: string };
+type CuentaEditState = { cuenta: CuentaInstagram; red_social: SocialNetwork; username: string; error?: string } | null;
 
 function redCuenta(cuenta: CuentaInstagram): SocialNetwork {
   const url = cuenta.url ?? "";
@@ -75,6 +76,8 @@ export function ModelosClient({
   const [saving, setSaving] = useState(false);
   const [cuentaDrafts, setCuentaDrafts] = useState<Record<string, CuentaDraft>>({});
   const [cuentaErrors, setCuentaErrors] = useState<Record<string, string>>({});
+  const [cuentaEdit, setCuentaEdit] = useState<CuentaEditState>(null);
+  const [cuentaSaving, setCuentaSaving] = useState(false);
   const [metricoolModal, setMetricoolModal] = useState<CuentaInstagram | null>(null);
   const [metricoolBlogId, setMetricoolBlogId] = useState("");
   const [metricoolSaving, setMetricoolSaving] = useState(false);
@@ -176,6 +179,49 @@ export function ModelosClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ activa: nextActiva }),
     });
+  }
+
+  function openEditCuenta(cuenta: CuentaInstagram) {
+    setCuentaEdit({ cuenta, red_social: redCuenta(cuenta), username: cuenta.username });
+  }
+
+  async function submitCuentaEdit() {
+    if (!cuentaEdit || !cuentaEdit.username.trim()) return;
+    setCuentaSaving(true);
+    try {
+      const res = await fetch(`/api/cuentas/${cuentaEdit.cuenta.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: cuentaEdit.username, red_social: cuentaEdit.red_social }),
+      });
+      const payload = await res.json();
+      if (!res.ok || !payload.data) {
+        setCuentaEdit((prev) => (prev ? { ...prev, error: payload.error ?? "No se pudo guardar la cuenta" } : prev));
+        return;
+      }
+      const updated = payload.data as CuentaInstagram;
+      setCuentas((prev) =>
+        prev.map((cuenta) =>
+          cuenta.id === cuentaEdit.cuenta.id
+            ? { ...cuenta, ...updated, red_social: updated.red_social ?? cuentaEdit.red_social }
+            : cuenta,
+        ),
+      );
+      setCuentaEdit(null);
+    } finally {
+      setCuentaSaving(false);
+    }
+  }
+
+  async function deleteCuenta(cuenta: CuentaInstagram) {
+    if (!confirm(`¿Eliminar @${cuenta.username} de esta modelo?`)) return;
+    const res = await fetch(`/api/cuentas/${cuenta.id}`, { method: "DELETE" });
+    const payload = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setCuentas((prev) => prev.filter((item) => item.id !== cuenta.id));
+    } else {
+      setCuentaErrors((prev) => ({ ...prev, [cuenta.modelo_id]: payload.error ?? "No se pudo eliminar la cuenta" }));
+    }
   }
 
   function openMetricool(cuenta: CuentaInstagram) {
@@ -359,6 +405,20 @@ export function ModelosClient({
                               </button>
                             </>
                           ) : null}
+                          <button
+                            onClick={() => openEditCuenta(cuenta)}
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 text-white/50 transition hover:border-white/25 hover:text-white"
+                            title="Editar cuenta"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => deleteCuenta(cuenta)}
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 text-white/45 transition hover:border-red-400/30 hover:text-red-300"
+                            title="Eliminar cuenta"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       );
                     })
@@ -512,6 +572,44 @@ export function ModelosClient({
                   {metricoolSaving ? "Guardando..." : "Conectar"}
                 </button>
               </div>
+            </div>
+          </GlassCard>
+        </div>
+      ) : null}
+
+      {cuentaEdit ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+          <GlassCard className="w-full max-w-sm p-6">
+            <h2 className="font-display text-lg font-semibold text-white">Editar cuenta</h2>
+            <div className="mt-4 space-y-3">
+              <Field label="Red social">
+                <select
+                  value={cuentaEdit.red_social}
+                  onChange={(event) => setCuentaEdit({ ...cuentaEdit, red_social: event.target.value as SocialNetwork, error: "" })}
+                  className="input-base"
+                >
+                  <option value="instagram">Instagram</option>
+                  <option value="twitter">Twitter / X</option>
+                  <option value="tiktok">TikTok</option>
+                </select>
+              </Field>
+              <Field label="Usuario">
+                <input
+                  value={cuentaEdit.username}
+                  onChange={(event) => setCuentaEdit({ ...cuentaEdit, username: event.target.value, error: "" })}
+                  placeholder={SOCIAL_PLACEHOLDER[cuentaEdit.red_social]}
+                  className="input-base"
+                />
+              </Field>
+              {cuentaEdit.error ? <p className="text-xs text-red-300">{cuentaEdit.error}</p> : null}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setCuentaEdit(null)} className="btn-secondary px-4 py-2 text-sm">
+                Cancelar
+              </button>
+              <button onClick={submitCuentaEdit} disabled={cuentaSaving || !cuentaEdit.username.trim()} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">
+                {cuentaSaving ? "Guardando..." : "Guardar"}
+              </button>
             </div>
           </GlassCard>
         </div>
