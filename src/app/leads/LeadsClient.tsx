@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Archive, CheckCircle2, Clock3, ExternalLink, ImageIcon, Mail, MessageCircle, Phone, Save, Trash2, UserRound, Video } from "lucide-react";
+import { Archive, CheckCircle2, ChevronLeft, ChevronRight, Clock3, ImageIcon, Mail, MessageCircle, Phone, Save, Trash2, UserRound, Video, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { Lead, LeadEstado } from "@/types";
+import type { Lead, LeadAdjunto, LeadEstado } from "@/types";
 
 const TABS: Array<{ estado: LeadEstado; label: string; hint: string; icon: LucideIcon; tone: "violet" | "cyan" | "emerald" | "amber" | "red" }> = [
   { estado: "nuevo", label: "Nuevos", hint: "Sin tocar", icon: Clock3, tone: "violet" },
@@ -90,6 +90,7 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
   const [leads, setLeads] = useState(initialLeads);
   const [active, setActive] = useState<LeadEstado>("nuevo");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<{ title: string; items: LeadAdjunto[]; index: number } | null>(null);
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialLeads.map((lead) => [lead.id, lead.notas ?? ""])),
   );
@@ -105,6 +106,7 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
   }, [leads]);
 
   const visible = leads.filter((lead) => lead.estado === active);
+  const currentAdjunto = viewer?.items[viewer.index] ?? null;
 
   async function updateLead(id: string, body: Record<string, unknown>) {
     setSavingId(id);
@@ -129,6 +131,7 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
             whatsapp: body.eliminar_datos ? null : lead.whatsapp,
             instagram: body.eliminar_datos ? null : lead.instagram,
             pais: body.eliminar_datos ? null : lead.pais,
+            adjuntos: body.eliminar_datos ? [] : lead.adjuntos,
           };
         }),
       );
@@ -250,40 +253,10 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
                   </div>
 
                   {lead.adjuntos?.length ? (
-                    <div className="mt-5 rounded-xl border border-white/[0.08] bg-black/20 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-white/35">Fotos y videos</p>
-                        <span className="badge">{lead.adjuntos.length} archivo{lead.adjuntos.length === 1 ? "" : "s"}</span>
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
-                        {lead.adjuntos.map((adjunto) => (
-                          <a
-                            key={adjunto.key}
-                            href={adjunto.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03] transition hover:border-[#8B5CF6]/50 hover:bg-white/[0.06]"
-                          >
-                            <div className="aspect-[4/5] bg-black/35">
-                              {adjunto.kind === "image" ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={adjunto.url} alt={adjunto.name} className="h-full w-full object-cover" loading="lazy" />
-                              ) : (
-                                <video src={adjunto.url} className="h-full w-full object-cover" preload="metadata" muted playsInline />
-                              )}
-                            </div>
-                            <div className="flex items-start gap-2 p-2.5">
-                              {adjunto.kind === "image" ? <ImageIcon className="mt-0.5 h-4 w-4 shrink-0 text-white/45" /> : <Video className="mt-0.5 h-4 w-4 shrink-0 text-white/45" />}
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-xs font-semibold text-white/75">{adjunto.name}</p>
-                                <p className="mt-0.5 text-[11px] text-white/35">{formatBytes(adjunto.size)}</p>
-                              </div>
-                              <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-white/30 transition group-hover:text-white/70" />
-                            </div>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
+                    <AdjuntosCompactos
+                      adjuntos={lead.adjuntos}
+                      onOpen={(index) => setViewer({ title: lead.nombre ?? "Lead", items: lead.adjuntos ?? [], index })}
+                    />
                   ) : null}
 
                   <div className="mt-5">
@@ -320,6 +293,122 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
             </article>
           );
         })}
+      </div>
+
+      {viewer && currentAdjunto ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101017] shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">{viewer.title}</p>
+                <p className="truncate text-xs text-white/40">
+                  {viewer.index + 1}/{viewer.items.length} · {currentAdjunto.name} {formatBytes(currentAdjunto.size) ? `· ${formatBytes(currentAdjunto.size)}` : ""}
+                </p>
+              </div>
+              <button type="button" onClick={() => setViewer(null)} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-white/70 transition hover:bg-white/[0.08] hover:text-white" aria-label="Cerrar">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[1fr_180px]">
+              <div className="relative flex min-h-[55vh] items-center justify-center bg-black">
+                {viewer.items.length > 1 ? (
+                  <>
+                    <button type="button" onClick={() => setViewer((current) => current ? { ...current, index: (current.index - 1 + current.items.length) % current.items.length } : current)} className="absolute left-3 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white transition hover:bg-black/80" aria-label="Anterior">
+                      <ChevronLeft className="h-6 w-6" />
+                    </button>
+                    <button type="button" onClick={() => setViewer((current) => current ? { ...current, index: (current.index + 1) % current.items.length } : current)} className="absolute right-3 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white transition hover:bg-black/80" aria-label="Siguiente">
+                      <ChevronRight className="h-6 w-6" />
+                    </button>
+                  </>
+                ) : null}
+
+                {currentAdjunto.kind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={currentAdjunto.url} alt={currentAdjunto.name} className="max-h-[72vh] w-auto max-w-full object-contain" />
+                ) : (
+                  <video key={currentAdjunto.key} src={currentAdjunto.url} className="max-h-[72vh] w-auto max-w-full" controls playsInline preload="metadata" />
+                )}
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto border-t border-white/[0.08] bg-white/[0.02] p-3 lg:max-h-[72vh] lg:flex-col lg:overflow-y-auto lg:border-l lg:border-t-0">
+                {viewer.items.map((adjunto, index) => (
+                  <button
+                    key={adjunto.key}
+                    type="button"
+                    onClick={() => setViewer((current) => current ? { ...current, index } : current)}
+                    className={`group flex w-36 shrink-0 items-center gap-2 rounded-xl border p-2 text-left transition lg:w-full ${index === viewer.index ? "border-[#8B5CF6]/70 bg-[#8B5CF6]/15" : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"}`}
+                  >
+                    <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-black/40">
+                      {adjunto.kind === "image" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={adjunto.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <Video className="h-5 w-5 text-white/55" />
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-semibold text-white/75">{adjunto.name}</span>
+                      <span className="mt-0.5 block text-[11px] text-white/35">{formatBytes(adjunto.size)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AdjuntosCompactos({ adjuntos, onOpen }: { adjuntos: LeadAdjunto[]; onOpen: (index: number) => void }) {
+  const first = adjuntos[0];
+  const fotos = adjuntos.filter((item) => item.kind === "image").length;
+  const videos = adjuntos.filter((item) => item.kind === "video").length;
+
+  return (
+    <div className="mt-5 rounded-xl border border-white/[0.08] bg-black/20 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/35">Fotos y videos</p>
+          <p className="mt-1 text-sm text-white/60">
+            {adjuntos.length} archivo{adjuntos.length === 1 ? "" : "s"} · {fotos} foto{fotos === 1 ? "" : "s"} · {videos} video{videos === 1 ? "" : "s"}
+          </p>
+        </div>
+        <button type="button" onClick={() => onOpen(0)} className="btn-secondary inline-flex min-h-10 items-center gap-2 px-3 text-sm">
+          <ImageIcon className="h-4 w-4" />
+          Ver archivos
+        </button>
+      </div>
+      <div className="mt-3 flex gap-2 overflow-hidden">
+        {adjuntos.slice(0, 4).map((adjunto, index) => (
+          <button
+            key={adjunto.key}
+            type="button"
+            onClick={() => onOpen(index)}
+            className="relative h-20 w-16 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.03]"
+            aria-label={`Ver ${adjunto.name}`}
+          >
+            {adjunto.kind === "image" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={adjunto.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+            ) : (
+              <span className="grid h-full w-full place-items-center bg-black/40">
+                <Video className="h-5 w-5 text-white/65" />
+              </span>
+            )}
+          </button>
+        ))}
+        {adjuntos.length > 4 ? (
+          <button type="button" onClick={() => onOpen(4)} className="grid h-20 w-16 shrink-0 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-sm font-semibold text-white/65">
+            +{adjuntos.length - 4}
+          </button>
+        ) : null}
+        <button type="button" onClick={() => onOpen(0)} className="ml-auto hidden min-w-0 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-left text-xs text-white/55 transition hover:bg-white/[0.06] md:flex">
+          {first.kind === "video" ? <Video className="h-4 w-4 shrink-0" /> : <ImageIcon className="h-4 w-4 shrink-0" />}
+          <span className="truncate">{first.name}</span>
+        </button>
       </div>
     </div>
   );
