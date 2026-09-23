@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     urls?: string[] | string;
+    archivos?: Array<{ key?: string; url?: string | null; filename?: string; size?: number; contentType?: string }>;
     tipo?: number;
     modelo_ids?: string[];
     instrucciones?: string | null;
@@ -20,11 +21,20 @@ export async function POST(req: NextRequest) {
     ),
   );
   const invalidas = urls.filter((u) => !/^https?:\/\/\S+$/i.test(u));
+  const archivos = (Array.isArray(body.archivos) ? body.archivos : [])
+    .map((a) => ({
+      key: String(a.key ?? "").trim(),
+      url: a.url ? String(a.url).trim() : null,
+      filename: String(a.filename ?? "video").trim(),
+      size: Number(a.size ?? 0),
+      contentType: String(a.contentType ?? "video/mp4").trim(),
+    }))
+    .filter((a) => a.key && a.contentType.startsWith("video/"));
   const tipo = Number(body.tipo);
   const modelos = Array.from(new Set(body.modelo_ids ?? []));
 
   if (![1, 2, 3, 4].includes(tipo)) return NextResponse.json({ error: "Elige el tipo de video (1-4)" }, { status: 400 });
-  if (tipo === 4 && !urls.length) return NextResponse.json({ error: "Pega al menos una URL de referencia" }, { status: 400 });
+  if (tipo === 4 && !urls.length && !archivos.length) return NextResponse.json({ error: "Pega una URL o sube al menos un video de referencia" }, { status: 400 });
   if (invalidas.length) return NextResponse.json({ error: `URL no valida: ${invalidas[0]}` }, { status: 400 });
   if (!modelos.length) return NextResponse.json({ error: "Elige al menos una modelo" }, { status: 400 });
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
@@ -36,7 +46,7 @@ export async function POST(req: NextRequest) {
     let encargosCreados = 0;
     let yaAsignados = 0;
 
-    if (tipo !== 4 && urls.length === 0) {
+    if (tipo !== 4 && urls.length === 0 && archivos.length === 0) {
       const instrucciones = body.instrucciones?.trim() || null;
       for (const modeloId of modelos) {
         const query = supabase
@@ -61,16 +71,45 @@ export async function POST(req: NextRequest) {
         if (error) throw error;
         encargosCreados++;
       }
-      return NextResponse.json({ ok: true, urls: 0, referencias_nuevas: 0, encargos: encargosCreados, ya_asignados: yaAsignados });
+      return NextResponse.json({ ok: true, urls: 0, archivos: 0, referencias_nuevas: 0, encargos: encargosCreados, ya_asignados: yaAsignados });
     }
 
-    for (const url of urls) {
-      const { data: existente } = await supabase.from("referencias").select("id").eq("url_original", url).maybeSingle();
+    const fuentes = [
+      ...urls.map((url) => ({ original: url, r2: null as string | null, descripcion: null as string | null })),
+      ...archivos.map((archivo) => ({
+        original: archivo.url ?? archivo.key,
+        r2: archivo.key,
+        descripcion: archivo.filename,
+      })),
+    ];
+
+    for (const fuente of fuentes) {
+      const { data: existente } = await supabase.from("referencias").select("id").eq("url_original", fuente.original).maybeSingle();
       let referenciaId = existente?.id as string | undefined;
       if (referenciaId) {
-        await supabase.from("referencias").update({ tipo_video: tipoVideo, activa: true, updated_at: new Date().toISOString() }).eq("id", referenciaId);
+        const updatePayload: Record<string, string | boolean> = {
+          tipo_video: tipoVideo,
+          activa: true,
+          updated_at: new Date().toISOString(),
+        };
+        if (fuente.r2) updatePayload.url_r2 = fuente.r2;
+        if (fuente.descripcion) updatePayload.descripcion = fuente.descripcion;
+        await supabase
+          .from("referencias")
+          .update(updatePayload)
+          .eq("id", referenciaId);
       } else {
-        const { data: ref, error } = await supabase.from("referencias").insert({ url_original: url, tipo_video: tipoVideo, activa: true }).select("id").single();
+        const { data: ref, error } = await supabase
+          .from("referencias")
+          .insert({
+            url_original: fuente.original,
+            url_r2: fuente.r2,
+            descripcion: fuente.descripcion,
+            tipo_video: tipoVideo,
+            activa: true,
+          })
+          .select("id")
+          .single();
         if (error || !ref) throw error ?? new Error("No se pudo guardar la referencia");
         referenciaId = ref.id;
         referenciasNuevas++;
@@ -98,7 +137,7 @@ export async function POST(req: NextRequest) {
         encargosCreados++;
       }
     }
-    return NextResponse.json({ ok: true, urls: urls.length, referencias_nuevas: referenciasNuevas, encargos: encargosCreados, ya_asignados: yaAsignados });
+    return NextResponse.json({ ok: true, urls: urls.length, archivos: archivos.length, referencias_nuevas: referenciasNuevas, encargos: encargosCreados, ya_asignados: yaAsignados });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : (e as { message?: string })?.message ?? "Error interno" }, { status: 500 });
   }

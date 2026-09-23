@@ -17,43 +17,110 @@ export type EncargoRow = {
   tieneReferencia: boolean;
 };
 
+type ArchivoSubido = {
+  key: string;
+  url: string | null;
+  filename: string;
+  size: number;
+  contentType: string;
+};
+
+function formatBytes(bytes: number) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
 export function AsignarClient({ modelos, encargos }: { modelos: { id: string; nombre: string }[]; encargos: EncargoRow[] }) {
   const router = useRouter();
   const [urls, setUrls] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [tipo, setTipo] = useState(4);
   const [elegidas, setElegidas] = useState<string[]>([]);
   const [nota, setNota] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [progreso, setProgreso] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const lista = urls.split(/[\s,]+/).filter(Boolean);
   const exigeReferencia = tipo === 4;
-  const tieneUrls = lista.length > 0;
+  const totalFuentes = lista.length + files.length;
   const alternar = (id: string) => setElegidas((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  function seleccionarArchivos(nuevos: FileList | null) {
+    if (!nuevos?.length) return;
+    setFiles((prev) => {
+      const map = new Map(prev.map((file) => [`${file.name}-${file.size}-${file.lastModified}`, file]));
+      Array.from(nuevos)
+        .filter((file) => file.type.startsWith("video/"))
+        .forEach((file) => map.set(`${file.name}-${file.size}-${file.lastModified}`, file));
+      return Array.from(map.values());
+    });
+  }
+
+  async function subirArchivo(file: File): Promise<ArchivoSubido> {
+    const presign = await fetch("/api/asignar/presign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name, contentType: file.type || "video/mp4", size: file.size }),
+    });
+    const pre = (await presign.json()) as { error?: string; uploadUrl?: string; publicUrl?: string | null; key?: string; contentType?: string };
+    if (!presign.ok || !pre.uploadUrl || !pre.key) throw new Error(pre.error ?? `No se pudo preparar la subida de ${file.name}`);
+
+    const subida = await fetch(pre.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": pre.contentType ?? file.type ?? "video/mp4" },
+      body: file,
+    });
+    if (!subida.ok) throw new Error(`No se pudo subir ${file.name} (${subida.status})`);
+
+    return {
+      key: pre.key,
+      url: pre.publicUrl ?? null,
+      filename: file.name,
+      size: file.size,
+      contentType: pre.contentType ?? file.type ?? "video/mp4",
+    };
+  }
 
   async function asignar() {
     setCargando(true);
+    setProgreso("");
     setMsg(null);
     try {
+      let completados = 0;
+      if (files.length) setProgreso(`Subiendo ${files.length} archivo(s) a R2...`);
+      const archivos = await Promise.all(
+        files.map(async (file) => {
+          const subido = await subirArchivo(file);
+          completados++;
+          setProgreso(`Subidos ${completados}/${files.length} archivo(s)`);
+          return subido;
+        }),
+      );
+      setProgreso(files.length ? "Creando encargos..." : "");
       const res = await fetch("/api/asignar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ urls: lista, tipo, modelo_ids: elegidas, instrucciones: nota }),
+        body: JSON.stringify({ urls: lista, archivos, tipo, modelo_ids: elegidas, instrucciones: nota }),
       });
-      const j = (await res.json()) as { error?: string; encargos?: number; ya_asignados?: number; urls?: number };
+      const j = (await res.json()) as { error?: string; encargos?: number; ya_asignados?: number; urls?: number; archivos?: number };
       if (!res.ok) throw new Error(j.error ?? "Error");
       setMsg({
         ok: true,
-        texto: tieneUrls
-          ? `${j.encargos} asignación(es) creada(s) con ${j.urls} URL(s)${j.ya_asignados ? ` · ${j.ya_asignados} ya estaban asignadas` : ""}. El runner las descarga en menos de 1 minuto.`
+        texto: totalFuentes
+          ? `${j.encargos} asignación(es) creada(s) con ${j.urls ?? 0} URL(s) y ${j.archivos ?? 0} archivo(s)${j.ya_asignados ? ` · ${j.ya_asignados} ya estaban asignadas` : ""}.`
           : `${j.encargos} encargo(s) creado(s) para el portal${j.ya_asignados ? ` · ${j.ya_asignados} ya existían` : ""}.`,
       });
       setUrls("");
+      setFiles([]);
       setNota("");
       router.refresh();
     } catch (e) {
       setMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
     } finally {
+      setProgreso("");
       setCargando(false);
     }
   }
@@ -81,6 +148,50 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
           <p className="mt-1 text-xs text-white/35">
             {lista.length} URL detectada(s). En tipo 1, 2 y 3 puedes dejarlo vacio para crear solo una tarea.
           </p>
+        </div>
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <label className="block text-sm font-semibold text-white">Subir vídeos manualmente</label>
+            {files.length ? (
+              <button type="button" onClick={() => setFiles([])} className="text-xs text-white/35 hover:text-red-300">
+                Vaciar cola
+              </button>
+            ) : null}
+          </div>
+          <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.14] bg-white/[0.03] px-4 py-5 text-center transition hover:border-[#8B5CF6]/60 hover:bg-[#8B5CF6]/10">
+            <span className="text-sm font-semibold text-white">Seleccionar uno o varios vídeos</span>
+            <span className="mt-1 text-xs text-white/40">Se suben directo a R2 y quedan asignados al tipo elegido.</span>
+            <input
+              type="file"
+              accept="video/*"
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                seleccionarArchivos(e.target.files);
+                e.currentTarget.value = "";
+              }}
+            />
+          </label>
+          {files.length ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {files.map((file) => (
+                <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white">{file.name}</p>
+                    <p className="text-xs text-white/35">{formatBytes(file.size)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFiles((prev) => prev.filter((item) => item !== file))}
+                    className="rounded-lg px-2 py-1 text-xs text-white/35 hover:bg-red-500/10 hover:text-red-300"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div>
@@ -136,9 +247,10 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
         <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Instrucciones para la modelo (opcional)" className="input-base w-full" />
 
         <div className="flex flex-wrap items-center gap-3">
-          <button onClick={asignar} disabled={cargando || (exigeReferencia && !lista.length) || !elegidas.length} className="btn-primary px-5 py-2.5 text-sm disabled:opacity-40">
-            {cargando ? "Asignando..." : exigeReferencia ? `Asignar ${lista.length || ""} vídeo(s)` : "Crear encargo"}
+          <button onClick={asignar} disabled={cargando || (exigeReferencia && !totalFuentes) || !elegidas.length} className="btn-primary px-5 py-2.5 text-sm disabled:opacity-40">
+            {cargando ? "Asignando..." : exigeReferencia ? `Asignar ${totalFuentes || ""} vídeo(s)` : totalFuentes ? `Asignar ${totalFuentes} vídeo(s)` : "Crear encargo"}
           </button>
+          {progreso ? <p className="text-sm text-[#A78BFA]">{progreso}</p> : null}
           {msg ? <p className={`text-sm ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>{msg.texto}</p> : null}
         </div>
       </GlassCard>
