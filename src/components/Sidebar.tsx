@@ -144,7 +144,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
           Salir
         </button>
         <div style={{ color: "#6B6E85", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-          v2.0 · Halo Agency
+          Panel de admin · Halo Agency
         </div>
       </div>
     </aside>
