@@ -30,6 +30,17 @@ export async function PATCH(req: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const { data: actual, error: actualError } = await supabase
+      .from("library_content")
+      .select("id, estado")
+      .eq("id", id)
+      .maybeSingle();
+    if (actualError) throw actualError;
+    if (!actual) return NextResponse.json({ error: "Video no encontrado" }, { status: 404 });
+    if (actual.estado !== "en_aprobacion") {
+      return NextResponse.json({ ok: true, estado: actual.estado, skipped: true });
+    }
+
     const update: Record<string, unknown> = {
       estado: nuevoEstado,
       updated_at: new Date().toISOString(),
@@ -38,15 +49,31 @@ export async function PATCH(req: NextRequest) {
     if (caption !== undefined) update.caption = caption;
     if (correcciones !== undefined) update.correcciones = correcciones;
     if (frase_quemada !== undefined) update.frase_quemada = frase_quemada;
-    if (accion === "aprobar") update.aprobado_at = new Date().toISOString();
+    if (accion === "aprobar") {
+      update.aprobado_at = new Date().toISOString();
+      update.estado_procesamiento = "aprobado";
+      update.error_mensaje = null;
+    }
+    if (accion === "descartar") {
+      update.estado_procesamiento = "descartado";
+      update.error_mensaje = null;
+    }
     if (accion === "rehacer") {
       // El runner vuelve a coger la pieza: reset del estado de procesamiento
       update.estado_procesamiento = "pendiente";
       update.error_mensaje = null;
+      update.aprobado_at = null;
+      update.publicado_at = null;
     }
 
-    const { error } = await supabase.from("library_content").update(update).eq("id", id);
+    const { data: updated, error } = await supabase
+      .from("library_content")
+      .update(update)
+      .eq("id", id)
+      .eq("estado", "en_aprobacion")
+      .select("id");
     if (error) throw error;
+    if (!updated?.length) return NextResponse.json({ ok: true, estado: actual.estado, skipped: true });
 
     await supabase
       .from("log_agentes")

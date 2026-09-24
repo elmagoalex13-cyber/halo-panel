@@ -675,34 +675,40 @@ export function MesaClient({
                     ↓ Descargar mp4
                   </a>
                 )}
-                <button
-                  onClick={() => saveAndAct("aprobar")}
-                  disabled={loading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all hover:bg-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] disabled:opacity-40"
-                >
-                  ✓ Aprobar <kbd className="rounded bg-emerald-900/60 px-1.5 text-[9px] font-normal">A</kbd>
-                </button>
-                <button
-                  onClick={() => saveAndAct("rehacer")}
-                  disabled={loading || !correcciones.trim()}
-                  title={correcciones.trim() ? undefined : "Escribe una nota para rehacer"}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] py-2.5 text-sm font-semibold text-white/80 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white disabled:opacity-40"
-                >
-                  ↺ Rehacer <kbd className="rounded bg-white/10 px-1.5 text-[9px] font-normal">R</kbd>
-                </button>
+                {selected.estado === "en_aprobacion" ? (
+                  <>
+                    <button
+                      onClick={() => saveAndAct("aprobar")}
+                      disabled={loading}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all hover:bg-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] disabled:opacity-40"
+                    >
+                      ✓ Aprobar <kbd className="rounded bg-emerald-900/60 px-1.5 text-[9px] font-normal">A</kbd>
+                    </button>
+                    <button
+                      onClick={() => saveAndAct("rehacer")}
+                      disabled={loading || !correcciones.trim()}
+                      title={correcciones.trim() ? undefined : "Escribe una nota para rehacer"}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] py-2.5 text-sm font-semibold text-white/80 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white disabled:opacity-40"
+                    >
+                      ↺ Rehacer <kbd className="rounded bg-white/10 px-1.5 text-[9px] font-normal">R</kbd>
+                    </button>
+                  </>
+                ) : null}
                 <a
                   href={`/api/descargar?id=${selected.id}&tipo=original`}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-700/40 bg-amber-950/30 py-2.5 text-sm font-semibold text-amber-400 transition-all hover:bg-amber-950/50 hover:text-amber-300"
                 >
                   ↓ Editar yo <span className="text-[9px] font-normal opacity-60">(descarga original)</span>
                 </a>
-                <button
-                  onClick={() => saveAndAct("descartar")}
-                  disabled={loading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-900/40 bg-red-950/40 py-2.5 text-sm font-semibold text-red-400 transition-all hover:bg-red-950/60 hover:text-red-300 disabled:opacity-40"
-                >
-                  x Descartar <kbd className="rounded bg-red-900/40 px-1.5 text-[9px] font-normal">X</kbd>
-                </button>
+                {selected.estado === "en_aprobacion" ? (
+                  <button
+                    onClick={() => saveAndAct("descartar")}
+                    disabled={loading}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-900/40 bg-red-950/40 py-2.5 text-sm font-semibold text-red-400 transition-all hover:bg-red-950/60 hover:text-red-300 disabled:opacity-40"
+                  >
+                    x Descartar <kbd className="rounded bg-red-900/40 px-1.5 text-[9px] font-normal">X</kbd>
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
