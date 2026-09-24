@@ -49,10 +49,10 @@ function VideoReferencia({ r, grande = false }: { r: Referencia; grande?: boolea
           controls
           playsInline
           preload="metadata"
-          className={`mx-auto aspect-[9/16] w-full object-contain ${grande ? "max-h-[72vh]" : "max-h-[60vh]"}`}
+          className={`mx-auto aspect-[9/16] w-full object-contain ${grande ? "max-h-[72dvh]" : "max-h-[60dvh]"}`}
         />
       ) : (
-        <div className="grid aspect-[9/16] max-h-[40vh] w-full place-items-center p-4 text-center text-sm text-white/40">
+        <div className="grid aspect-[9/16] max-h-[40dvh] w-full place-items-center p-4 text-center text-sm text-white/40">
           {r.instagram ? (
             <a href={r.instagram} target="_blank" rel="noreferrer" className="text-[#A78BFA] underline">
               Ver la referencia en Instagram
@@ -75,11 +75,11 @@ function ModalVideo({
 }) {
   if (!pendiente?.referencia) return null;
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
-      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center py-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 p-3 backdrop-blur-md sm:p-4" role="dialog" aria-modal="true">
+      <div className="mx-auto flex min-h-dvh w-full max-w-[min(94vw,440px)] flex-col justify-center py-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="badge">{NOMBRE_TIPO[pendiente.tipo]}</span>
-          <button type="button" onClick={onClose} className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white">
+          <button type="button" onClick={onClose} className="min-h-11 rounded-full border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white">
             Cerrar
           </button>
         </div>
@@ -143,7 +143,7 @@ function TarjetaPendiente({ p }: { p: Pendiente }) {
   const tieneVideoPedido = Boolean(p.referencia);
 
   return (
-    <article className="space-y-3 rounded-3xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-4">
+    <article className="space-y-3 rounded-2xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-3 sm:rounded-3xl sm:p-4">
       <div className="flex items-center justify-between">
         <span className="badge">{NOMBRE_TIPO[p.tipo]}</span>
         {p.fecha_limite ? <span className="text-xs text-white/40">Para el {new Date(p.fecha_limite).toLocaleDateString("es-ES")}</span> : null}
@@ -172,7 +172,7 @@ function TarjetaVideoPedido({ p, onOpen }: { p: Pendiente; onOpen: (p: Pendiente
   const esReferencia = p.tipo === 4;
 
   return (
-    <article className="space-y-2 rounded-2xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-2">
+    <article className="min-w-0 space-y-2 rounded-2xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-2.5 sm:p-3">
       <button
         type="button"
         onClick={() => onOpen(p)}
@@ -205,7 +205,7 @@ function SubidaLibre({ tipo }: { tipo: number }) {
   const tab = TABS.find((t) => t.tipo === tipo);
   if (!tab || tipo === 4) return null;
   return (
-    <article className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+    <article className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 sm:rounded-3xl sm:p-4">
       <div>
         <h3 className="font-semibold text-white">Subir {tab.titulo.toLowerCase()}</h3>
         <p className="text-sm text-white/45">{tab.desc}</p>
@@ -240,19 +240,19 @@ export function PortalClient({
   }
 
   return (
-    <main className="mx-auto max-w-lg space-y-8 px-4 pb-16 pt-6">
-      <header className="flex items-center justify-between">
-        <div>
+    <main className="mx-auto min-h-dvh w-full max-w-3xl space-y-6 px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pt-6 md:space-y-8">
+      <header className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-sm text-white/40">Hola</p>
-          <h1 className="font-display text-2xl font-semibold text-white">{nombre}</h1>
+          <h1 className="truncate font-display text-2xl font-semibold text-white">{nombre}</h1>
         </div>
-        <button onClick={salir} className="btn-secondary px-3 py-2 text-xs">
+        <button onClick={salir} className="btn-secondary min-h-11 shrink-0 px-4 text-xs">
           Salir
         </button>
       </header>
 
       <Seccion titulo="Tus videos" sub="Entra en cada apartado para ver lo pendiente y subir el contenido correcto.">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
           {TABS.map((item) => {
             const activo = item.tipo === tabActiva;
             const count = conteos[item.tipo] ?? 0;
@@ -274,7 +274,7 @@ export function PortalClient({
           })}
         </div>
 
-        <div className="space-y-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:rounded-3xl sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="font-display text-xl font-semibold text-white">{tab.titulo}</h2>
@@ -288,7 +288,7 @@ export function PortalClient({
           {pendientesActivos.length ? (
             <div className="space-y-4">
               {pendientesConVideo.length ? (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
                   {pendientesConVideo.map((p) => (
                     <TarjetaVideoPedido key={p.id} p={p} onOpen={setVideoAbierto} />
                   ))}

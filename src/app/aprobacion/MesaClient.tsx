@@ -265,11 +265,11 @@ export function MesaClient({
           </p>
           {actionMessage ? <p className="mt-1 text-xs text-[#22D3EE]">{actionMessage}</p> : null}
         </div>
-        <div className="flex gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
           <select
             value={modeloFiltro}
             onChange={(event) => setModeloFiltro(event.target.value)}
-            className="input-base min-w-36 py-1.5 text-xs"
+            className="input-base min-w-0 py-1.5 text-xs"
           >
             <option value="todos">Todas las modelos</option>
             {modeloNombres.map((modelo) => (
@@ -281,7 +281,7 @@ export function MesaClient({
           <select
             value={tipoFiltro}
             onChange={(event) => setTipoFiltro(event.target.value)}
-            className="input-base min-w-40 py-1.5 text-xs"
+            className="input-base min-w-0 py-1.5 text-xs"
           >
             {TIPO_FILTROS.map((tipo) => (
               <option key={tipo.value} value={tipo.value}>
@@ -297,7 +297,7 @@ export function MesaClient({
           Sin videos en esta cola
         </div>
       ) : (
-        <div className="max-h-[calc(100vh-230px)] overflow-y-auto rounded-2xl border border-white/[0.08] bg-white/[0.025]">
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] md:max-h-[calc(100vh-230px)] md:overflow-y-auto">
           {filteredRows.map((row) => {
             const url = videoEditado(row);
             const canQuickReview = row.estado === "en_aprobacion";
@@ -409,8 +409,8 @@ export function MesaClient({
       )}
 
       {selected ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true">
-          <div className="relative grid h-[94vh] w-full max-w-6xl grid-cols-1 overflow-hidden rounded-3xl border border-white/[0.1] bg-[#08080d] shadow-[0_24px_80px_rgba(0,0,0,0.65)] lg:grid-cols-[minmax(260px,420px)_1fr]">
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/75 p-2 backdrop-blur-md sm:items-center sm:p-5" role="dialog" aria-modal="true">
+          <div className="relative grid h-[calc(100dvh-1rem)] w-full max-w-6xl grid-cols-1 overflow-hidden rounded-2xl border border-white/[0.1] bg-[#08080d] shadow-[0_24px_80px_rgba(0,0,0,0.65)] sm:h-[94dvh] sm:rounded-3xl lg:grid-cols-[minmax(260px,420px)_1fr]">
             <button
               onClick={closePopup}
               className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-black/40 text-sm text-white/55 transition hover:border-white/20 hover:text-white"
@@ -419,8 +419,8 @@ export function MesaClient({
               x
             </button>
 
-            <div className="grid min-h-0 place-items-center bg-black p-3 sm:p-5">
-              <div className="h-full max-h-[88vh] w-auto overflow-hidden rounded-2xl bg-black ring-1 ring-white/10">
+            <div className="grid min-h-0 place-items-center bg-black p-2 sm:p-5">
+              <div className="h-full max-h-[46dvh] w-auto overflow-hidden rounded-2xl bg-black ring-1 ring-white/10 sm:max-h-[88dvh]">
                 {videoEditado(selected) ? (
                   <video
                     key={selected.id}
@@ -428,7 +428,7 @@ export function MesaClient({
                     controls
                     playsInline
                     autoPlay
-                    className="h-full max-h-[88vh] aspect-[9/16] object-contain"
+                    className="h-full max-h-[46dvh] aspect-[9/16] object-contain sm:max-h-[88dvh]"
                   />
                 ) : (
                   <div className="grid aspect-[9/16] h-full min-h-[360px] place-items-center text-xs text-white/25">
@@ -438,7 +438,7 @@ export function MesaClient({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-t border-white/[0.08] bg-white/[0.04] p-4 backdrop-blur-xl lg:border-l lg:border-t-0">
+            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-t border-white/[0.08] bg-white/[0.04] p-3 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:p-4 lg:border-l lg:border-t-0">
               <div className="pr-10">
                 <p className="font-mono text-[10px] text-white/40">
                   {selected.modelo_nombre}

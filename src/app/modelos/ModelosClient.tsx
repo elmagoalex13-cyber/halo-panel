@@ -380,11 +380,11 @@ export function ModelosClient({
                       return (
                         <div
                           key={cuenta.id}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/80"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/80"
                         >
                           <button
                             onClick={() => toggleCuentaActiva(cuenta)}
-                            className="flex-1 truncate text-left font-code hover:text-white"
+                            className="min-w-0 flex-1 truncate text-left font-code hover:text-white"
                             title="Cambiar activa/pausada"
                           >
                             {SOCIAL_PREFIX[red]}{cuenta.username}
@@ -424,7 +424,7 @@ export function ModelosClient({
                     })
                   )}
                 </div>
-                <div className="mt-2 grid grid-cols-[118px_1fr_auto] gap-1.5">
+                <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-[118px_1fr_auto]">
                   <select
                     value={draftCuenta.red_social}
                     onChange={(event) =>
@@ -453,7 +453,7 @@ export function ModelosClient({
                     placeholder={SOCIAL_PLACEHOLDER[draftCuenta.red_social]}
                     className="input-base flex-1 py-1.5 text-xs"
                   />
-                  <button onClick={() => addCuenta(modelo.id)} className="btn-secondary px-3 py-1.5 text-xs">
+                  <button onClick={() => addCuenta(modelo.id)} className="btn-secondary min-h-10 px-3 py-1.5 text-xs">
                     Anadir
                   </button>
                 </div>
