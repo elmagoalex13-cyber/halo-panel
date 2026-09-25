@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { estadoLabel, formatDate, tipoVideoLabel } from "@/lib/utils";
-import { urlR2, videoBruto, videoEditado } from "@/lib/media";
+import { urlR2, videoBrutoAlternativas, videoEditado } from "@/lib/media";
 
 export interface VideoRow {
   id: string;
@@ -55,6 +55,96 @@ function mensajeAprobado(p?: Programacion) {
   return p.motivo === "publer_inactivo"
     ? "Aprobado. Publer no esta activo: descargalo desde la pestana Aprobados y subelo tu; se programara solo cuando actives Publer."
     : `Aprobado, pero no se pudo programar: ${p.mensaje}`;
+}
+
+function OriginalSinEditar({
+  row,
+  abierto,
+  onAbrir,
+  onCerrar,
+}: {
+  row: VideoRow;
+  abierto: boolean;
+  onAbrir: () => void;
+  onCerrar: () => void;
+}) {
+  const sources = useMemo(() => videoBrutoAlternativas(row), [row]);
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const src = sources[sourceIndex] ?? null;
+  const failed = sources.length > 0 && !src;
+
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [row.id]);
+
+  function probarSiguiente() {
+    setSourceIndex((current) => current + 1);
+  }
+
+  if (!sources.length) {
+    return (
+      <div className="grid h-28 w-16 place-items-center rounded-xl border border-dashed border-white/[0.08] px-1 text-center text-[10px] leading-tight text-white/25">
+        Sin original
+      </div>
+    );
+  }
+
+  if (failed) {
+    return (
+      <div className="grid h-28 w-20 place-items-center rounded-xl border border-amber-400/20 bg-amber-400/10 px-2 text-center text-[10px] leading-tight text-amber-100">
+        No se pudo cargar el original
+      </div>
+    );
+  }
+
+  if (abierto) {
+    return (
+      <div className="relative mx-auto max-h-[280px] overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "9/16" }}>
+        <video
+          key={`original-${row.id}-${sourceIndex}`}
+          src={src}
+          controls
+          playsInline
+          autoPlay
+          onError={probarSiguiente}
+          className="h-full w-full object-contain"
+        />
+        <button
+          onClick={onCerrar}
+          className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/75 text-[10px] text-white hover:bg-black"
+          aria-label="Cerrar original"
+        >
+          x
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onAbrir}
+      className="group relative flex h-28 w-16 overflow-hidden rounded-xl bg-black ring-1 ring-white/10 transition-all hover:ring-[#06B6D4]/60"
+    >
+      <video
+        key={`original-thumb-${row.id}-${sourceIndex}`}
+        src={src}
+        className="h-full w-full object-cover"
+        muted
+        playsInline
+        preload="metadata"
+        onError={probarSiguiente}
+      />
+      <div className="absolute inset-0 flex items-center justify-center bg-black/40 transition-colors group-hover:bg-black/20">
+        <div className="grid h-8 w-8 place-items-center rounded-full bg-black/70 ring-1 ring-white/20">
+          <svg className="ml-0.5 h-3.5 w-3.5 text-white" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M6 4l6 4-6 4V4z" />
+          </svg>
+        </div>
+      </div>
+      <span className="absolute bottom-1 left-0 right-0 text-center text-[8px] text-white/60">ver original</span>
+    </button>
+  );
 }
 
 export function MesaClient({
@@ -127,7 +217,7 @@ export function MesaClient({
     // Tipo 4: auto-expandir referencia y original para comparativa de 3 paneles
     const esTipo4 = row.tipo_video === "tipo4";
     setRefOpen(esTipo4 && Boolean(row.r2_key_referencia));
-    setOriginalOpen(esTipo4 && Boolean(videoBruto(row)));
+    setOriginalOpen(esTipo4 && videoBrutoAlternativas(row).length > 0);
     setActionMessage(null);
   }, []);
 
@@ -622,46 +712,12 @@ export function MesaClient({
 
                   <div>
                     <p className="mb-1 text-[10px] text-white/35">Original sin editar</p>
-                    {videoBruto(selected) ? (
-                      originalOpen ? (
-                        <div className="relative mx-auto max-h-[280px] overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "9/16" }}>
-                          <video
-                            key={`original-${selected.id}`}
-                            src={videoBruto(selected)!}
-                            controls
-                            playsInline
-                            autoPlay
-                            className="h-full w-full object-contain"
-                          />
-                          <button
-                            onClick={() => setOriginalOpen(false)}
-                            className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/75 text-[10px] text-white hover:bg-black"
-                            aria-label="Cerrar original"
-                          >
-                            x
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setOriginalOpen(true)}
-                          className="group relative flex h-28 w-16 overflow-hidden rounded-xl bg-black ring-1 ring-white/10 transition-all hover:ring-[#06B6D4]/60"
-                        >
-                          <video src={videoBruto(selected)!} className="h-full w-full object-cover" muted playsInline preload="metadata" />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 transition-colors group-hover:bg-black/20">
-                            <div className="grid h-8 w-8 place-items-center rounded-full bg-black/70 ring-1 ring-white/20">
-                              <svg className="ml-0.5 h-3.5 w-3.5 text-white" fill="currentColor" viewBox="0 0 16 16">
-                                <path d="M6 4l6 4-6 4V4z" />
-                              </svg>
-                            </div>
-                          </div>
-                          <span className="absolute bottom-1 left-0 right-0 text-center text-[8px] text-white/60">ver original</span>
-                        </button>
-                      )
-                    ) : (
-                      <div className="grid h-28 w-16 place-items-center rounded-xl border border-dashed border-white/[0.08] px-1 text-center text-[10px] leading-tight text-white/25">
-                        Sin original
-                      </div>
-                    )}
+                    <OriginalSinEditar
+                      row={selected}
+                      abierto={originalOpen}
+                      onAbrir={() => setOriginalOpen(true)}
+                      onCerrar={() => setOriginalOpen(false)}
+                    />
                   </div>
                 </div>
               </div>

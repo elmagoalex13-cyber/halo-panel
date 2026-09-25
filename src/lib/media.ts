@@ -35,7 +35,15 @@ export function videoEditado(p: PiezaVideo): string | null {
 
 /** Video bruto original grabado por la modelo. */
 export function videoBruto(p: PiezaVideo): string | null {
-  return urlR2(p.r2_key_original) ?? (p.video_procesado_url ? urlR2(p.r2_key) : null);
+  return videoBrutoAlternativas(p)[0] ?? null;
+}
+
+/** Posibles URLs del bruto original, de mas nueva a mas antigua. */
+export function videoBrutoAlternativas(p: PiezaVideo): string[] {
+  return [
+    urlR2(p.r2_key_original),
+    p.video_procesado_url ? urlR2(p.r2_key) : null,
+  ].filter((url, index, urls): url is string => Boolean(url) && urls.indexOf(url) === index);
 }
 
 export function keyEditado(p: PiezaVideo): string | null {
@@ -43,5 +51,13 @@ export function keyEditado(p: PiezaVideo): string | null {
 }
 
 export function keyBruto(p: PiezaVideo): string | null {
-  return keyR2(p.r2_key_original) ?? (p.video_procesado_url ? keyR2(p.r2_key) : null);
+  return keyBrutoAlternativas(p)[0] ?? null;
+}
+
+/** Posibles keys del bruto original, de mas nueva a mas antigua. */
+export function keyBrutoAlternativas(p: PiezaVideo): string[] {
+  return [
+    keyR2(p.r2_key_original),
+    p.video_procesado_url ? keyR2(p.r2_key) : null,
+  ].filter((key, index, keys): key is string => Boolean(key) && keys.indexOf(key) === index);
 }

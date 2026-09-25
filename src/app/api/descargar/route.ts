@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
-import { keyBruto, keyEditado } from "@/lib/media";
+import { keyBrutoAlternativas, keyEditado } from "@/lib/media";
 import { getR2Object } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +22,11 @@ export async function GET(req: NextRequest) {
     .single();
   if (error || !pieza) return NextResponse.json({ error: "Pieza no encontrada" }, { status: 404 });
 
-  const key = tipo === "original" ? keyBruto(pieza) ?? keyEditado(pieza) : keyEditado(pieza);
-  if (!key) return NextResponse.json({ error: "La pieza no tiene video" }, { status: 404 });
+  const keys = tipo === "original" ? keyBrutoAlternativas(pieza) : [keyEditado(pieza)].filter(Boolean) as string[];
+  if (!keys.length) return NextResponse.json({ error: "La pieza no tiene video" }, { status: 404 });
 
+  let lastError: unknown = null;
+  for (const key of keys) {
   try {
     const obj = await getR2Object(key);
     if (!obj.Body) return NextResponse.json({ error: "Objeto vacio" }, { status: 404 });
@@ -39,6 +41,10 @@ export async function GET(req: NextRequest) {
     if (obj.ContentLength) headers.set("Content-Length", String(obj.ContentLength));
     return new Response(obj.Body.transformToWebStream(), { headers });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo descargar" }, { status: 500 });
+    lastError = e;
+    if (tipo !== "original") break;
   }
+  }
+
+  return NextResponse.json({ error: lastError instanceof Error ? lastError.message : "No se pudo descargar" }, { status: 500 });
 }
