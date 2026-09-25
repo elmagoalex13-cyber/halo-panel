@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
@@ -30,6 +30,37 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [counts, setCounts] = useState({ approval: pendingAprobacion, leads: pendingLeads });
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function loadCounts() {
+      try {
+        const res = await fetch("/api/panel/counts", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { approval?: number; leads?: number };
+        if (!disposed) {
+          setCounts({
+            approval: Number(data.approval ?? 0),
+            leads: Number(data.leads ?? 0),
+          });
+        }
+      } catch {
+        // El menú no debe bloquear la navegación si los contadores fallan.
+      }
+    }
+
+    loadCounts();
+    const interval = window.setInterval(loadCounts, 30000);
+    window.addEventListener("focus", loadCounts);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", loadCounts);
+    };
+  }, []);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -42,8 +73,8 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   }
 
   function badgeFor(item: (typeof NAV)[number]) {
-    if (item.badge && pendingAprobacion > 0) return pendingAprobacion > 99 ? "99+" : String(pendingAprobacion);
-    if (item.leadsBadge && pendingLeads > 0) return pendingLeads > 99 ? "99+" : String(pendingLeads);
+    if (item.badge && counts.approval > 0) return counts.approval > 99 ? "99+" : String(counts.approval);
+    if (item.leadsBadge && counts.leads > 0) return counts.leads > 99 ? "99+" : String(counts.leads);
     return null;
   }
 
