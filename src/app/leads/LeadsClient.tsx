@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Archive, CheckCircle2, ChevronLeft, ChevronRight, Clock3, ImageIcon, Mail, MessageCircle, Phone, Save, Trash2, UserRound, Video, X } from "lucide-react";
+import { Archive, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, ImageIcon, Mail, MessageCircle, Phone, Save, Trash2, UserRound, Video, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Lead, LeadAdjunto, LeadEstado } from "@/types";
 
@@ -53,6 +53,11 @@ function formatBytes(value?: number | null) {
   if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(value >= 100 * 1024 * 1024 ? 0 : 1)} MB`;
   if (value >= 1024) return `${Math.round(value / 1024)} KB`;
   return `${value} B`;
+}
+
+function downloadHref(adjunto: LeadAdjunto) {
+  const params = new URLSearchParams({ key: adjunto.key || adjunto.url, name: adjunto.name });
+  return `/api/leads/adjuntos/descargar?${params.toString()}`;
 }
 
 function tabTone(tone: "violet" | "cyan" | "emerald" | "amber" | "red", active: boolean) {
@@ -309,6 +314,18 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] bg-white/[0.025] px-4 py-3">
+              <p className="text-xs text-white/45">
+                Puedes ver el archivo aqui o descargarlo para guardarlo.
+              </p>
+              <a
+                href={downloadHref(currentAdjunto)}
+                className="btn-secondary inline-flex min-h-10 items-center gap-2 px-3 text-sm"
+              >
+                <Download className="h-4 w-4" />
+                Descargar
+              </a>
+            </div>
 
             <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[1fr_180px]">
               <div className="relative flex min-h-[55vh] items-center justify-center bg-black">
@@ -333,25 +350,36 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
 
               <div className="flex gap-2 overflow-x-auto border-t border-white/[0.08] bg-white/[0.02] p-3 lg:max-h-[72vh] lg:flex-col lg:overflow-y-auto lg:border-l lg:border-t-0">
                 {viewer.items.map((adjunto, index) => (
-                  <button
+                  <div
                     key={adjunto.key}
-                    type="button"
-                    onClick={() => setViewer((current) => current ? { ...current, index } : current)}
-                    className={`group flex w-36 shrink-0 items-center gap-2 rounded-xl border p-2 text-left transition lg:w-full ${index === viewer.index ? "border-[#8B5CF6]/70 bg-[#8B5CF6]/15" : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"}`}
+                    className={`flex w-44 shrink-0 items-center gap-2 rounded-xl border p-2 transition lg:w-full ${index === viewer.index ? "border-[#8B5CF6]/70 bg-[#8B5CF6]/15" : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"}`}
                   >
-                    <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-black/40">
-                      {adjunto.kind === "image" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={adjunto.url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      ) : (
-                        <Video className="h-5 w-5 text-white/55" />
-                      )}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-xs font-semibold text-white/75">{adjunto.name}</span>
-                      <span className="mt-0.5 block text-[11px] text-white/35">{formatBytes(adjunto.size)}</span>
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewer((current) => current ? { ...current, index } : current)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
+                      <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-black/40">
+                        {adjunto.kind === "image" ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={adjunto.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                        ) : (
+                          <Video className="h-5 w-5 text-white/55" />
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-semibold text-white/75">{adjunto.name}</span>
+                        <span className="mt-0.5 block text-[11px] text-white/35">{formatBytes(adjunto.size)}</span>
+                      </span>
+                    </button>
+                    <a
+                      href={downloadHref(adjunto)}
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-white/55 transition hover:border-white/20 hover:text-white"
+                      aria-label={`Descargar ${adjunto.name}`}
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </div>
                 ))}
               </div>
             </div>
@@ -380,25 +408,37 @@ function AdjuntosCompactos({ adjuntos, onOpen }: { adjuntos: LeadAdjunto[]; onOp
           <ImageIcon className="h-4 w-4" />
           Ver archivos
         </button>
+        <a href={downloadHref(first)} className="btn-secondary inline-flex min-h-10 items-center gap-2 px-3 text-sm">
+          <Download className="h-4 w-4" />
+          Descargar
+        </a>
       </div>
       <div className="mt-3 flex gap-2 overflow-hidden">
         {adjuntos.slice(0, 4).map((adjunto, index) => (
-          <button
-            key={adjunto.key}
-            type="button"
-            onClick={() => onOpen(index)}
-            className="relative h-20 w-16 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.03]"
-            aria-label={`Ver ${adjunto.name}`}
-          >
-            {adjunto.kind === "image" ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={adjunto.url} alt="" className="h-full w-full object-cover" loading="lazy" />
-            ) : (
-              <span className="grid h-full w-full place-items-center bg-black/40">
-                <Video className="h-5 w-5 text-white/65" />
-              </span>
-            )}
-          </button>
+          <div key={adjunto.key} className="relative h-20 w-16 shrink-0">
+            <button
+              type="button"
+              onClick={() => onOpen(index)}
+              className="h-full w-full overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.03]"
+              aria-label={`Ver ${adjunto.name}`}
+            >
+              {adjunto.kind === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={adjunto.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+              ) : (
+                <span className="grid h-full w-full place-items-center bg-black/40">
+                  <Video className="h-5 w-5 text-white/65" />
+                </span>
+              )}
+            </button>
+            <a
+              href={downloadHref(adjunto)}
+              className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-md bg-black/70 text-white/80 ring-1 ring-white/15 backdrop-blur transition hover:bg-black hover:text-white"
+              aria-label={`Descargar ${adjunto.name}`}
+            >
+              <Download className="h-3.5 w-3.5" />
+            </a>
+          </div>
         ))}
         {adjuntos.length > 4 ? (
           <button type="button" onClick={() => onOpen(4)} className="grid h-20 w-16 shrink-0 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-sm font-semibold text-white/65">
