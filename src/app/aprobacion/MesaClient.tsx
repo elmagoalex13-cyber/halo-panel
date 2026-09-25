@@ -500,7 +500,7 @@ export function MesaClient({
 
       {selected ? (
         <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/75 p-2 backdrop-blur-md sm:items-center sm:p-5" role="dialog" aria-modal="true">
-          <div className="relative grid h-[calc(100dvh-1rem)] w-full max-w-6xl grid-cols-1 overflow-hidden rounded-2xl border border-white/[0.1] bg-[#08080d] shadow-[0_24px_80px_rgba(0,0,0,0.65)] sm:h-[94dvh] sm:rounded-3xl lg:grid-cols-[minmax(260px,420px)_1fr]">
+          <div className="relative grid h-[calc(100dvh-1rem)] w-full max-w-6xl grid-cols-1 overflow-hidden rounded-2xl border border-white/[0.14] bg-[#0b0912]/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.65)] backdrop-blur-2xl sm:h-[94dvh] sm:rounded-3xl lg:grid-cols-[minmax(260px,420px)_1fr]">
             <button
               onClick={closePopup}
               className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-black/40 text-sm text-white/55 transition hover:border-white/20 hover:text-white"
@@ -773,7 +773,7 @@ export function MesaClient({
 
       {quickRehacer ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
-          <div className="w-full max-w-lg rounded-2xl border border-white/[0.1] bg-[#101018] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+          <div className="glass-card w-full max-w-lg p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-display text-lg font-semibold text-white">Rehacer video</p>

@@ -349,7 +349,7 @@ export default async function LandingsPage({
           </div>
           <div className="max-h-[520px] overflow-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="sticky top-0 bg-[#101018] text-xs uppercase tracking-wider text-white/30">
+              <thead className="sticky top-0 bg-[#0b0912]/95 text-xs uppercase tracking-wider text-white/30 backdrop-blur-xl">
                 <tr>
                   <th className="px-5 py-3">Fecha</th>
                   <th className="px-5 py-3">Landing</th>

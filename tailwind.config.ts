@@ -6,12 +6,12 @@ const config: Config = {
     extend: {
       colors: {
         halo: {
-          base: "#050508",
-          bg: "#050508",
-          surface: "#151620",
-          muted: "#1E2030",
-          border: "rgba(255,255,255,0.08)",
-          text: "rgba(255,255,255,0.92)",
+          base: "#060509",
+          bg: "rgba(255,255,255,0.045)",
+          surface: "rgba(255,255,255,0.05)",
+          muted: "rgba(255,255,255,0.06)",
+          border: "rgba(255,255,255,0.14)",
+          text: "rgba(255,255,255,0.94)",
           subtle: "rgba(255,255,255,0.5)",
           accent: "#8B5CF6",
           accent2: "#A78BFA",

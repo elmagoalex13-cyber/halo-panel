@@ -35,7 +35,7 @@ export function LoginClient({ configured }: { configured: boolean }) {
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-10">
-      <div className="w-full max-w-sm rounded-3xl border border-white/[0.08] bg-white/[0.04] p-6 shadow-2xl shadow-black/40">
+      <div className="glass-card w-full max-w-sm p-6">
         <div className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#A78BFA]">HALO</p>
           <h1 className="mt-2 font-display text-3xl font-semibold text-white">Acceso admin</h1>

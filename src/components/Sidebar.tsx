@@ -83,37 +83,23 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
 
   return (
     <>
+      {/* Escritorio: panel de cristal fijo */}
       <aside
-        className="hidden md:flex"
-        style={{
-          width: "224px",
-          flexShrink: 0,
-          backgroundColor: "#151620",
-          borderRight: "1px solid #1E2030",
-          flexDirection: "column",
-          height: "100vh",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          overflowY: "auto",
-          zIndex: 30,
-        }}
+        className="sidebar fixed left-0 top-0 z-30 hidden h-screen w-[224px] shrink-0 flex-col overflow-y-auto md:flex"
       >
-        <div style={{ padding: "20px", borderBottom: "1px solid #1E2030" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ color: "#7B5EFF", fontSize: "20px", fontWeight: "bold" }}>◈</span>
+        <div className="border-b border-white/[0.08] p-5">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-9 w-9 place-items-center rounded-xl border border-white/[0.14] bg-gradient-to-br from-[#8B5CF6]/35 to-[#A78BFA]/10 text-lg text-[#C4B5FD] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
+              ◈
+            </span>
             <div>
-              <div style={{ color: "#E8E9F0", fontSize: "13px", fontWeight: "700", letterSpacing: "0.05em" }}>
-                HALO
-              </div>
-              <div style={{ color: "#6B6E85", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                Models Panel
-              </div>
+              <div className="text-[13px] font-bold tracking-[0.05em] text-white/90">HALO</div>
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/40">Models Panel</div>
             </div>
           </div>
         </div>
-        <nav style={{ flex: 1, padding: "16px 0", overflowY: "auto" }}>
-          <div style={{ padding: "0 12px", display: "flex", flexDirection: "column", gap: "2px" }}>
+        <nav className="flex-1 overflow-y-auto py-4">
+          <div className="flex flex-col gap-1 px-3">
             {NAV.map((item) => {
               const { href, label, icon, leadsBadge } = item;
               const active = activeFor(href);
@@ -122,35 +108,19 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                 <Link
                   key={href}
                   href={href}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    textDecoration: "none",
-                    fontWeight: "500",
-                    transition: "all 0.15s",
-                    backgroundColor: active ? "rgba(123,94,255,0.12)" : "transparent",
-                    color: active ? "#7B5EFF" : "#6B6E85",
-                    border: active ? "1px solid rgba(123,94,255,0.2)" : "1px solid transparent",
-                  }}
+                  className={`group relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                    active
+                      ? "border-[#A78BFA]/30 bg-[#8B5CF6]/[0.16] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-8px_rgba(139,92,246,0.6)]"
+                      : "border-transparent text-white/50 hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white/85"
+                  }`}
                 >
-                  <span style={{ fontSize: "15px", lineHeight: "1" }}>{icon}</span>
-                  <span style={{ flex: 1 }}>{label}</span>
+                  <span className={`text-[15px] leading-none ${active ? "text-[#C4B5FD]" : ""}`}>{icon}</span>
+                  <span className="flex-1">{label}</span>
                   {badgeText ? (
                     <span
-                      style={{
-                        backgroundColor: leadsBadge ? "#06B6D4" : "#7B5EFF",
-                        color: "white",
-                        fontSize: "10px",
-                        fontWeight: "700",
-                        padding: "2px 6px",
-                        borderRadius: "99px",
-                        minWidth: "18px",
-                        textAlign: "center",
-                      }}
+                      className={`min-w-[18px] rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold text-white shadow-[0_0_10px_-2px_rgba(139,92,246,0.8)] ${
+                        leadsBadge ? "bg-[#06B6D4]" : "bg-[#8B5CF6]"
+                      }`}
                     >
                       {badgeText}
                     </span>
@@ -160,31 +130,16 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
             })}
           </div>
         </nav>
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #1E2030" }}>
-          <button
-            onClick={logout}
-            style={{
-              width: "100%",
-              marginBottom: "12px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.03)",
-              color: "#A1A4B8",
-              borderRadius: "8px",
-              padding: "8px 10px",
-              fontSize: "12px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
+        <div className="border-t border-white/[0.08] p-4">
+          <button onClick={logout} className="btn-secondary mb-3 w-full py-2 text-xs">
             Salir
           </button>
-          <div style={{ color: "#6B6E85", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            Panel de admin · Halo Agency
-          </div>
+          <div className="text-[10px] uppercase tracking-[0.12em] text-white/30">Panel de admin · Halo Agency</div>
         </div>
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-[#10111a]/95 px-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-2xl md:hidden">
+      {/* Movil: barra inferior de cristal */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.1] bg-[#0d0a16]/80 px-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           {primaryItems.map((item) => {
             const active = activeFor(item.href);
@@ -224,7 +179,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
       {moreOpen ? (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm md:hidden" role="dialog" aria-modal="true" onClick={() => setMoreOpen(false)}>
           <div
-            className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-y-auto rounded-t-3xl border border-white/[0.1] bg-[#151620] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-24px_80px_rgba(0,0,0,0.65)]"
+            className="glass-card absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-y-auto rounded-b-none rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
@@ -263,11 +218,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                 );
               })}
             </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="mt-3 flex min-h-12 w-full items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.04] text-sm font-bold text-white/70"
-            >
+            <button type="button" onClick={logout} className="btn-secondary mt-3 flex min-h-12 w-full items-center justify-center text-sm">
               Salir
             </button>
           </div>

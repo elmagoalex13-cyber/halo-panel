@@ -141,7 +141,7 @@ export function TrialReelsMesa() {
       {/* Modal */}
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={(e) => { if (e.target === e.currentTarget) setSelected(null); }}>
-          <div className="w-full max-w-4xl rounded-2xl border border-halo-border bg-[#12131e] p-5 space-y-4 overflow-y-auto max-h-[90vh]">
+          <div className="glass-card w-full max-w-4xl space-y-4 overflow-y-auto max-h-[90vh] p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs text-halo-subtle uppercase tracking-wider font-semibold">Trial Reel</p>

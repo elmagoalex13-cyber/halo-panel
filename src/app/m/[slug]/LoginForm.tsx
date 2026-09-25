@@ -33,7 +33,7 @@ export function LoginForm({ slug, nombre }: { slug: string; nombre: string }) {
 
   return (
     <main className="grid min-h-screen place-items-center px-5 py-10">
-      <form onSubmit={entrar} className="w-full max-w-sm space-y-4 rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
+      <form onSubmit={entrar} className="glass-card w-full max-w-sm space-y-4 p-6">
         <div className="text-center">
           <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[#8B5CF6]/20 text-xl text-[#A78BFA]">◈</div>
           <h1 className="font-display text-2xl font-semibold text-white">Hola, {nombre}</h1>

@@ -129,7 +129,7 @@ export function LandingLineChart({ data }: { data: LandingChartPoint[] }) {
 
       {hoverIndex !== null && activePoint ? (
         <div
-          className="pointer-events-none absolute top-12 min-w-[170px] rounded-xl border border-white/[0.1] bg-[#101018]/95 p-3 text-xs shadow-2xl"
+          className="pointer-events-none absolute top-12 min-w-[170px] rounded-xl border border-white/[0.14] bg-[#0b0912]/90 p-3 text-xs shadow-2xl backdrop-blur-xl"
           style={{ left: `min(calc(${(hoverX / width) * 100}% + 12px), calc(100% - 190px))` }}
         >
           <p className="mb-2 font-semibold text-white">{formatDay(activePoint.date)}</p>
