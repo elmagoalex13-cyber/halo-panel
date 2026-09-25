@@ -177,15 +177,31 @@ function TarjetaVideoPedido({ p, onOpen }: { p: Pendiente; onOpen: (p: Pendiente
         type="button"
         onClick={() => onOpen(p)}
         className="group relative block aspect-[9/16] w-full overflow-hidden rounded-xl bg-black text-left ring-1 ring-white/10"
+        aria-label={`Ver referencia ${NOMBRE_TIPO[p.tipo]}`}
       >
         {p.referencia?.thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.referencia.thumb} alt="" className="h-full w-full object-cover" />
+        ) : p.referencia?.video ? (
+          <video
+            src={p.referencia.video}
+            className="h-full w-full object-cover"
+            muted
+            playsInline
+            preload="metadata"
+          />
         ) : (
-          <span className="grid h-full w-full place-items-center px-2 text-center text-xs text-white/40">Tocar para ver</span>
+          <span className="grid h-full w-full place-items-center px-2 text-center text-xs text-white/40">Sin portada</span>
         )}
-        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 text-[11px] font-semibold text-white">
-          Tocar para ver
+        <span className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-95 transition group-hover:bg-black/0">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-black/65 text-white ring-1 ring-white/25">
+            <svg className="ml-0.5 h-5 w-5" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M6 4l6 4-6 4V4z" />
+            </svg>
+          </span>
+        </span>
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2 text-[11px] font-semibold text-white">
+          Ver referencia
         </span>
       </button>
       <div className="space-y-1">

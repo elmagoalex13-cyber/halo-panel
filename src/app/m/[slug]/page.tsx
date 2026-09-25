@@ -22,7 +22,7 @@ function refVista(r: RefRow | null) {
     ? {
         id: r.id,
         video: urlR2(r.url_r2),
-        thumb: r.thumbnail_url,
+        thumb: urlR2(r.thumbnail_url) ?? r.thumbnail_url,
         instagram: r.url_original,
         descripcion: r.descripcion,
       }
