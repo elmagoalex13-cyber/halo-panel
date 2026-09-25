@@ -5,13 +5,12 @@
 :root {
   --bg-base: #060509;
 
-  /* Vidrio oscuro y mate: tinte casi negro (no blanco), sin brillo. Se nota transparente
-     porque desenfoca el color de detras, no porque reluzca. */
-  --glass-bg: rgba(8, 7, 14, 0.5);
-  --glass-bg-hover: rgba(14, 11, 22, 0.58);
-  --glass-border: rgba(255, 255, 255, 0.07);
-  --glass-border-hover: rgba(167, 139, 250, 0.22);
-  --glass-blur: blur(22px) saturate(115%) brightness(0.92);
+  /* Vidrio mate: se distingue bien del fondo (no demasiado oscuro) pero sin reflejos ni brillo */
+  --glass-bg: rgba(255, 255, 255, 0.06);
+  --glass-bg-hover: rgba(255, 255, 255, 0.09);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-border-hover: rgba(167, 139, 250, 0.32);
+  --glass-blur: blur(22px) saturate(130%);
 
   --accent: #8B5CF6;
   --accent-2: #A78BFA;
@@ -125,9 +124,9 @@ a {
 
 /* Panel lateral: mismo cristal oscuro, algo mas opaco para que la navegacion se lea bien */
 .sidebar {
-  background-color: rgba(6, 5, 11, 0.62);
-  -webkit-backdrop-filter: blur(28px) saturate(115%) brightness(0.92);
-  backdrop-filter: blur(28px) saturate(115%) brightness(0.92);
+  background-color: rgba(16, 13, 26, 0.55);
+  -webkit-backdrop-filter: blur(28px) saturate(130%);
+  backdrop-filter: blur(28px) saturate(130%);
   border-right: 1px solid var(--glass-border);
   box-shadow: 8px 0 40px -20px rgba(0, 0, 0, 0.55);
   width: 220px;
@@ -179,13 +178,13 @@ a {
 /* ---------- Campos ---------- */
 .input,
 .input-base {
-  background-color: rgba(0, 0, 0, 0.28);
+  background-color: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   color: rgba(255, 255, 255, 0.94);
-  -webkit-backdrop-filter: blur(16px) saturate(110%);
-  backdrop-filter: blur(16px) saturate(110%);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.22);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
