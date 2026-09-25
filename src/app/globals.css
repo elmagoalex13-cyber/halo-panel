@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --bg-base: #0c0a16;
+  --bg-base: #060509;
 
-  /* Vidrio: muy translucido, el color de fondo se ve a traves (backdrop-filter hace el trabajo) */
-  --glass-bg: rgba(255, 255, 255, 0.035);
-  --glass-bg-hover: rgba(255, 255, 255, 0.06);
-  --glass-border: rgba(255, 255, 255, 0.16);
-  --glass-border-hover: rgba(196, 181, 253, 0.45);
-  --glass-specular: rgba(226, 210, 255, 0.28);
-  --glass-blur: blur(30px) saturate(150%) brightness(0.97);
+  /* Vidrio oscuro y mate: tinte casi negro (no blanco), sin brillo. Se nota transparente
+     porque desenfoca el color de detras, no porque reluzca. */
+  --glass-bg: rgba(8, 7, 14, 0.5);
+  --glass-bg-hover: rgba(14, 11, 22, 0.58);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-border-hover: rgba(167, 139, 250, 0.22);
+  --glass-blur: blur(22px) saturate(115%) brightness(0.92);
 
   --accent: #8B5CF6;
   --accent-2: #A78BFA;
@@ -40,16 +40,16 @@ html {
   overflow-x: hidden;
 }
 
-/* Fondo: "luces" moradas grandes y saturadas, fijas, para que el cristal tenga color real que refractar */
+/* Fondo: la base es casi negra; el morado solo asoma como un resplandor lejano y apagado
+   en las esquinas, no como una luz que ilumina la pantalla. */
 body {
   position: relative;
   background-color: var(--bg-base);
   background-image:
-    radial-gradient(62rem 48rem at 12% -12%, rgba(168, 133, 255, 0.55) 0%, rgba(168, 133, 255, 0) 62%),
-    radial-gradient(56rem 46rem at 105% 0%, rgba(139, 92, 246, 0.48) 0%, rgba(139, 92, 246, 0) 58%),
-    radial-gradient(50rem 54rem at 92% 100%, rgba(6, 182, 212, 0.24) 0%, rgba(6, 182, 212, 0) 55%),
-    radial-gradient(58rem 50rem at -5% 96%, rgba(124, 58, 237, 0.42) 0%, rgba(124, 58, 237, 0) 58%),
-    radial-gradient(38rem 38rem at 50% 42%, rgba(217, 190, 255, 0.1) 0%, rgba(217, 190, 255, 0) 65%);
+    radial-gradient(56rem 44rem at 10% -15%, rgba(124, 58, 237, 0.22) 0%, rgba(124, 58, 237, 0) 60%),
+    radial-gradient(50rem 42rem at 108% -5%, rgba(99, 60, 200, 0.18) 0%, rgba(99, 60, 200, 0) 58%),
+    radial-gradient(46rem 48rem at 95% 105%, rgba(6, 182, 212, 0.1) 0%, rgba(6, 182, 212, 0) 55%),
+    radial-gradient(52rem 44rem at -8% 100%, rgba(88, 40, 170, 0.18) 0%, rgba(88, 40, 170, 0) 58%);
   background-attachment: fixed;
   background-repeat: no-repeat;
   color: var(--text-primary);
@@ -96,68 +96,53 @@ a {
   background-clip: padding-box;
 }
 
-/* ---------- Superficies de cristal (liquid glass) ---------- */
-/* Casi transparentes: el color de fondo se ve a traves del blur. Solo un reflejo morado arriba
-   y un borde fino que "atrapa" la luz marcan que es cristal, no una caja solida. */
+/* ---------- Superficies de cristal (mate, sin brillo) ---------- */
+/* Tinte oscuro (no blanco) + desenfoque: se nota transparente por lo que difumina detras,
+   no por ningun reflejo. Sin brillos ni bordes luminosos. */
 .glass-card,
 .card {
   position: relative;
   isolation: isolate;
   background-color: var(--glass-bg);
-  background-image:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 16%),
-    radial-gradient(60% 40% at 6% 0%, rgba(216, 196, 255, 0.12), transparent 60%);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  box-shadow:
-    inset 0 1px 0 var(--glass-specular),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
-    0 20px 50px -30px rgba(0, 0, 0, 0.6);
-  transition: border-color 0.25s ease, box-shadow 0.3s ease, background-color 0.25s ease, transform 0.25s ease;
+  box-shadow: 0 16px 40px -28px rgba(0, 0, 0, 0.75);
+  transition: border-color 0.25s ease, box-shadow 0.3s ease, background-color 0.25s ease;
 }
 
 .glass-card:hover,
 .card:hover {
   border-color: var(--glass-border-hover);
   background-color: var(--glass-bg-hover);
-  box-shadow:
-    inset 0 1px 0 var(--glass-specular),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
-    0 0 0 1px rgba(196, 181, 253, 0.2),
-    0 26px 60px -28px rgba(0, 0, 0, 0.65),
-    0 0 36px -10px var(--accent-glow);
+  box-shadow: 0 18px 44px -26px rgba(0, 0, 0, 0.8);
 }
 
 .card {
   padding: 1rem;
 }
 
-/* Panel lateral: el mismo cristal, muy transparente, con mucho blur para que se lea la navegacion */
+/* Panel lateral: mismo cristal oscuro, algo mas opaco para que la navegacion se lea bien */
 .sidebar {
-  background-color: rgba(20, 14, 36, 0.34);
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 25%);
-  -webkit-backdrop-filter: blur(40px) saturate(150%) brightness(0.97);
-  backdrop-filter: blur(40px) saturate(150%) brightness(0.97);
+  background-color: rgba(6, 5, 11, 0.62);
+  -webkit-backdrop-filter: blur(28px) saturate(115%) brightness(0.92);
+  backdrop-filter: blur(28px) saturate(115%) brightness(0.92);
   border-right: 1px solid var(--glass-border);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05), 8px 0 40px -20px rgba(0, 0, 0, 0.5);
+  box-shadow: 8px 0 40px -20px rgba(0, 0, 0, 0.55);
   width: 220px;
 }
 
 /* ---------- Botones ---------- */
-/* Capsulas de cristal con tinte morado: se ve el fondo a traves, no son bloques pintados solidos */
+/* Morado apagado y mate: sin degradados brillantes ni halos, solo un tinte plano translucido */
 .btn-primary {
   position: relative;
-  background-color: rgba(139, 92, 246, 0.38);
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 60%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  backdrop-filter: blur(18px) saturate(150%);
-  border: 1px solid rgba(216, 196, 255, 0.32);
+  background-color: rgba(109, 68, 199, 0.55);
+  -webkit-backdrop-filter: blur(14px) saturate(115%);
+  backdrop-filter: blur(14px) saturate(115%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-sm);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 8px 20px -14px rgba(76, 29, 149, 0.55);
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.55);
   color: white;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -165,50 +150,42 @@ a {
 }
 
 .btn-primary:hover {
-  background-color: rgba(150, 105, 250, 0.48);
-  border-color: rgba(216, 196, 255, 0.45);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 10px 26px -14px rgba(76, 29, 149, 0.65);
-  transform: translateY(-1px);
+  background-color: rgba(124, 79, 216, 0.62);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .btn-primary:active {
-  transform: translateY(0);
-  background-color: rgba(139, 92, 246, 0.45);
+  background-color: rgba(96, 60, 176, 0.6);
 }
 
 .btn-secondary {
   position: relative;
   border: 1px solid var(--glass-border);
-  background-color: rgba(255, 255, 255, 0.03);
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 60%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  backdrop-filter: blur(18px) saturate(140%);
+  background-color: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-sm);
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.75);
   font-weight: 600;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .btn-secondary:hover {
   border-color: var(--glass-border-hover);
-  background-color: rgba(196, 181, 253, 0.08);
+  background-color: var(--glass-bg-hover);
   color: white;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 22px -10px var(--accent-glow);
 }
 
 /* ---------- Campos ---------- */
 .input,
 .input-base {
-  background-color: rgba(255, 255, 255, 0.035);
+  background-color: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   color: rgba(255, 255, 255, 0.94);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  backdrop-filter: blur(20px) saturate(150%);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(16px) saturate(110%);
+  backdrop-filter: blur(16px) saturate(110%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
