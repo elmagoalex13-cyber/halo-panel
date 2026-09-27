@@ -34,8 +34,50 @@ type SupabaseApprovalRow = {
   cuenta?: { username?: string | null } | null;
 };
 
+type EditingStats = {
+  processing: number;
+  pending: number;
+  errors: number;
+};
+
 function resolveEstado(value: string | undefined): ApprovalEstado {
   return ESTADOS_VALIDOS.includes(value as ApprovalEstado) ? (value as ApprovalEstado) : "en_aprobacion";
+}
+
+async function getEditingStats(): Promise<EditingStats> {
+  if (!canUseSupabase()) return { processing: 0, pending: 0, errors: 0 };
+
+  try {
+    const supabase = createAdminClient();
+    const [processing, pending, errors] = await Promise.all([
+      supabase
+        .from("library_content")
+        .select("id", { count: "exact", head: true })
+        .eq("estado", "editando")
+        .eq("estado_procesamiento", "procesando")
+        .or("tipo.is.null,tipo.neq.5"),
+      supabase
+        .from("library_content")
+        .select("id", { count: "exact", head: true })
+        .eq("estado", "editando")
+        .eq("estado_procesamiento", "pendiente")
+        .or("tipo.is.null,tipo.neq.5"),
+      supabase
+        .from("library_content")
+        .select("id", { count: "exact", head: true })
+        .eq("estado", "editando")
+        .eq("estado_procesamiento", "error")
+        .or("tipo.is.null,tipo.neq.5"),
+    ]);
+
+    return {
+      processing: processing.count ?? 0,
+      pending: pending.count ?? 0,
+      errors: errors.count ?? 0,
+    };
+  } catch {
+    return { processing: 0, pending: 0, errors: 0 };
+  }
 }
 
 async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
@@ -89,7 +131,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
 export default async function AprobacionPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const estado = resolveEstado(params.estado);
-  const rows = await getRows(estado);
+  const [rows, editingStats] = await Promise.all([getRows(estado), getEditingStats()]);
 
   const mainTabs = [
     { href: "/aprobacion?estado=en_aprobacion", estado: "en_aprobacion", label: "En aprobación" },
@@ -102,6 +144,16 @@ export default async function AprobacionPage({ searchParams }: { searchParams: P
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="font-display text-xl font-semibold text-halo-text">Mesa de Aprobación</h1>
+          <div className="flex min-w-[230px] items-center justify-between gap-4 rounded-2xl border border-cyan-400/25 bg-cyan-400/[0.08] px-4 py-3 shadow-[0_18px_45px_rgba(34,211,238,0.08)]">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-200/70">Editando ahora</p>
+              <p className="mt-1 font-display text-2xl font-semibold text-white">{editingStats.processing}</p>
+            </div>
+            <div className="text-right text-xs text-white/55">
+              <p><span className="font-semibold text-white/80">{editingStats.pending}</span> en cola</p>
+              <p><span className="font-semibold text-red-200">{editingStats.errors}</span> con error</p>
+            </div>
+          </div>
         </div>
 
         <>

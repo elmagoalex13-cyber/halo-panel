@@ -85,6 +85,17 @@ async function procesarPieza(pieza) {
   }
 }
 
+async function runPool(items, concurrency, task) {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      if (item) await task(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
 let ocupado = false;
 async function ciclo() {
   if (ocupado) return;
@@ -103,8 +114,13 @@ async function ciclo() {
       console.error("[runner] error consultando la cola:", error.message);
       return;
     }
+    const reclamadas = [];
     for (const pieza of piezas ?? []) {
-      if (await reclamar(pieza.id)) await procesarPieza(pieza);
+      if (await reclamar(pieza.id)) reclamadas.push(pieza);
+    }
+    if (reclamadas.length) {
+      console.log(`[runner] procesando ${reclamadas.length} pieza(s), concurrencia ${config.runnerConcurrency}`);
+      await runPool(reclamadas, config.runnerConcurrency, procesarPieza);
     }
   } catch (err) {
     console.error("[runner] error inesperado en el ciclo:", err.message);
@@ -113,7 +129,7 @@ async function ciclo() {
   }
 }
 
-console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta`);
+console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta, concurrencia ${config.runnerConcurrency}, ffmpeg ${config.ffmpegPreset}/crf${config.ffmpegCrf}/threads${config.ffmpegThreads}`);
 await ciclo();
 setInterval(ciclo, config.pollMs);
 

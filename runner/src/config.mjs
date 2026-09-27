@@ -1,5 +1,16 @@
 import "dotenv/config";
 
+function intEnv(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const parsed = parseInt(process.env[name] ?? "", 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function strEnv(name, fallback) {
+  const value = process.env[name]?.trim();
+  return value || fallback;
+}
+
 // Mismo contrato de variables que el .env desplegado en el VPS (deploy-runner.sh).
 export const config = {
   supabaseUrl: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -10,11 +21,15 @@ export const config = {
   r2Secret: process.env.R2_SECRET_ACCESS_KEY,
   r2Bucket: process.env.R2_BUCKET ?? process.env.R2_BUCKET_NAME ?? "halo-videos",
   r2PublicUrl: (process.env.R2_PUBLIC_URL ?? "").replace(/\/+$/, ""),
-  pollMs: parseInt(process.env.POLL_INTERVAL_MS ?? "15000", 10),
-  maxPiezas: parseInt(process.env.MAX_PIEZAS ?? process.env.MAX_PIEZAS_POR_VUELTA ?? "3", 10),
+  pollMs: intEnv("POLL_INTERVAL_MS", 5000, { min: 3000, max: 15000 }),
+  maxPiezas: intEnv("MAX_PIEZAS", intEnv("MAX_PIEZAS_POR_VUELTA", 4, { min: 1, max: 12 }), { min: 1, max: 12 }),
+  runnerConcurrency: intEnv("RUNNER_CONCURRENCY", 2, { min: 1, max: 4 }),
   tmpDir: process.env.TMP_DIR ?? "/tmp/halo-runner",
   ffmpeg: process.env.FFMPEG_BIN ?? "ffmpeg",
   ffprobe: process.env.FFPROBE_BIN ?? "ffprobe",
+  ffmpegPreset: strEnv("FFMPEG_PRESET", "veryfast"),
+  ffmpegCrf: strEnv("FFMPEG_CRF", "18"),
+  ffmpegThreads: intEnv("FFMPEG_THREADS", 2, { min: 1, max: 8 }),
   igSessionId: process.env.IG_SESSIONID,
   igCsrf: process.env.IG_CSRFTOKEN,
   igCookie: process.env.IG_COOKIE,

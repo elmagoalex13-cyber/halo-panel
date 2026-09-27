@@ -11,8 +11,9 @@ const FFMPEG = config.ffmpeg;
 const FFPROBE = config.ffprobe;
 export const ENCODE_VIDEO_ARGS = [
   "-c:v", "libx264",
-  "-preset", "slow",
-  "-crf", "17",
+  "-preset", config.ffmpegPreset,
+  "-crf", config.ffmpegCrf,
+  "-threads", String(config.ffmpegThreads),
   "-profile:v", "high",
   "-pix_fmt", "yuv420p",
   "-colorspace", "bt709",
