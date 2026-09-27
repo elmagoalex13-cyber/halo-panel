@@ -14,6 +14,8 @@ const falta = faltanVariables();
 if (falta.length) ko(`variables .env que faltan: ${falta.join(", ")}`);
 else ok("variables .env completas");
 console.log(`     intervalo de cola: ${config.pollMs / 1000}s (POLL_INTERVAL_MS)`);
+console.log(`     max piezas: ${config.maxPiezas}, concurrencia: ${config.runnerConcurrency}`);
+console.log(`     timeout comando: ${Math.round(config.commandTimeoutMs / 60000)}m, timeout pieza: ${Math.round(config.pieceTimeoutMs / 60000)}m`);
 
 for (const [nombre, bin] of [["ffmpeg", config.ffmpeg], ["ffprobe", config.ffprobe]]) {
   try {
@@ -35,6 +37,12 @@ const { data, error } = await supabase
 if (error) ko(`Supabase: ${error.message}`);
 else {
   ok(`Supabase conectado. Piezas en 'editando': ${data.length}`);
+  const resumen = data.reduce((acc, p) => {
+    const key = p.estado_procesamiento ?? "sin_estado";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  console.log(`     resumen cola: ${Object.entries(resumen).map(([k, v]) => `${k}=${v}`).join(", ") || "vacia"}`);
   for (const p of data) {
     const existe = p.r2_key ? await existeEnR2(p.r2_key) : false;
     console.log(`     - ${p.id} tipo=${p.tipo} proc=${p.estado_procesamiento} bruto_en_R2=${existe}`);

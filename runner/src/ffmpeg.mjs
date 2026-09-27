@@ -30,7 +30,7 @@ function tail(value = "", max = 1400) {
 
 async function runFfmpeg(args, opts = {}) {
   try {
-    return await execFileAsync(FFMPEG, args, { maxBuffer: 1024 * 1024 * 12, ...opts });
+    return await execFileAsync(FFMPEG, args, { maxBuffer: 1024 * 1024 * 12, timeout: config.commandTimeoutMs, ...opts });
   } catch (err) {
     const stderr = tail(err.stderr || err.stdout || "");
     const command = `${FFMPEG} ${args.join(" ")}`;

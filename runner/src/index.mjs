@@ -56,6 +56,14 @@ async function reclamar(id) {
   return (data?.length ?? 0) > 0;
 }
 
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} supero el limite de ${Math.round(ms / 60000)} min`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function procesarPieza(pieza) {
   const tipo = tipoNumero(pieza);
   console.log(`[runner] pieza ${pieza.id} tipo ${tipo}`);
@@ -65,7 +73,11 @@ async function procesarPieza(pieza) {
       pieza.frase_quemada = asignado?.frase ?? "";
       pieza.layout_json = asignado?.layout_json ?? null;
     }
-    const { outKey, rawKey, fraseQuemada } = await procesarTipo(tipo, pieza);
+    const { outKey, rawKey, fraseQuemada } = await withTimeout(
+      procesarTipo(tipo, pieza),
+      config.pieceTimeoutMs,
+      `pieza ${pieza.id}`,
+    );
     const ahora = new Date().toISOString();
     const { error } = await supabase
       .from("library_content")
@@ -136,7 +148,7 @@ async function ciclo() {
   }
 }
 
-console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta, concurrencia ${config.runnerConcurrency}, ffmpeg ${config.ffmpegPreset}/crf${config.ffmpegCrf}/threads${config.ffmpegThreads}`);
+console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta, concurrencia ${config.runnerConcurrency}, ffmpeg ${config.ffmpegPreset}/crf${config.ffmpegCrf}/threads${config.ffmpegThreads}, timeout pieza ${Math.round(config.pieceTimeoutMs / 60000)}m`);
 await ciclo();
 setInterval(ciclo, config.pollMs);
 

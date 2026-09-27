@@ -6,6 +6,12 @@ function intEnv(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {})
   return Math.min(max, Math.max(min, parsed));
 }
 
+function durationMsEnv(name, fallbackMinutes, { minMinutes = 1, maxMinutes = 120 } = {}) {
+  const parsed = parseFloat(process.env[name] ?? "");
+  const minutes = Number.isFinite(parsed) ? parsed : fallbackMinutes;
+  return Math.round(Math.min(maxMinutes, Math.max(minMinutes, minutes)) * 60000);
+}
+
 function strEnv(name, fallback) {
   const value = process.env[name]?.trim();
   return value || fallback;
@@ -31,6 +37,8 @@ export const config = {
   ffmpegPreset: strEnv("FFMPEG_PRESET", "veryfast"),
   ffmpegCrf: strEnv("FFMPEG_CRF", "18"),
   ffmpegThreads: intEnv("FFMPEG_THREADS", 2, { min: 1, max: 8 }),
+  commandTimeoutMs: durationMsEnv("COMMAND_TIMEOUT_MINUTES", 10, { minMinutes: 2, maxMinutes: 60 }),
+  pieceTimeoutMs: durationMsEnv("PIECE_TIMEOUT_MINUTES", 18, { minMinutes: 5, maxMinutes: 120 }),
   igSessionId: process.env.IG_SESSIONID,
   igCsrf: process.env.IG_CSRFTOKEN,
   igCookie: process.env.IG_COOKIE,

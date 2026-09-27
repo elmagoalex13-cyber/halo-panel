@@ -18,7 +18,7 @@ const MODEL_CANDIDATES = [
 
 async function enPath(bin) {
   try {
-    const { stdout } = await execFileAsync("which", [bin]);
+    const { stdout } = await execFileAsync("which", [bin], { timeout: 5000 });
     return stdout.trim() || null;
   } catch {
     return null;
@@ -56,7 +56,7 @@ export async function extractAudio(videoPath, outputDir) {
     "-ac", "1",
     "-f", "wav",
     wavPath,
-  ]);
+  ], { timeout: config.commandTimeoutMs, maxBuffer: 1024 * 1024 * 8 });
   return wavPath;
 }
 
@@ -76,7 +76,7 @@ export async function detectAudioStart(audioPath) {
       "-af", "silencedetect=noise=-28dB:d=0.02",
       "-f", "null",
       "-",
-    ], { maxBuffer: 1024 * 1024 * 4 });
+    ], { maxBuffer: 1024 * 1024 * 4, timeout: Math.min(config.commandTimeoutMs, 180000) });
 
     const startsAtZero = /silence_start:\s*0(?:\.0+)?\b/.test(stderr);
     if (!startsAtZero) return null;
@@ -120,9 +120,9 @@ export async function transcribeWithWhisper(wavPath, outputDir) {
       ...commonArgs,
       "-ml", "1",
       "-sow",
-    ]);
+    ], { timeout: config.commandTimeoutMs, maxBuffer: 1024 * 1024 * 8 });
   } catch {
-    await execFileAsync(whisper.bin, commonArgs);
+    await execFileAsync(whisper.bin, commonArgs, { timeout: config.commandTimeoutMs, maxBuffer: 1024 * 1024 * 8 });
   }
 
   const srtPath = baseName + ".srt";
