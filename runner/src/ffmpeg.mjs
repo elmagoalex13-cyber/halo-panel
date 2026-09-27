@@ -23,6 +23,32 @@ export const ENCODE_VIDEO_ARGS = [
 ];
 export const ENCODE_AUDIO_ARGS = ["-c:a", "aac", "-b:a", "192k"];
 
+function tail(value = "", max = 1400) {
+  const clean = String(value).trim();
+  return clean.length > max ? clean.slice(-max) : clean;
+}
+
+async function runFfmpeg(args, opts = {}) {
+  try {
+    return await execFileAsync(FFMPEG, args, { maxBuffer: 1024 * 1024 * 12, ...opts });
+  } catch (err) {
+    const stderr = tail(err.stderr || err.stdout || "");
+    const command = `${FFMPEG} ${args.join(" ")}`;
+    const message = stderr || err.message || "ffmpeg fallo sin stderr";
+    throw new Error(`ffmpeg fallo: ${message}\nComando: ${command}`);
+  }
+}
+
+async function runWithHdrFallback(buildArgs, { hdr, label }) {
+  try {
+    await runFfmpeg(buildArgs(hdr));
+  } catch (err) {
+    if (!hdr) throw err;
+    console.warn(`[runner] ${label}: fallo HDR/tonemap, reintento SDR: ${tail(err.message, 500)}`);
+    await runFfmpeg(buildArgs(false));
+  }
+}
+
 function hasTrim(trim) {
   return Number.isFinite(trim?.start) || Number.isFinite(trim?.end);
 }
@@ -265,7 +291,7 @@ async function detectFaceTextPlacement(inputPath, workDir, hdr = false) {
   try {
     const duration = await getDuration(inputPath);
     const fps = duration > 0 ? Math.min(0.5, 3 / duration) : 0.25;
-    await execFileAsync(FFMPEG, [
+    await runFfmpeg([
       "-y",
       "-i", inputPath,
       "-vf", `${buildVideoFilter({ hdr })},fps=${fps}`,
@@ -326,22 +352,21 @@ print(json.dumps({"placement": placement}))
 export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   const hdr = await needsHdrTonemap(inputPath);
-  const vf = [
-    buildVideoTrimFilter(trim),
-    buildVideoFilter({ hdr }),
-    assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null,
-  ].filter(Boolean).join(",");
-  const af = buildAudioTrimFilter(trim);
+  const buildArgs = (useHdr) => {
+    const vf = [
+      buildVideoTrimFilter(trim),
+      buildVideoFilter({ hdr: useHdr }),
+      assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null,
+    ].filter(Boolean).join(",");
+    const af = buildAudioTrimFilter(trim);
+    const args = ["-y", "-i", inputPath, "-vf", vf];
+    if (af) args.push("-af", af);
+    pushEncodeArgs(args);
+    args.push(outputPath);
+    return args;
+  };
 
-  const args = ["-y", "-i", inputPath];
-  args.push(
-    "-vf", vf,
-  );
-  if (af) args.push("-af", af);
-  pushEncodeArgs(args);
-  args.push(outputPath);
-
-  await execFileAsync(FFMPEG, args);
+  await runWithHdrFallback(buildArgs, { hdr, label: "tipo1" });
 }
 
 /**
@@ -358,33 +383,35 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath, 
   const hdr = await needsHdrTonemap(inputPath);
   const assPath = path.join(path.dirname(outputPath), "frase_tipo2.ass");
 
-  const vfParts = [buildVideoFilter({ hdr })];
   const hasLayoutJson = Array.isArray(layout_json?.bloques) && layout_json.bloques.length > 0;
+  const overlayFilters = [];
 
   if (hasLayoutJson) {
     // layout_json explícito: genera múltiples bloques posicionados
     const duration = await getDuration(inputPath);
     await writeTipo2AssMulti(assPath, layout_json.bloques, { duration: Math.max(1, duration) });
-    vfParts.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
+    overlayFilters.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
   } else if (frase?.trim()) {
     // Fallback: un bloque centrado con detección de cara (comportamiento anterior)
     const placement = await detectFaceTextPlacement(inputPath, path.dirname(outputPath), hdr);
     const duration = await getDuration(inputPath);
     await writeTipo2Ass(assPath, frase, { placement, duration: Math.max(1, duration) });
-    vfParts.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
+    overlayFilters.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
   }
 
-  const vf = vfParts.join(",");
+  const buildArgs = (useHdr) => {
+    const vf = [buildVideoFilter({ hdr: useHdr }), ...overlayFilters].join(",");
+    const args = ["-y", "-i", inputPath];
+    if (audioRefPath) {
+      args.push("-i", audioRefPath, "-map", "0:v", "-map", "1:a");
+    }
+    args.push("-vf", vf);
+    pushEncodeArgs(args, { shortest: true });
+    args.push(outputPath);
+    return args;
+  };
 
-  const args = ["-y", "-i", inputPath];
-  if (audioRefPath) {
-    args.push("-i", audioRefPath, "-map", "0:v", "-map", "1:a");
-  }
-  args.push("-vf", vf);
-  pushEncodeArgs(args, { shortest: true });
-  args.push(outputPath);
-
-  await execFileAsync(FFMPEG, args);
+  await runWithHdrFallback(buildArgs, { hdr, label: "tipo2" });
 }
 
 /**
@@ -401,22 +428,25 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
   const hdr = await needsHdrTonemap(inputPath);
 
   const mainPath = outputPath.replace(".mp4", "_main.mp4");
-  const mainArgs = ["-y", "-i", inputPath];
   const trimVf = buildVideoTrimFilter(trim);
   const trimAf = buildAudioTrimFilter(trim);
-  const mainVf = [trimVf, hdr ? buildVideoFilter({ hdr }) : null].filter(Boolean).join(",");
-  if (mainVf) mainArgs.push("-vf", mainVf);
-  if (trimAf) mainArgs.push("-af", trimAf);
-  pushEncodeArgs(mainArgs, { faststart: false });
-  mainArgs.push(mainPath);
-  await execFileAsync(FFMPEG, mainArgs);
+  const buildMainArgs = (useHdr) => {
+    const mainArgs = ["-y", "-i", inputPath];
+    const mainVf = [trimVf, buildVideoFilter({ hdr: useHdr })].filter(Boolean).join(",");
+    if (mainVf) mainArgs.push("-vf", mainVf);
+    if (trimAf) mainArgs.push("-af", trimAf);
+    pushEncodeArgs(mainArgs, { faststart: false });
+    mainArgs.push(mainPath);
+    return mainArgs;
+  };
+  await runWithHdrFallback(buildMainArgs, { hdr, label: "tipo3-main" });
 
   const duration = await getDuration(mainPath);
   const freezeStart = Math.max(0, duration - 0.05);
   const tmpFreeze = outputPath.replace(".mp4", "_freeze.mp4");
 
   // 1. Congelar último frame
-  await execFileAsync(FFMPEG, [
+  await runFfmpeg([
     "-y",
     "-i", mainPath,
     "-vf", `trim=start=${freezeStart},setpts=PTS-STARTPTS,` +
@@ -434,7 +464,7 @@ export async function renderTipo3(inputPath, assPath, outputPath, freezeDuration
 
   const vf = [buildVideoFilter(), assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null].filter(Boolean).join(",");
 
-  await execFileAsync(FFMPEG, [
+  await runFfmpeg([
     "-y",
     "-f", "concat", "-safe", "0",
     "-i", concatList,
@@ -469,21 +499,20 @@ export async function renderTipo4(inputPath, refPath, outputPath, assPath = null
     ? { start: trim.start, end: trim.start + maxDuration }
     : { start: 0, end: maxDuration };
 
-  // Recortar el bruto a la duración de referencia y aplicar mismo tratamiento
-  const vfParts = [buildVideoTrimFilter(inputTrim), buildVideoFilter({ hdr })].filter(Boolean);
-  if (assPath) {
-    vfParts.push(`ass='${assPath.replace(/'/g, "\\'")}'`);
-  }
-  const vf = vfParts.join(",");
-  const af = buildAudioTrimFilter(inputTrim);
+  const buildArgs = (useHdr) => {
+    // Recortar el bruto a la duración de referencia y aplicar mismo tratamiento
+    const vfParts = [buildVideoTrimFilter(inputTrim), buildVideoFilter({ hdr: useHdr })].filter(Boolean);
+    if (assPath) {
+      vfParts.push(`ass='${assPath.replace(/'/g, "\\'")}'`);
+    }
+    const vf = vfParts.join(",");
+    const af = buildAudioTrimFilter(inputTrim);
+    const args = ["-y", "-i", inputPath, "-vf", vf];
+    if (af) args.push("-af", af);
+    pushEncodeArgs(args);
+    args.push(outputPath);
+    return args;
+  };
 
-  const args = ["-y", "-i", inputPath];
-  args.push(
-    "-vf", vf,
-  );
-  if (af) args.push("-af", af);
-  pushEncodeArgs(args);
-  args.push(outputPath);
-
-  await execFileAsync(FFMPEG, args);
+  await runWithHdrFallback(buildArgs, { hdr, label: "tipo4" });
 }
