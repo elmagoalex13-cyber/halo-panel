@@ -24,6 +24,7 @@ export const config = {
   pollMs: intEnv("POLL_INTERVAL_MS", 5000, { min: 3000, max: 15000 }),
   maxPiezas: intEnv("MAX_PIEZAS", intEnv("MAX_PIEZAS_POR_VUELTA", 4, { min: 1, max: 12 }), { min: 1, max: 12 }),
   runnerConcurrency: intEnv("RUNNER_CONCURRENCY", 2, { min: 1, max: 4 }),
+  stuckMinutes: intEnv("STUCK_PROCESSING_MINUTES", 6, { min: 2, max: 60 }),
   tmpDir: process.env.TMP_DIR ?? "/tmp/halo-runner",
   ffmpeg: process.env.FFMPEG_BIN ?? "ffmpeg",
   ffprobe: process.env.FFPROBE_BIN ?? "ffprobe",

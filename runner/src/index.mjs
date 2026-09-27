@@ -29,14 +29,21 @@ function tipoNumero(pieza) {
 }
 
 async function liberarAtascadas() {
-  // Piezas que quedaron en 'procesando' (crash/reinicio) hace mas de 20 min vuelven a la cola
-  const limite = new Date(Date.now() - 20 * 60000).toISOString();
-  await supabase
+  // Piezas que quedaron en 'procesando' (crash/reinicio) vuelven a la cola.
+  const limite = new Date(Date.now() - config.stuckMinutes * 60000).toISOString();
+  const { data, error } = await supabase
     .from("library_content")
     .update({ estado_procesamiento: "pendiente" })
     .eq("estado", "editando")
     .eq("estado_procesamiento", "procesando")
-    .lt("updated_at", limite);
+    .lt("updated_at", limite)
+    .select("id");
+
+  if (error) {
+    console.error("[runner] no se pudieron liberar piezas atascadas:", error.message);
+  } else if (data?.length) {
+    console.log(`[runner] ${data.length} pieza(s) atascada(s) reencolada(s)`);
+  }
 }
 
 async function reclamar(id) {

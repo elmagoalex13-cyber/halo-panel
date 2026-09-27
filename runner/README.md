@@ -36,6 +36,7 @@ rm -f src/telegram.mjs src/spoofer.mjs
 sed -i 's/^POLL_INTERVAL_MS=.*/POLL_INTERVAL_MS=5000/' .env
 grep -q '^MAX_PIEZAS=' .env || echo 'MAX_PIEZAS=4' >> .env
 grep -q '^RUNNER_CONCURRENCY=' .env || echo 'RUNNER_CONCURRENCY=2' >> .env
+grep -q '^STUCK_PROCESSING_MINUTES=' .env || echo 'STUCK_PROCESSING_MINUTES=6' >> .env
 grep -q '^FFMPEG_PRESET=' .env || echo 'FFMPEG_PRESET=veryfast' >> .env
 grep -q '^FFMPEG_CRF=' .env || echo 'FFMPEG_CRF=18' >> .env
 grep -q '^FFMPEG_THREADS=' .env || echo 'FFMPEG_THREADS=2' >> .env
@@ -64,7 +65,7 @@ node /opt/halo-runner/src/diagnostico.mjs
 ## Variables (`/opt/halo-runner/.env`)
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
 `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` (sin barra final y con un solo `https://`),
-`POLL_INTERVAL_MS` (5000), `MAX_PIEZAS` (4), `RUNNER_CONCURRENCY` (2). Opcionales: `WHISPER_BIN`, `WHISPER_MODEL`, `TMP_DIR`,
+`POLL_INTERVAL_MS` (5000), `MAX_PIEZAS` (4), `RUNNER_CONCURRENCY` (2), `STUCK_PROCESSING_MINUTES` (6). Opcionales: `WHISPER_BIN`, `WHISPER_MODEL`, `TMP_DIR`,
 `FFMPEG_PRESET` (veryfast), `FFMPEG_CRF` (18), `FFMPEG_THREADS` (2),
 `IG_SESSIONID` (scraper y descarga de referencias), `SCRAPER_HORAS` (24), `SCRAPER_DIAS` (14),
 `SCRAPER_MAX_REELS` (30), `SCRAPER_FACTOR` (1.5), `TRIAL_COLCHON` (9), `TRIAL_MAX_USOS` (5), `TRIAL_FACTOR` (1.5),
