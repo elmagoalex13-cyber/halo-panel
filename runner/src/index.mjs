@@ -33,7 +33,8 @@ async function ciclo() {
   }
 }
 
-console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta, concurrencia ${config.runnerConcurrency}, ffmpeg ${config.ffmpegPreset}/crf${config.ffmpegCrf}/threads${config.ffmpegThreads}, timeout pieza ${Math.round(config.pieceTimeoutMs / 60000)}m`);
+const pieceTimeoutMinutes = Number.isFinite(config.pieceTimeoutMs) ? Math.round(config.pieceTimeoutMs / 60000) : 18;
+console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta, concurrencia ${config.runnerConcurrency}, ffmpeg ${config.ffmpegPreset}/crf${config.ffmpegCrf}/threads${config.ffmpegThreads}, timeout pieza ${pieceTimeoutMinutes}m`);
 await ciclo();
 setInterval(ciclo, config.pollMs);
 

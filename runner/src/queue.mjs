@@ -43,8 +43,9 @@ async function reclamar(id) {
 
 function withTimeout(promise, ms, label) {
   let timer;
+  const safeMs = Number.isFinite(ms) && ms > 0 ? ms : 18 * 60000;
   const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} supero el limite de ${Math.round(ms / 60000)} min`)), ms);
+    timer = setTimeout(() => reject(new Error(`${label} supero el limite de ${Math.round(safeMs / 60000)} min`)), safeMs);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
