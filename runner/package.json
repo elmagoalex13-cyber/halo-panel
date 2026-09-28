@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/index.mjs",
     "diagnostico": "node src/diagnostico.mjs",
+    "kick": "node src/kick.mjs",
     "recover": "node src/recover.mjs",
     "purge-queue": "node src/purge-queue.mjs",
     "scraper": "node src/scraper-cli.mjs"
