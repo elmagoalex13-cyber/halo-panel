@@ -135,7 +135,8 @@ export async function cicloOnce({ logEmpty = false } = {}) {
     return { claimed: 0, results: [] };
   }
 
-  console.log(`[runner] procesando ${reclamadas.length} pieza(s), concurrencia ${config.runnerConcurrency}`);
-  const results = await runPool(reclamadas, config.runnerConcurrency, procesarPieza);
+  const concurrency = Math.min(config.runnerConcurrency, Math.max(1, config.maxPiezas));
+  console.log(`[runner] procesando ${reclamadas.length} pieza(s), concurrencia ${concurrency}`);
+  const results = await runPool(reclamadas, concurrency, procesarPieza);
   return { claimed: reclamadas.length, results };
 }
