@@ -222,7 +222,7 @@ export function MesaClient({
   }, []);
 
   const saveAndAct = useCallback(
-    async (accion: "aprobar" | "rehacer" | "descartar") => {
+    async (accion: "aprobar" | "rehacer" | "descartar" | "nueva_frase") => {
       if (!selected) return;
       setLoading(true);
       try {
@@ -234,7 +234,7 @@ export function MesaClient({
 
         if (res.ok) {
           const payload = (await res.json()) as { estado?: string; programacion?: Programacion };
-          const nuevoEstado = payload.estado ?? (accion === "aprobar" ? "aprobado" : accion === "rehacer" ? "editando" : "rechazado");
+          const nuevoEstado = payload.estado ?? (accion === "aprobar" ? "aprobado" : accion === "descartar" ? "rechazado" : "editando");
           setRows((prev) =>
             nuevoEstado === currentEstado
               ? prev.map((row) =>
@@ -247,7 +247,9 @@ export function MesaClient({
               ? mensajeAprobado(payload.programacion)
               : accion === "rehacer"
                 ? "Video enviado a Rehacer IA."
-                : "Video descartado.",
+                : accion === "nueva_frase"
+                  ? "Video enviado a reprocesar con otra frase del banco."
+                  : "Video descartado.",
           );
           router.refresh();
           closePopup();
@@ -263,7 +265,7 @@ export function MesaClient({
   );
 
   const quickAct = useCallback(
-    async (row: VideoRow, accion: "aprobar" | "descartar" | "rehacer", notaRehacer?: string) => {
+    async (row: VideoRow, accion: "aprobar" | "descartar" | "rehacer" | "nueva_frase", notaRehacer?: string) => {
       setQuickLoadingId(`${row.id}:${accion}`);
       setActionMessage(null);
       try {
@@ -286,14 +288,20 @@ export function MesaClient({
         }
 
         const payload = (await res.json()) as { estado?: string; programacion?: Programacion };
-        const nuevoEstado = payload.estado ?? (accion === "aprobar" ? "aprobado" : accion === "rehacer" ? "editando" : "rechazado");
+        const nuevoEstado = payload.estado ?? (accion === "aprobar" ? "aprobado" : accion === "descartar" ? "rechazado" : "editando");
         setRows((prev) =>
           nuevoEstado === currentEstado
             ? prev.map((item) => (item.id === row.id ? { ...item, estado: nuevoEstado } : item))
             : prev.filter((item) => item.id !== row.id),
         );
         setActionMessage(
-          accion === "aprobar" ? mensajeAprobado(payload.programacion) : accion === "rehacer" ? "Video enviado a Rehacer IA." : "Video descartado.",
+          accion === "aprobar"
+            ? mensajeAprobado(payload.programacion)
+            : accion === "rehacer"
+              ? "Video enviado a Rehacer IA."
+              : accion === "nueva_frase"
+                ? "Video enviado a reprocesar con otra frase del banco."
+                : "Video descartado.",
         );
         router.refresh();
       } finally {
@@ -394,6 +402,7 @@ export function MesaClient({
             const approveLoading = quickLoadingId === `${row.id}:aprobar`;
             const discardLoading = quickLoadingId === `${row.id}:descartar`;
             const remakeLoading = quickLoadingId === `${row.id}:rehacer`;
+            const newPhraseLoading = quickLoadingId === `${row.id}:nueva_frase`;
             return (
               <div
                 key={row.id}
@@ -482,6 +491,17 @@ export function MesaClient({
                       >
                         {remakeLoading ? "..." : "Rehacer"}
                       </button>
+                      {row.frase_quemada ? (
+                        <button
+                          type="button"
+                          onClick={() => quickAct(row, "nueva_frase")}
+                          disabled={Boolean(quickLoadingId)}
+                          title="Vuelve a procesar el video con otra frase del banco (evita repetir esta misma)"
+                          className="rounded-lg border border-[#8B5CF6]/35 bg-[#8B5CF6]/10 px-3 py-1.5 text-xs font-semibold text-[#C4B5FD] transition hover:border-[#8B5CF6]/70 hover:bg-[#8B5CF6]/20 disabled:opacity-40"
+                        >
+                          {newPhraseLoading ? "..." : "Nueva frase"}
+                        </button>
+                      ) : null}
                     </>
                   ) : null}
                   <button
@@ -748,6 +768,16 @@ export function MesaClient({
                     >
                       ↺ Rehacer <kbd className="rounded bg-white/10 px-1.5 text-[9px] font-normal">R</kbd>
                     </button>
+                    {selected.frase_quemada ? (
+                      <button
+                        onClick={() => saveAndAct("nueva_frase")}
+                        disabled={loading}
+                        title="Vuelve a procesar el video con otra frase del banco (evita repetir esta misma)"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#8B5CF6]/30 bg-[#8B5CF6]/10 py-2.5 text-sm font-semibold text-[#C4B5FD] transition-all hover:border-[#8B5CF6]/60 hover:bg-[#8B5CF6]/20 disabled:opacity-40"
+                      >
+                        ⟳ Nueva frase
+                      </button>
+                    ) : null}
                   </>
                 ) : null}
                 <a

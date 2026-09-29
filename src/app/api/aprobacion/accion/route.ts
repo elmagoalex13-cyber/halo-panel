@@ -6,6 +6,7 @@ import type { VideoEstado } from "@/types";
 const ESTADO_MAP: Record<string, string> = {
   aprobar: "aprobado",
   rehacer: "editando",
+  nueva_frase: "editando",
   descartar: "rechazado",
 };
 
@@ -64,6 +65,17 @@ export async function PATCH(req: NextRequest) {
       update.error_mensaje = null;
       update.aprobado_at = null;
       update.publicado_at = null;
+    }
+    if (accion === "nueva_frase") {
+      // Igual que rehacer, pero ademas se borra la frase/layout actuales para que el
+      // runner asigne una frase distinta del banco (asignarFrase excluye las ya usadas
+      // en esta pieza) en vez de repetir el mismo caption.
+      update.estado_procesamiento = "pendiente";
+      update.error_mensaje = null;
+      update.aprobado_at = null;
+      update.publicado_at = null;
+      update.frase_quemada = null;
+      update.layout_json = null;
     }
 
     const { data: updated, error } = await supabase
