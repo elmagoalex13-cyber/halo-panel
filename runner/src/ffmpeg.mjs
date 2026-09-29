@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { mkdir, readdir, writeFile } from "fs/promises";
+import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 
 const execFileAsync = promisify(execFile);
@@ -172,6 +172,31 @@ function escapeAssText(value) {
     .replace(/\r?\n/g, "\\N");
 }
 
+// libass (el motor que quema estos subtitulos) no sabe pintar emoji a color: como mucho dibuja
+// un contorno monocromo (facil de confundir con el propio texto blanco) y las banderas
+// (secuencias de dos "regional indicator") salen directamente como cuadros con las letras dentro.
+// Mejor quitarlos limpiamente que dejar un icono roto o invisible.
+const EMOJI_RE =
+  /[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}\u{FE0F}\u{200D}\u{20E3}]/gu;
+
+function quitarEmoji(texto = "") {
+  return String(texto)
+    .replace(EMOJI_RE, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +([,.!?:;])/g, "$1")
+    .split("\n")
+    .map((linea) => linea.trim())
+    .join("\n")
+    .trim();
+}
+
+// Tamano de letra seguro: por debajo de esto no se lee bien en un movil, por encima queda
+// desproporcionado para una frase corta (habia layouts con hasta 156px para 3 palabras).
+function limitarFontsize(valor, porDefecto = 72) {
+  const n = Math.round(Number(valor) || porDefecto);
+  return Math.min(120, Math.max(48, n));
+}
+
 function formatAssTime(seconds) {
   const sec = Math.max(0, seconds);
   const h = Math.floor(sec / 3600);
@@ -182,7 +207,7 @@ function formatAssTime(seconds) {
 }
 
 function layoutTipo2Text(text = "") {
-  const clean = String(text).replace(/\s+/g, " ").trim();
+  const clean = quitarEmoji(String(text)).replace(/\s+/g, " ").trim();
   if (!clean) return "";
 
   const slashParts = clean.split(/\s+\/\s+/).map((part) => part.trim()).filter(Boolean);
@@ -206,45 +231,45 @@ function hexToAssColor(hex = "#FFFFFF") {
   return `&H00${b}${g}${r}`.toUpperCase();
 }
 
-function posicionToAssParams(posicion = "center") {
-  const map = {
-    "top-left":      { alignment: 7, marginV: 150 },
-    "top-center":    { alignment: 8, marginV: 150 },
-    "top-right":     { alignment: 9, marginV: 150 },
-    "mid-left":      { alignment: 4, marginV: 150 },
-    "mid-center":    { alignment: 5, marginV: 150 },
-    "center":        { alignment: 5, marginV: 150 },
-    "mid-right":     { alignment: 6, marginV: 150 },
-    "bottom-left":   { alignment: 1, marginV: 150 },
-    "bottom-center": { alignment: 2, marginV: 150 },
-    "bottom":        { alignment: 2, marginV: 150 },
-    "bottom-right":  { alignment: 3, marginV: 150 },
-  };
-  return map[posicion] ?? { alignment: 5, marginV: 150 };
+/** Color para un override inline (\c&HBBGGRR&), sin el byte de alfa que llevan los Style. */
+function hexToAssInlineColor(hex = "#FFFFFF") {
+  const h = String(hex).replace("#", "").padEnd(6, "0");
+  const r = h.slice(0, 2);
+  const g = h.slice(2, 4);
+  const b = h.slice(4, 6);
+  return `&H${b}${g}${r}&`.toUpperCase();
 }
+
+// El texto de tipo 2 va SIEMPRE centrado en pantalla (horizontal y vertical), empujado un
+// poquito hacia abajo del centro exacto. Antes la posicion (arriba/abajo/izq/der) salia del
+// layout_json (que analiza OTRO video, el de referencia) o de detectar la cara con OpenCV; las
+// dos formas fallaban a menudo (posicion de otro video no aplica al real, deteccion de cara
+// poco fiable en primeros planos/angulos raros) y el texto acababa tapando la cara o pegado a
+// un borde. Un centro fijo, ligeramente bajo, es la posicion mas segura para cualquier encuadre.
+const CENTRO_X = 540; // PlayResX=1080 / 2
+const CENTRO_Y = 1060; // PlayResY=1920 / 2 = 960, +100px hacia abajo
 
 /**
- * Genera un fichero ASS con múltiples bloques de texto posicionados independientemente.
- * Cada bloque tiene su propio estilo (color, negrita, posición).
+ * Genera un fichero ASS con todos los bloques de texto fundidos en un unico evento, siempre
+ * centrado (ver CENTRO_X/CENTRO_Y). Se ignora la "posicion" que pueda traer cada bloque; solo
+ * se respeta su tamano/color/negrita propios, y el orden en el que aparecen (arriba del todo el
+ * primero, como una sola frase de varias lineas).
  */
 async function writeTipo2AssMulti(filePath, bloques, { duration = 60 } = {}) {
-  const styleLines = [];
-  const dialogueLines = [];
+  const primero = bloques[0];
+  const color = hexToAssColor(primero?.color ?? "#FFFFFF");
+  const bold = primero?.negrita ? -1 : 0;
+  const fontsize = limitarFontsize(primero?.fontsize);
 
-  for (let i = 0; i < bloques.length; i++) {
-    const b = bloques[i];
-    const { alignment, marginV } = posicionToAssParams(b.posicion);
-    const color = hexToAssColor(b.color ?? "#FFFFFF");
-    const bold = b.negrita ? -1 : 0;
-    const fontsize = b.fontsize ?? 72;
-
-    styleLines.push(
-      `Style: Bloque${i},Noto Sans,${fontsize},${color},&H000000FF,&H00000000,&H80000000,${bold},0,0,0,100,100,0,0,1,4.5,0,${alignment},80,80,${marginV},1`
-    );
-    dialogueLines.push(
-      `Dialogue: 0,0:00:00.00,${formatAssTime(duration)},Bloque${i},,0,0,0,,${escapeAssText(b.texto ?? "")}`
-    );
-  }
+  const texto = bloques
+    .map((b) => {
+      const fs = limitarFontsize(b.fontsize, fontsize);
+      const inlineColor = hexToAssInlineColor(b.color ?? "#FFFFFF");
+      const inlineBold = b.negrita ? 1 : 0;
+      const limpio = quitarEmoji(b.texto ?? "");
+      return `{\\fs${fs}\\c${inlineColor}\\b${inlineBold}}${escapeAssText(limpio.replace(/\n/g, "\\N"))}`;
+    })
+    .join("\\N");
 
   const ass = `[Script Info]
 ScriptType: v4.00+
@@ -254,91 +279,13 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-${styleLines.join("\n")}
+Style: Bloque,Noto Sans,${fontsize},${color},&H000000FF,&H00000000,&H80000000,${bold},0,0,0,100,100,0,0,1,4.5,0,5,80,80,150,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-${dialogueLines.join("\n")}
+Dialogue: 0,0:00:00.00,${formatAssTime(duration)},Bloque,,0,0,0,,{\\an5\\pos(${CENTRO_X},${CENTRO_Y})}${texto}
 `;
   await writeFile(filePath, ass, "utf-8");
-}
-
-async function writeTipo2Ass(filePath, text, { placement = "center", duration = 60 } = {}) {
-  const alignment = placement === "top" ? 8 : placement === "bottom" ? 2 : 5;
-  const marginV = 150;
-  const body = layoutTipo2Text(text);
-  const ass = `[Script Info]
-ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
-ScaledBorderAndShadow: yes
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Viral,Noto Sans,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4.5,0,${alignment},74,74,${marginV},1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,${formatAssTime(duration)},Viral,,0,0,0,,${escapeAssText(body)}
-`;
-  await writeFile(filePath, ass, "utf-8");
-}
-
-async function detectFaceTextPlacement(inputPath, workDir, hdr = false) {
-  const framesDir = path.join(workDir, "face-frames");
-  await mkdir(framesDir, { recursive: true });
-
-  try {
-    const duration = await getDuration(inputPath);
-    const fps = duration > 0 ? Math.min(0.5, 3 / duration) : 0.25;
-    await runFfmpeg([
-      "-y",
-      "-i", inputPath,
-      "-vf", `${buildVideoFilter({ hdr })},fps=${fps}`,
-      "-frames:v", "4",
-      path.join(framesDir, "frame_%02d.jpg"),
-    ], { maxBuffer: 1024 * 1024 * 4 });
-
-    const frames = (await readdir(framesDir))
-      .filter((file) => /\.(jpe?g|png)$/i.test(file))
-      .map((file) => path.join(framesDir, file));
-    if (!frames.length) return "center";
-
-    const script = `
-import json, sys
-try:
-    import cv2
-except Exception:
-    print(json.dumps({"placement": "center"}))
-    sys.exit(0)
-
-ys = []
-for image_path in sys.argv[1:]:
-    image = cv2.imread(image_path)
-    if image is None:
-        continue
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    faces = cascade.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=4, minSize=(80, 80))
-    if len(faces) == 0:
-        continue
-    x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-    ys.append((y + h / 2) / image.shape[0])
-
-if not ys:
-    placement = "center"
-else:
-    avg = sum(ys) / len(ys)
-    placement = "bottom" if avg < 0.5 else "top"
-print(json.dumps({"placement": placement}))
-`;
-
-    const { stdout } = await execFileAsync("python3", ["-c", script, ...frames], { maxBuffer: 1024 * 1024 });
-    const result = JSON.parse(stdout.trim() || "{}");
-    return ["top", "bottom", "center"].includes(result.placement) ? result.placement : "center";
-  } catch {
-    return "center";
-  }
 }
 
 /**
@@ -386,16 +333,14 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath, 
   const hasLayoutJson = Array.isArray(layout_json?.bloques) && layout_json.bloques.length > 0;
   const overlayFilters = [];
 
-  if (hasLayoutJson) {
-    // layout_json explícito: genera múltiples bloques posicionados
+  if (hasLayoutJson || frase?.trim()) {
+    // Siempre centrado (ver writeTipo2AssMulti): si hay layout_json se usan sus bloques
+    // (tamano/color propios), si no, la frase suelta como un unico bloque.
+    const bloques = hasLayoutJson
+      ? layout_json.bloques
+      : [{ texto: layoutTipo2Text(frase), fontsize: 72, color: "#FFFFFF", negrita: true }];
     const duration = await getDuration(inputPath);
-    await writeTipo2AssMulti(assPath, layout_json.bloques, { duration: Math.max(1, duration) });
-    overlayFilters.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
-  } else if (frase?.trim()) {
-    // Fallback: un bloque centrado con detección de cara (comportamiento anterior)
-    const placement = await detectFaceTextPlacement(inputPath, path.dirname(outputPath), hdr);
-    const duration = await getDuration(inputPath);
-    await writeTipo2Ass(assPath, frase, { placement, duration: Math.max(1, duration) });
+    await writeTipo2AssMulti(assPath, bloques, { duration: Math.max(1, duration) });
     overlayFilters.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
   }
 
