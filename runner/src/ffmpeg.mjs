@@ -192,9 +192,9 @@ function quitarEmoji(texto = "") {
 
 // Tamano de letra seguro: por debajo de esto no se lee bien en un movil, por encima queda
 // desproporcionado para una frase corta (habia layouts con hasta 156px para 3 palabras).
-function limitarFontsize(valor, porDefecto = 72) {
+function limitarFontsize(valor, porDefecto = 56) {
   const n = Math.round(Number(valor) || porDefecto);
-  return Math.min(120, Math.max(48, n));
+  return Math.min(88, Math.max(36, n));
 }
 
 function formatAssTime(seconds) {
@@ -279,7 +279,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Bloque,Noto Sans,${fontsize},${color},&H000000FF,&H00000000,&H80000000,${bold},0,0,0,100,100,0,0,1,4.5,0,5,80,80,150,1
+Style: Bloque,Noto Sans,${fontsize},${color},&H000000FF,&H00000000,&H80000000,${bold},0,0,0,100,100,0,0,1,4,0,5,80,80,150,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -338,7 +338,7 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath, 
     // (tamano/color propios), si no, la frase suelta como un unico bloque.
     const bloques = hasLayoutJson
       ? layout_json.bloques
-      : [{ texto: layoutTipo2Text(frase), fontsize: 72, color: "#FFFFFF", negrita: true }];
+      : [{ texto: layoutTipo2Text(frase), fontsize: 56, color: "#FFFFFF", negrita: true }];
     const duration = await getDuration(inputPath);
     await writeTipo2AssMulti(assPath, bloques, { duration: Math.max(1, duration) });
     overlayFilters.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
