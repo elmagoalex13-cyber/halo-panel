@@ -15,9 +15,10 @@ import { downloadFromR2, uploadToR2, keyDesdeUrl } from "./r2.mjs";
 import {
   alignCorrectedText,
   chunkWordTimed,
-  detectAudioStart,
+  detectVoiceOnset,
   extractAudio,
   generateASS,
+  primerTramoSospechoso,
   speechBounds,
   transcriptText,
   transcribeWithWhisper,
@@ -47,15 +48,17 @@ async function subtitulos(rawPath, workDir, textoCorregido = "") {
   try {
     const audioDir = path.join(workDir, "audio");
     const wavPath = await extractAudio(rawPath, audioDir);
-    const [segments, audioStart] = await Promise.all([
-      transcribeWithWhisper(wavPath, audioDir),
-      detectAudioStart(wavPath),
-    ]);
+    const segments = await transcribeWithWhisper(wavPath, audioDir);
     if (!segments.length) {
       console.warn("[runner] sin segmentos de voz (o whisper no instalado): se renderiza sin subtitulos");
       return null;
     }
-    const trim = speechBounds(segments, { audioStart });
+    // Solo se corrige el timestamp de Whisper si hay una señal concreta de que
+    // no es fiable (ver primerTramoSospechoso): en audio limpio, Whisper ya
+    // acierta el inicio; corregir siempre a ciegas por volumen puede cortar
+    // habla real en videos con viento/ruido de fondo alto.
+    const voiceOnset = primerTramoSospechoso(segments) ? await detectVoiceOnset(wavPath) : null;
+    const trim = speechBounds(segments, { voiceOnset });
     const textoWhisper = transcriptText(segments);
     const textoFinal = textoCorregido.trim() || textoWhisper;
     const wordTimed = wordTimedFromSegments(segments);

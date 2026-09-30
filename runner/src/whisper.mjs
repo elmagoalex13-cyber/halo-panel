@@ -60,35 +60,96 @@ export async function extractAudio(videoPath, outputDir) {
   return wavPath;
 }
 
-/**
- * Detecta donde termina el silencio inicial del audio.
- * Esto complementa Whisper: Whisper puede adelantar el primer timestamp unos
- * frames, mientras que silencedetect encuentra el primer audio real.
- * @param {string} audioPath
- * @returns {Promise<number | null>}
- */
-export async function detectAudioStart(audioPath) {
+/** Nivel medio (dB) de un tramo de audio. null si no se puede medir. */
+async function medirVolumen(audioPath, start, duration) {
   try {
     const { stderr } = await execFileAsync(config.ffmpeg, [
-      "-hide_banner",
-      "-nostats",
+      "-hide_banner", "-nostats",
+      "-ss", String(Math.max(0, start)),
       "-i", audioPath,
-      "-af", "silencedetect=noise=-28dB:d=0.02",
-      "-f", "null",
-      "-",
-    ], { maxBuffer: 1024 * 1024 * 4, timeout: Math.min(config.commandTimeoutMs, 180000) });
-
-    const startsAtZero = /silence_start:\s*0(?:\.0+)?\b/.test(stderr);
-    if (!startsAtZero) return null;
-
-    const match = stderr.match(/silence_end:\s*([0-9.]+)/);
-    if (!match) return null;
-
-    const start = Number(match[1]);
-    return Number.isFinite(start) ? start : null;
+      "-t", String(duration),
+      "-af", "volumedetect",
+      "-f", "null", "-",
+    ], { maxBuffer: 1024 * 1024 * 2, timeout: 15000 });
+    const match = stderr.match(/mean_volume:\s*(-?[0-9.]+)\s*dB/);
+    return match ? Number(match[1]) : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Busca el instante real en el que empieza a hablar, en vez de fiarse solo del
+ * primer timestamp de Whisper ni de un silencedetect global. Dos problemas
+ * distintos hacian esto poco fiable:
+ *  - Con ruido de fondo constante (eco de habitacion, aire, rustle de ropa),
+ *    silencedetect o bien disparaba casi al instante con el primer pico, o no
+ *    detectaba silencio nunca si el ruido ya rozaba el umbral.
+ *  - Whisper puede "alucinar" una palabra entera en el silencio/ruido inicial
+ *    con un timestamp muy adelantado (segundos, no frames) cuando la voz real
+ *    empieza mucho despues; escanear solo un poco mas alla de ese timestamp
+ *    (como se hacia antes) se queda corto y nunca llega a la voz real.
+ *
+ * Por eso se ignora el timestamp de Whisper para esto: se mide el nivel de
+ * ruido ambiente al principio del clip y se escanea un tramo fijo generoso
+ * buscando una subida sostenida (no un pico suelto de respiracion) por
+ * encima de ese suelo.
+ * @param {string} audioPath
+ * @param {{ maxScanSec?: number }} opts
+ * @returns {Promise<number | null>}
+ */
+export async function detectVoiceOnset(audioPath, { maxScanSec = 6 } = {}) {
+  const marginDb = 7;
+  const sustainMarginDb = 5;
+  const sustainSteps = 2;
+  const stepSec = 0.06;
+  const windowSec = 0.12;
+
+  const floor = await medirVolumen(audioPath, 0, 0.25);
+  if (floor === null) return null;
+
+  const steps = Math.ceil(maxScanSec / stepSec);
+  const vols = [];
+  for (let i = 0; i <= steps; i++) {
+    vols.push(await medirVolumen(audioPath, i * stepSec, windowSec));
+  }
+
+  for (let i = 0; i < vols.length; i++) {
+    if (vols[i] === null || vols[i] < floor + marginDb) continue;
+    let sostenido = true;
+    for (let k = 1; k <= sustainSteps; k++) {
+      const v = vols[i + k];
+      if (v === null || v === undefined || v < floor + sustainMarginDb) { sostenido = false; break; }
+    }
+    if (sostenido) return i * stepSec;
+  }
+  return null;
+}
+
+/**
+ * Decide si merece la pena corregir el timestamp inicial de Whisper con
+ * detectVoiceOnset, o si es mejor no tocarlo.
+ *
+ * detectVoiceOnset se basa en volumen, no en si hay VOZ o solo ruido (viento,
+ * eco, trafico...): en un video grabado con viento/ruido de fondo alto, la
+ * voz real puede tardar en cruzar el margen por encima de ese ruido, y
+ * "corregir" el inicio ahi cortaria habla real ya perfectamente valida (mismo
+ * fallo que se queria arreglar, pero al reves).
+ *
+ * Por eso solo se llama a detectVoiceOnset cuando hay una señal concreta de
+ * que el timestamp de Whisper NO es fiable: una de las primeras palabras
+ * "reales" con una duracion absurda para lo corta que es (sintoma tipico de
+ * una alucinacion o de varias palabras fusionadas en un silencio/ruido
+ * inicial, como cuando Whisper inventa una frase corta a partir del silencio
+ * de arranque). Si las primeras palabras tienen duraciones normales, se
+ * confia en Whisper tal cual.
+ * @param {{ start: number, end: number, text: string }[]} segments
+ * @param {{ maxWords?: number, umbralSeg?: number }} opts
+ * @returns {boolean}
+ */
+export function primerTramoSospechoso(segments, { maxWords = 3, umbralSeg = 1.0 } = {}) {
+  const spoken = segments.filter((s) => s.text.trim() && s.end > s.start);
+  return spoken.slice(0, maxWords).some((s) => s.end - s.start > umbralSeg);
 }
 
 /**
@@ -223,11 +284,11 @@ export function compactSubtitleSegments(segments, maxWords = 4) {
  * @param {number} [opts.padEnd]
  * @returns {{ start: number, end: number } | null}
  */
-export function speechBounds(segments, { audioStart = null, padStart = 0, padEnd = 0.03 } = {}) {
+export function speechBounds(segments, { voiceOnset = null, padStart = 0, padEnd = 0.03 } = {}) {
   const spoken = segments.filter((seg) => seg.text.trim() && seg.end > seg.start);
   if (!spoken.length) return null;
   const firstWord = spoken[0].start;
-  const start = Number.isFinite(audioStart) && audioStart > firstWord ? audioStart : firstWord;
+  const start = Number.isFinite(voiceOnset) ? voiceOnset : firstWord;
   return {
     start: Math.max(0, start - padStart),
     end: spoken.at(-1).end + padEnd,
