@@ -156,16 +156,20 @@ function formatearSegundos(s: number | null) {
   return `${m}:${sec.padStart(5, "0")}`;
 }
 
-function RecorteManualEditor({ row }: { row: VideoRow }) {
+function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [duracion, setDuracion] = useState<number | null>(null);
   const [inicio, setInicio] = useState<number | null>(row.recorte_inicio ?? null);
   const [fin, setFin] = useState<number | null>(row.recorte_fin ?? null);
+  const [arrastrando, setArrastrando] = useState<"inicio" | "fin" | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
   useEffect(() => {
     setInicio(row.recorte_inicio ?? null);
     setFin(row.recorte_fin ?? null);
+    setDuracion(null);
     setMensaje(null);
   }, [row.id, row.recorte_inicio, row.recorte_fin]);
 
@@ -174,6 +178,35 @@ function RecorteManualEditor({ row }: { row: VideoRow }) {
   }
   function marcarFin() {
     if (videoRef.current) setFin(Math.round(videoRef.current.currentTime * 100) / 100);
+  }
+
+  function tiempoDesdeX(clientX: number): number {
+    const el = trackRef.current;
+    if (!el || !duracion) return 0;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return Math.round(ratio * duracion * 100) / 100;
+  }
+
+  function handlersHandle(tipo: "inicio" | "fin") {
+    return {
+      onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setArrastrando(tipo);
+      },
+      onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => {
+        if (arrastrando !== tipo || !duracion) return;
+        const t = tiempoDesdeX(event.clientX);
+        if (videoRef.current) videoRef.current.currentTime = t;
+        if (tipo === "inicio") setInicio(Math.min(t, (fin ?? duracion) - 0.05));
+        else setFin(Math.max(t, (inicio ?? 0) + 0.05));
+      },
+      onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        setArrastrando(null);
+      },
+    };
   }
 
   async function guardar() {
@@ -188,13 +221,18 @@ function RecorteManualEditor({ row }: { row: VideoRow }) {
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
         setMensaje(payload?.error ?? "No se pudo guardar el recorte.");
+        setGuardando(false);
         return;
       }
-      setMensaje("Guardado. El video se va a reprocesar con este recorte.");
-    } finally {
+      onGuardado();
+    } catch {
+      setMensaje("No se pudo guardar el recorte.");
       setGuardando(false);
     }
   }
+
+  const pctInicio = duracion ? ((inicio ?? 0) / duracion) * 100 : 0;
+  const pctFin = duracion ? ((fin ?? duracion) / duracion) * 100 : 100;
 
   return (
     <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
@@ -206,8 +244,34 @@ function RecorteManualEditor({ row }: { row: VideoRow }) {
         src={`/api/aprobacion/original?id=${row.id}`}
         controls
         playsInline
-        className="mb-2 max-h-[220px] w-full rounded-lg bg-black"
+        onLoadedMetadata={(event) => setDuracion(event.currentTarget.duration)}
+        className="mb-3 max-h-[220px] w-full rounded-lg bg-black"
       />
+
+      {duracion ? (
+        <div
+          ref={trackRef}
+          className="relative mb-3 h-6 w-full touch-none select-none rounded-full bg-white/[0.08]"
+        >
+          <div
+            className="absolute inset-y-0 rounded-full bg-[#8B5CF6]/35"
+            style={{ left: `${pctInicio}%`, right: `${100 - pctFin}%` }}
+          />
+          <div
+            {...handlersHandle("inicio")}
+            className="absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize place-items-center rounded-full border-2 border-white bg-[#8B5CF6] shadow-lg"
+            style={{ left: `${pctInicio}%` }}
+            title="Arrastra para marcar el inicio"
+          />
+          <div
+            {...handlersHandle("fin")}
+            className="absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize place-items-center rounded-full border-2 border-white bg-[#22D3EE] shadow-lg"
+            style={{ left: `${pctFin}%` }}
+            title="Arrastra para marcar el fin"
+          />
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.08] px-2 py-1.5">
           <span className="text-white/45">
@@ -254,7 +318,7 @@ function RecorteManualEditor({ row }: { row: VideoRow }) {
           {guardando ? "Guardando..." : "Guardar y reprocesar"}
         </button>
       </div>
-      {mensaje ? <p className="mt-2 text-[11px] text-[#22D3EE]">{mensaje}</p> : null}
+      {mensaje ? <p className="mt-2 text-[11px] text-red-300">{mensaje}</p> : null}
     </div>
   );
 }
@@ -855,7 +919,15 @@ export function MesaClient({
 
                 {["tipo1", "tipo3", "tipo4"].includes(selected.tipo_video ?? "") ? (
                   <div className="mt-3">
-                    <RecorteManualEditor row={selected} />
+                    <RecorteManualEditor
+                      row={selected}
+                      onGuardado={() => {
+                        setRows((prev) => prev.filter((row) => row.id !== selected.id));
+                        setActionMessage("Video enviado a reprocesar con el recorte manual.");
+                        router.refresh();
+                        closePopup();
+                      }}
+                    />
                   </div>
                 ) : null}
               </div>
