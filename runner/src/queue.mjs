@@ -109,7 +109,7 @@ export async function cicloOnce({ logEmpty = false } = {}) {
   await liberarAtascadas();
   const { data: piezas, error } = await supabase
     .from("library_content")
-    .select("id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada, layout_json")
+    .select("id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada, layout_json, recorte_inicio, recorte_fin")
     .eq("estado", "editando")
     .eq("estado_procesamiento", "pendiente")
     .order("recibido_at", { ascending: true })

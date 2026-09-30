@@ -20,6 +20,8 @@ export interface VideoRow {
   caption: string;
   frase_quemada: string;
   correcciones: string;
+  recorte_inicio?: number | null;
+  recorte_fin?: number | null;
   modelo_nombre: string;
   cuenta_username: string | null;
   programado_at?: string | null;
@@ -144,6 +146,116 @@ function OriginalSinEditar({
       </div>
       <span className="absolute bottom-1 left-0 right-0 text-center text-[8px] text-white/60">ver original</span>
     </button>
+  );
+}
+
+function formatearSegundos(s: number | null) {
+  if (s === null || !Number.isFinite(s)) return "—";
+  const m = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(2);
+  return `${m}:${sec.padStart(5, "0")}`;
+}
+
+function RecorteManualEditor({ row }: { row: VideoRow }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [inicio, setInicio] = useState<number | null>(row.recorte_inicio ?? null);
+  const [fin, setFin] = useState<number | null>(row.recorte_fin ?? null);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+
+  useEffect(() => {
+    setInicio(row.recorte_inicio ?? null);
+    setFin(row.recorte_fin ?? null);
+    setMensaje(null);
+  }, [row.id, row.recorte_inicio, row.recorte_fin]);
+
+  function marcarInicio() {
+    if (videoRef.current) setInicio(Math.round(videoRef.current.currentTime * 100) / 100);
+  }
+  function marcarFin() {
+    if (videoRef.current) setFin(Math.round(videoRef.current.currentTime * 100) / 100);
+  }
+
+  async function guardar() {
+    setGuardando(true);
+    setMensaje(null);
+    try {
+      const res = await fetch("/api/aprobacion/accion", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: row.id, accion: "recorte", recorte_inicio: inicio, recorte_fin: fin }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        setMensaje(payload?.error ?? "No se pudo guardar el recorte.");
+        return;
+      }
+      setMensaje("Guardado. El video se va a reprocesar con este recorte.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+      <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/40">
+        Recorte manual del video original (para cuando el corte automatico no acierta)
+      </p>
+      <video
+        ref={videoRef}
+        src={`/api/aprobacion/original?id=${row.id}`}
+        controls
+        playsInline
+        className="mb-2 max-h-[220px] w-full rounded-lg bg-black"
+      />
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.08] px-2 py-1.5">
+          <span className="text-white/45">
+            Inicio: <span className="font-mono text-white/80">{formatearSegundos(inicio)}</span>
+          </span>
+          <button
+            type="button"
+            onClick={marcarInicio}
+            className="rounded-md bg-[#8B5CF6]/15 px-2 py-1 text-[#C4B5FD] transition hover:bg-[#8B5CF6]/25"
+          >
+            Marcar aqui
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.08] px-2 py-1.5">
+          <span className="text-white/45">
+            Fin: <span className="font-mono text-white/80">{formatearSegundos(fin)}</span>
+          </span>
+          <button
+            type="button"
+            onClick={marcarFin}
+            className="rounded-md bg-[#8B5CF6]/15 px-2 py-1 text-[#C4B5FD] transition hover:bg-[#8B5CF6]/25"
+          >
+            Marcar aqui
+          </button>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setInicio(null);
+            setFin(null);
+          }}
+          className="text-[11px] text-white/40 transition hover:text-white/70"
+        >
+          Quitar marcas
+        </button>
+        <button
+          type="button"
+          onClick={guardar}
+          disabled={guardando || (inicio === null && fin === null)}
+          className="rounded-lg bg-[#8B5CF6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#7C3AED] disabled:opacity-40"
+        >
+          {guardando ? "Guardando..." : "Guardar y reprocesar"}
+        </button>
+      </div>
+      {mensaje ? <p className="mt-2 text-[11px] text-[#22D3EE]">{mensaje}</p> : null}
+    </div>
   );
 }
 
@@ -740,6 +852,12 @@ export function MesaClient({
                     />
                   </div>
                 </div>
+
+                {["tipo1", "tipo3", "tipo4"].includes(selected.tipo_video ?? "") ? (
+                  <div className="mt-3">
+                    <RecorteManualEditor row={selected} />
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-3">

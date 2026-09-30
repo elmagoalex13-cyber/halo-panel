@@ -7,17 +7,20 @@ const ESTADO_MAP: Record<string, string> = {
   aprobar: "aprobado",
   rehacer: "editando",
   nueva_frase: "editando",
+  recorte: "editando",
   descartar: "rechazado",
 };
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, accion, caption, correcciones, frase_quemada } = (await req.json()) as {
+    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin } = (await req.json()) as {
       id?: string;
       accion?: string;
       caption?: string;
       correcciones?: string;
       frase_quemada?: string;
+      recorte_inicio?: number | null;
+      recorte_fin?: number | null;
     };
 
     if (!id || !accion || !ESTADO_MAP[accion]) {
@@ -76,6 +79,20 @@ export async function PATCH(req: NextRequest) {
       update.publicado_at = null;
       update.frase_quemada = null;
       update.layout_json = null;
+    }
+    if (accion === "recorte") {
+      // Guarda el recorte manual (segundos sobre el video bruto, marcados en
+      // la mesa viendo el original) y reencola: el runner lo usa en vez de la
+      // deteccion automatica de inicio/fin de voz.
+      if (typeof recorte_inicio !== "number" && typeof recorte_fin !== "number") {
+        return NextResponse.json({ error: "Falta recorte_inicio o recorte_fin" }, { status: 400 });
+      }
+      update.estado_procesamiento = "pendiente";
+      update.error_mensaje = null;
+      update.aprobado_at = null;
+      update.publicado_at = null;
+      update.recorte_inicio = typeof recorte_inicio === "number" ? recorte_inicio : null;
+      update.recorte_fin = typeof recorte_fin === "number" ? recorte_fin : null;
     }
 
     const { data: updated, error } = await supabase

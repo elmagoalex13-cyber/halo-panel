@@ -30,6 +30,8 @@ type SupabaseApprovalRow = {
   caption: string | null;
   frase_quemada: string | null;
   correcciones: string | null;
+  recorte_inicio?: number | null;
+  recorte_fin?: number | null;
   modelo?: { nombre?: string | null } | null;
   cuenta?: { username?: string | null } | null;
 };
@@ -90,7 +92,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       .select(`
         id, titulo, tipo_video, tipo, estado, recibido_at, publicado_at,
         r2_key, r2_key_referencia, r2_key_original, video_procesado_url, estado_procesamiento, error_mensaje,
-        caption, frase_quemada, correcciones,
+        caption, frase_quemada, correcciones, recorte_inicio, recorte_fin,
         modelo:modelos(nombre),
         cuenta:cuentas_instagram(username)
       `)
@@ -120,6 +122,8 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       caption: row.caption ?? "",
       frase_quemada: row.frase_quemada ?? "",
       correcciones: row.correcciones ?? "",
+      recorte_inicio: row.recorte_inicio ?? null,
+      recorte_fin: row.recorte_fin ?? null,
       modelo_nombre: row.modelo?.nombre ?? "—",
       cuenta_username: row.cuenta?.username ?? null,
     }));

@@ -44,7 +44,7 @@ async function downloadInput(key, destPath) {
   await downloadFromR2(key, destPath);
 }
 
-async function subtitulos(rawPath, workDir, textoCorregido = "") {
+async function subtitulos(rawPath, workDir, textoCorregido = "", recorteManual = {}) {
   try {
     const audioDir = path.join(workDir, "audio");
     const wavPath = await extractAudio(rawPath, audioDir);
@@ -53,12 +53,21 @@ async function subtitulos(rawPath, workDir, textoCorregido = "") {
       console.warn("[runner] sin segmentos de voz (o whisper no instalado): se renderiza sin subtitulos");
       return null;
     }
+    // Recorte manual desde la mesa de aprobacion (segundos sobre el video
+    // bruto): tiene prioridad sobre la deteccion automatica. Si solo se dio
+    // uno de los dos limites, el otro se sigue calculando automaticamente.
+    const inicioManual = Number.isFinite(recorteManual.inicio) ? Math.max(0, recorteManual.inicio) : null;
+    const finManual = Number.isFinite(recorteManual.fin) ? recorteManual.fin : null;
+
     // Solo se corrige el timestamp de Whisper si hay una señal concreta de que
     // no es fiable (ver primerTramoSospechoso): en audio limpio, Whisper ya
     // acierta el inicio; corregir siempre a ciegas por volumen puede cortar
     // habla real en videos con viento/ruido de fondo alto.
-    const voiceOnset = primerTramoSospechoso(segments) ? await detectVoiceOnset(wavPath) : null;
-    const trim = speechBounds(segments, { voiceOnset });
+    const voiceOnset = inicioManual === null && primerTramoSospechoso(segments) ? await detectVoiceOnset(wavPath) : null;
+    const auto = speechBounds(segments, { voiceOnset });
+    const trim = (inicioManual !== null || finManual !== null)
+      ? { start: inicioManual ?? auto?.start ?? 0, end: finManual ?? auto?.end }
+      : auto;
     const textoWhisper = transcriptText(segments);
     const textoFinal = textoCorregido.trim() || textoWhisper;
     const wordTimed = wordTimedFromSegments(segments);
@@ -85,10 +94,11 @@ export async function procesarTipo(tipo, pieza) {
     const rawPath = path.join(workDir, "raw.mp4");
     const outPath = path.join(workDir, "output.mp4");
     let fraseQuemada = pieza.frase_quemada ?? "";
+    const recorteManual = { inicio: pieza.recorte_inicio, fin: pieza.recorte_fin };
     await downloadInput(rawKey, rawPath);
 
     if (tipo === 1) {
-      const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "");
+      const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
       await renderTipo1(rawPath, subs?.assPath, outPath, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
     } else if (tipo === 2) {
@@ -105,7 +115,7 @@ export async function procesarTipo(tipo, pieza) {
       await renderTipo2(rawPath, outPath, { frase: pieza.frase_quemada ?? "", audioRefPath: audioRef, layout_json: pieza.layout_json ?? null });
       fraseQuemada = pieza.frase_quemada ?? "";
     } else if (tipo === 3) {
-      const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "");
+      const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
       await renderTipo3(rawPath, subs?.assPath, outPath, 2, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
     } else {
@@ -113,7 +123,7 @@ export async function procesarTipo(tipo, pieza) {
       if (!refKey) throw new Error("Tipo 4 sin video de referencia (r2_key_referencia)");
       const refPath = path.join(workDir, "referencia.mp4");
       await downloadFromR2(refKey, refPath);
-      const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "");
+      const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
       await renderTipo4(rawPath, refPath, outPath, subs?.assPath, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
     }
