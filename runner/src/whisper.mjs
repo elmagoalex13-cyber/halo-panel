@@ -161,17 +161,16 @@ function parseSRT(srtContent) {
 }
 
 /**
- * Divide cada segmento de Whisper en subtitulos cortos.
- * Mantiene el tiempo del segmento original repartido de forma proporcional
- * para que no aparezca una frase larga entera en pantalla.
+ * Aplana los segmentos de Whisper a una lista de palabras con su tiempo real.
+ * Cuando whisper-cpp soporta -sow/-ml 1 (caso normal en este servidor) cada
+ * segmento YA es una sola palabra con su timestamp real; si el binario cae al
+ * modo sin timestamps por palabra, se interpola proporcionalmente dentro del
+ * segmento como aproximacion (mejor que nada, pero menos preciso).
  * @param {{ start: number, end: number, text: string }[]} segments
- * @param {number} maxWords
  * @returns {{ start: number, end: number, text: string }[]}
  */
-export function compactSubtitleSegments(segments, maxWords = 4) {
-  const compact = [];
+export function wordTimedFromSegments(segments) {
   const wordTimed = [];
-
   for (const seg of segments) {
     const words = seg.text.trim().split(/\s+/).filter(Boolean);
     if (!words.length) continue;
@@ -188,7 +187,12 @@ export function compactSubtitleSegments(segments, maxWords = 4) {
       wordTimed.push({ start, end, text: words[i] });
     }
   }
+  return wordTimed;
+}
 
+/** Agrupa una lista de palabras con tiempo real en subtitulos de `maxWords` palabras. */
+export function chunkWordTimed(wordTimed, maxWords = 4) {
+  const compact = [];
   for (let i = 0; i < wordTimed.length; i += maxWords) {
     const chunk = wordTimed.slice(i, i + maxWords);
     compact.push({
@@ -197,8 +201,18 @@ export function compactSubtitleSegments(segments, maxWords = 4) {
       text: chunk.map((word) => word.text).join(" "),
     });
   }
-
   return compact;
+}
+
+/**
+ * Divide cada segmento de Whisper en subtitulos cortos, con el tiempo real de
+ * cada palabra (ver wordTimedFromSegments).
+ * @param {{ start: number, end: number, text: string }[]} segments
+ * @param {number} maxWords
+ * @returns {{ start: number, end: number, text: string }[]}
+ */
+export function compactSubtitleSegments(segments, maxWords = 4) {
+  return chunkWordTimed(wordTimedFromSegments(segments), maxWords);
 }
 
 /**
@@ -247,6 +261,34 @@ export function subtitleSegmentsFromText(text, bounds, maxWords = 4) {
       text: chunk.join(" "),
     };
   });
+}
+
+/**
+ * Subtitulos para un texto corregido a mano (ej. el admin arreglo una palabra
+ * mal transcrita en la mesa de aprobacion), intentando conservar el tiempo
+ * REAL de Whisper en vez de repartir el texto de forma uniforme (que es lo
+ * que desincroniza el subtitulo del habla en cuanto se corrige/rehace algo).
+ *
+ * Si el texto corregido tiene el mismo numero de palabras que la transcripcion
+ * original, se reutiliza el timestamp real de cada palabra (solo cambia el
+ * texto). Si el admin reescribio la frase con otro numero de palabras, no hay
+ * forma fiable de re-alinear palabra a palabra: se cae al reparto proporcional
+ * uniforme sobre `bounds` (mismo comportamiento que antes).
+ * @param {string} text - Texto corregido a quemar
+ * @param {{ start: number, end: number, text: string }[]} wordTimed - Palabras con tiempo real (ver wordTimedFromSegments)
+ * @param {{ start: number, end: number }} bounds - Limites de voz (fallback)
+ * @param {number} maxWords
+ */
+export function alignCorrectedText(text, wordTimed, bounds, maxWords = 4) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+
+  if (wordTimed.length === words.length) {
+    const conTiempoReal = words.map((w, i) => ({ start: wordTimed[i].start, end: wordTimed[i].end, text: w }));
+    return chunkWordTimed(conTiempoReal, maxWords);
+  }
+
+  return subtitleSegmentsFromText(text, bounds, maxWords);
 }
 
 /**

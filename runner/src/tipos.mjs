@@ -13,14 +13,15 @@ import { pipeline } from "stream/promises";
 import { config } from "./config.mjs";
 import { downloadFromR2, uploadToR2, keyDesdeUrl } from "./r2.mjs";
 import {
-  compactSubtitleSegments,
+  alignCorrectedText,
+  chunkWordTimed,
   detectAudioStart,
   extractAudio,
   generateASS,
   speechBounds,
-  subtitleSegmentsFromText,
   transcriptText,
   transcribeWithWhisper,
+  wordTimedFromSegments,
 } from "./whisper.mjs";
 import { renderTipo1, renderTipo2, renderTipo3, renderTipo4 } from "./ffmpeg.mjs";
 import { createClient } from "@supabase/supabase-js";
@@ -57,9 +58,10 @@ async function subtitulos(rawPath, workDir, textoCorregido = "") {
     const trim = speechBounds(segments, { audioStart });
     const textoWhisper = transcriptText(segments);
     const textoFinal = textoCorregido.trim() || textoWhisper;
+    const wordTimed = wordTimedFromSegments(segments);
     const compact = textoCorregido.trim()
-      ? subtitleSegmentsFromText(textoFinal, trim, 4)
-      : compactSubtitleSegments(segments, 4);
+      ? alignCorrectedText(textoFinal, wordTimed, trim, 4)
+      : chunkWordTimed(wordTimed, 4);
     const assPath = path.join(workDir, "subs.ass");
     await writeFile(assPath, generateASS(compact, { offset: trim?.start ?? 0 }), "utf-8");
     return { assPath, trim, texto: textoFinal };
