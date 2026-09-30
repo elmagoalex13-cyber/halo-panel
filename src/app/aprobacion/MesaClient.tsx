@@ -829,8 +829,8 @@ export function MesaClient({
                   Esta nota queda de registro, pero no hay IA que la lea. Para ajustar el recorte al rehacer, escribe
                   algo como <span className="font-mono text-white/40">inicio +1.5</span> o{" "}
                   <span className="font-mono text-white/40">fin -0.5</span> (segundos a sumar/restar al recorte
-                  actual) — para todo lo demas (frase, tamano de letra...) usa el recorte manual o "Nueva frase" de
-                  arriba.
+                  actual) — para todo lo demas (frase, tamano de letra...) usa el recorte manual o &quot;Nueva
+                  frase&quot; de arriba.
                 </p>
               </div>
 
