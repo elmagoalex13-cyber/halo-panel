@@ -94,6 +94,7 @@ export async function procesarTipo(tipo, pieza) {
     const rawPath = path.join(workDir, "raw.mp4");
     const outPath = path.join(workDir, "output.mp4");
     let fraseQuemada = pieza.frase_quemada ?? "";
+    let trimUsado = null;
     const recorteManual = { inicio: pieza.recorte_inicio, fin: pieza.recorte_fin };
     await downloadInput(rawKey, rawPath);
 
@@ -101,6 +102,7 @@ export async function procesarTipo(tipo, pieza) {
       const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
       await renderTipo1(rawPath, subs?.assPath, outPath, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
+      trimUsado = subs?.trim ?? null;
     } else if (tipo === 2) {
       let audioRef;
       const refKey = keyDesdeUrl(pieza.audio_referencia_url);
@@ -118,6 +120,7 @@ export async function procesarTipo(tipo, pieza) {
       const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
       await renderTipo3(rawPath, subs?.assPath, outPath, 2, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
+      trimUsado = subs?.trim ?? null;
     } else {
       const refKey = keyDesdeUrl(pieza.r2_key_referencia);
       if (!refKey) throw new Error("Tipo 4 sin video de referencia (r2_key_referencia)");
@@ -126,10 +129,11 @@ export async function procesarTipo(tipo, pieza) {
       const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
       await renderTipo4(rawPath, refPath, outPath, subs?.assPath, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
+      trimUsado = subs?.trim ?? null;
     }
 
     await uploadToR2(outPath, outKey);
-    return { outKey, rawKey, fraseQuemada };
+    return { outKey, rawKey, fraseQuemada, trimUsado };
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }

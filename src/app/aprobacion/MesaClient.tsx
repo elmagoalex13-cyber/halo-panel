@@ -163,6 +163,7 @@ function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: (
   const [inicio, setInicio] = useState<number | null>(row.recorte_inicio ?? null);
   const [fin, setFin] = useState<number | null>(row.recorte_fin ?? null);
   const [arrastrando, setArrastrando] = useState<"inicio" | "fin" | null>(null);
+  const [pausadoEn, setPausadoEn] = useState<number | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
@@ -170,14 +171,17 @@ function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: (
     setInicio(row.recorte_inicio ?? null);
     setFin(row.recorte_fin ?? null);
     setDuracion(null);
+    setPausadoEn(null);
     setMensaje(null);
   }, [row.id, row.recorte_inicio, row.recorte_fin]);
 
-  function marcarInicio() {
-    if (videoRef.current) setInicio(Math.round(videoRef.current.currentTime * 100) / 100);
+  function marcarInicio(tiempo?: number) {
+    const t = tiempo ?? videoRef.current?.currentTime;
+    if (t !== undefined) setInicio(Math.round(t * 100) / 100);
   }
-  function marcarFin() {
-    if (videoRef.current) setFin(Math.round(videoRef.current.currentTime * 100) / 100);
+  function marcarFin(tiempo?: number) {
+    const t = tiempo ?? videoRef.current?.currentTime;
+    if (t !== undefined) setFin(Math.round(t * 100) / 100);
   }
 
   function tiempoDesdeX(clientX: number): number {
@@ -245,8 +249,37 @@ function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: (
         controls
         playsInline
         onLoadedMetadata={(event) => setDuracion(event.currentTarget.duration)}
-        className="mb-3 max-h-[220px] w-full rounded-lg bg-black"
+        onPause={(event) => setPausadoEn(Math.round(event.currentTarget.currentTime * 100) / 100)}
+        onPlay={() => setPausadoEn(null)}
+        onSeeked={(event) => {
+          if (event.currentTarget.paused) setPausadoEn(Math.round(event.currentTarget.currentTime * 100) / 100);
+        }}
+        className="mb-2 max-h-[220px] w-full rounded-lg bg-black"
       />
+
+      {pausadoEn !== null ? (
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-[#22D3EE]/25 bg-[#22D3EE]/10 px-3 py-2 text-xs">
+          <span className="text-[#67E8F9]">
+            Pausado en <span className="font-mono">{formatearSegundos(pausadoEn)}</span>
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => marcarInicio(pausadoEn)}
+              className="rounded-md bg-[#8B5CF6]/20 px-2 py-1 font-semibold text-[#C4B5FD] transition hover:bg-[#8B5CF6]/30"
+            >
+              Usar como inicio
+            </button>
+            <button
+              type="button"
+              onClick={() => marcarFin(pausadoEn)}
+              className="rounded-md bg-[#22D3EE]/20 px-2 py-1 font-semibold text-[#67E8F9] transition hover:bg-[#22D3EE]/30"
+            >
+              Usar como fin
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {duracion ? (
         <div
@@ -279,7 +312,7 @@ function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: (
           </span>
           <button
             type="button"
-            onClick={marcarInicio}
+            onClick={() => marcarInicio()}
             className="rounded-md bg-[#8B5CF6]/15 px-2 py-1 text-[#C4B5FD] transition hover:bg-[#8B5CF6]/25"
           >
             Marcar aqui
@@ -291,7 +324,7 @@ function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: (
           </span>
           <button
             type="button"
-            onClick={marcarFin}
+            onClick={() => marcarFin()}
             className="rounded-md bg-[#8B5CF6]/15 px-2 py-1 text-[#C4B5FD] transition hover:bg-[#8B5CF6]/25"
           >
             Marcar aqui
@@ -792,6 +825,13 @@ export function MesaClient({
                   placeholder="que hay que cambiar y como (se guarda con el video)"
                   className="input-base w-full resize-none text-xs"
                 />
+                <p className="mt-1 text-[10px] text-white/25">
+                  Esta nota queda de registro, pero no hay IA que la lea. Para ajustar el recorte al rehacer, escribe
+                  algo como <span className="font-mono text-white/40">inicio +1.5</span> o{" "}
+                  <span className="font-mono text-white/40">fin -0.5</span> (segundos a sumar/restar al recorte
+                  actual) — para todo lo demas (frase, tamano de letra...) usa el recorte manual o "Nueva frase" de
+                  arriba.
+                </p>
               </div>
 
               <div>
@@ -1016,7 +1056,7 @@ export function MesaClient({
               onChange={(event) => setQuickRehacer((current) => current ? { ...current, nota: event.target.value } : current)}
               rows={4}
               className="input-base mt-2 w-full resize-none text-sm"
-              placeholder="Ej: subir el texto, cambiar frase, recortar mejor, usar otra versión..."
+              placeholder="Queda de registro (no hay IA leyendola). Para ajustar el recorte: inicio +1.5 / fin -0.5"
             />
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <button

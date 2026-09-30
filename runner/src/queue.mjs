@@ -59,7 +59,7 @@ export async function procesarPieza(pieza) {
       pieza.frase_quemada = asignado?.frase ?? "";
       pieza.layout_json = asignado?.layout_json ?? null;
     }
-    const { outKey, rawKey, fraseQuemada } = await withTimeout(
+    const { outKey, rawKey, fraseQuemada, trimUsado } = await withTimeout(
       procesarTipo(tipo, pieza),
       config.pieceTimeoutMs,
       `pieza ${pieza.id}`,
@@ -73,6 +73,10 @@ export async function procesarPieza(pieza) {
         video_procesado_url: publicUrl(outKey),
         r2_key_original: pieza.r2_key_original ?? rawKey,
         frase_quemada: fraseQuemada,
+        // Se guarda el recorte REALMENTE usado (automatico o manual) para que
+        // la mesa de aprobacion siempre muestre el corte actual y una nota de
+        // "rehacer" con ajuste (ej. "inicio +1.5") tenga un valor del que partir.
+        ...(trimUsado ? { recorte_inicio: trimUsado.start ?? null, recorte_fin: trimUsado.end ?? null } : {}),
         error_mensaje: null,
         procesado_en: ahora,
         edicion_at: ahora,

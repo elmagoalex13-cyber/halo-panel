@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { programarPieza } from "@/lib/publer";
+import { aplicarAjusteRecorte, parseNotaRecorte } from "@/lib/notaRecorte";
 import type { VideoEstado } from "@/types";
 
 const ESTADO_MAP: Record<string, string> = {
@@ -36,7 +37,7 @@ export async function PATCH(req: NextRequest) {
     const supabase = createAdminClient();
     const { data: actual, error: actualError } = await supabase
       .from("library_content")
-      .select("id, estado")
+      .select("id, estado, recorte_inicio, recorte_fin")
       .eq("id", id)
       .maybeSingle();
     if (actualError) throw actualError;
@@ -68,6 +69,22 @@ export async function PATCH(req: NextRequest) {
       update.error_mensaje = null;
       update.aprobado_at = null;
       update.publicado_at = null;
+
+      // Sin IA de por medio, la nota de "rehacer" solo se puede interpretar de
+      // forma fiable si trae una instruccion explicita de recorte tipo
+      // "inicio +1.5" / "fin -0.5" (ver notaRecorte.ts): ajusta el recorte
+      // actual (el que de verdad se uso la ultima vez, automatico o manual)
+      // en vez de ignorar la nota en silencio. Texto libre sin ese formato no
+      // se interpreta (adivinar mal seria peor que no hacer nada).
+      const ajuste = correcciones ? parseNotaRecorte(correcciones) : null;
+      if (ajuste) {
+        const { inicio, fin } = aplicarAjusteRecorte(ajuste, {
+          inicio: actual.recorte_inicio,
+          fin: actual.recorte_fin,
+        });
+        update.recorte_inicio = inicio;
+        update.recorte_fin = fin;
+      }
     }
     if (accion === "nueva_frase") {
       // Igual que rehacer, pero ademas se borra la frase/layout actuales para que el
