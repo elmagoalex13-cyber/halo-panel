@@ -4,6 +4,8 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { CreatorConfigSummary } from "../CreatorConfigSummary";
 import { PortalAccesoButton } from "../PortalAccesoButton";
+import { CopiarOnboarding } from "./CopiarOnboarding";
+import { LIMITES, SECCIONES, onboardingATexto, progresoOnboarding, sanearDatos, valorLegible } from "@/lib/onboarding";
 import type { CreatorConfig, SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 
@@ -19,6 +21,18 @@ const ESTADO_BADGE: Record<string, string> = {
   publicado: "badge-publicado",
   rechazado: "badge-rechazado",
 };
+
+function fechaHora(valor: string, segundos = false) {
+  return new Date(valor).toLocaleString("es-ES", {
+    timeZone: "Europe/Madrid",
+    day: "2-digit",
+    month: "short",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(segundos ? { second: "2-digit" } : {}),
+  });
+}
 
 const SOCIAL_LABEL: Record<SocialNetwork, string> = {
   instagram: "Instagram",
@@ -90,7 +104,7 @@ async function getModeloDetail(id: string) {
   const supabase = createAdminClient();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-  const [{ data: modelo }, { data: cuentas }, { data: pipeline }, { data: ultimasPublicaciones }, { data: facturacionHistorica }, { data: config }, { data: encargos }, { data: conteo }] = await Promise.all([
+  const [{ data: modelo }, { data: cuentas }, { data: pipeline }, { data: ultimasPublicaciones }, { data: facturacionHistorica }, { data: config }, { data: encargos }, { data: conteo }, { data: onboardingRow }, { data: onboardingHistorial }] = await Promise.all([
     supabase.from("modelos").select("*").eq("id", id).single(),
     supabase.from("cuentas_instagram").select("*").eq("modelo_id", id),
     supabase.from("library_content").select("id, titulo, tipo_video, estado, recibido_at").eq("modelo_id", id).not("estado", "in", "(publicado,archivado)").order("recibido_at", { ascending: false }).limit(20),
@@ -99,6 +113,8 @@ async function getModeloDetail(id: string) {
     supabase.from("creator_configs").select("*").eq("modelo_id", id).maybeSingle(),
     supabase.from("encargos").select("id, tipo_video, estado, instrucciones, fecha_limite, created_at").eq("modelo_id", id).order("created_at", { ascending: false }).limit(20),
     supabase.from("library_content").select("estado").eq("modelo_id", id),
+    supabase.from("modelo_onboarding").select("datos, estado, enviado_at, updated_at").eq("modelo_id", id).maybeSingle(),
+    supabase.from("modelo_onboarding_historial").select("id, origen, created_at").eq("modelo_id", id).order("created_at", { ascending: false }).limit(50),
   ]);
   if (!modelo) return null;
 
@@ -118,6 +134,8 @@ async function getModeloDetail(id: string) {
   });
 
   return {
+    onboarding: (onboardingRow ?? null) as { datos: unknown; estado: string; enviado_at: string | null; updated_at: string } | null,
+    onboardingHistorial: (onboardingHistorial ?? []) as Array<{ id: string; origen: string; created_at: string }>,
     config: (config ?? null) as CreatorConfig | null,
     encargos: (encargos ?? []) as Encargo[],
     porEstado,
@@ -141,7 +159,8 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   const data = await getModeloDetail(id);
   if (!data) notFound();
 
-  const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion, config, encargos, porEstado, totalVideos } = data;
+  const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion, config, encargos, porEstado, totalVideos, onboarding, onboardingHistorial } = data;
+  const onboardingDatos = sanearDatos(onboarding?.datos ?? {});
   const pendientes = encargos.filter((e) => e.estado !== "entregado");
   const facturacionMes = facturacion[0];
 
@@ -215,6 +234,69 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
               </div>
             )}
           </div>
+        </div>
+
+        <div id="onboarding" className="card scroll-mt-6">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Onboarding de creadora</h2>
+            {onboarding ? (
+              <>
+                <span className={`badge ${onboarding.estado === "enviado" ? "bg-green-500/20 text-green-400" : "bg-amber-500/15 text-amber-300"}`}>
+                  {onboarding.estado === "enviado" ? `Enviado ${onboarding.enviado_at ? formatDate(onboarding.enviado_at) : ""}` : "A medias"}
+                </span>
+                <span className="badge">{progresoOnboarding(onboardingDatos)}% obligatorios</span>
+                <span className="text-xs text-halo-subtle">Última edición: {fechaHora(onboarding.updated_at)}</span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <CopiarOnboarding texto={onboardingATexto(modelo.nombre, onboardingDatos)} />
+                  <a href={`/api/modelos/${modelo.id}/onboarding?formato=txt`} className="btn-secondary px-3 py-1.5 text-xs">Descargar .txt</a>
+                  <a href={`/api/modelos/${modelo.id}/onboarding?formato=json`} className="btn-secondary px-3 py-1.5 text-xs">Copia de seguridad .json</a>
+                </div>
+              </>
+            ) : (
+              <span className="text-sm text-halo-subtle">Todavía no ha empezado el formulario del portal.</span>
+            )}
+          </div>
+
+          {onboarding ? (
+            <>
+              <div className="grid grid-cols-1 gap-x-8 gap-y-5 lg:grid-cols-2">
+                {SECCIONES.map((seccion) => (
+                  <div key={seccion.id}>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-halo-accent">{seccion.titulo}</h3>
+                    <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 text-sm">
+                      {seccion.campos.map((campo) => (
+                        <div key={campo.id} className="contents">
+                          <dt className="text-halo-subtle">{campo.label}</dt>
+                          <dd className="whitespace-pre-wrap break-words text-halo-text">{valorLegible(campo, onboardingDatos) || "—"}</dd>
+                        </div>
+                      ))}
+                      {seccion.limites ? (
+                        <div className="contents">
+                          <dt className="text-halo-subtle">Límites marcados (NO hace)</dt>
+                          <dd className="text-halo-text">
+                            {(onboardingDatos.limites ?? []).length
+                              ? (onboardingDatos.limites ?? []).map((lid) => LIMITES.find((l) => l.id === lid)?.es ?? lid).join(", ")
+                              : "Ninguno de la lista"}
+                          </dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                  </div>
+                ))}
+              </div>
+              <details className="mt-5 border-t border-halo-border pt-3 text-sm">
+                <summary className="cursor-pointer text-halo-subtle">Historial de versiones guardadas ({onboardingHistorial.length}{onboardingHistorial.length === 50 ? "+" : ""}) — nunca se borran</summary>
+                <ul className="mt-2 space-y-1 font-mono text-xs text-halo-subtle">
+                  {onboardingHistorial.map((h) => (
+                    <li key={h.id}>
+                      {fechaHora(h.created_at, true)} · {h.origen}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-halo-subtle">El .json de copia de seguridad incluye el contenido completo de cada versión.</p>
+              </details>
+            </>
+          ) : null}
         </div>
 
         {config ? (

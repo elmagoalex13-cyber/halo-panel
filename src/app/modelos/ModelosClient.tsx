@@ -60,11 +60,13 @@ export function ModelosClient({
   cuentas: initialCuentas,
   creatorConfigs: initialCreatorConfigs,
   pipelineByModelo,
+  onboardingByModelo,
 }: {
   modelos: Modelo[];
   cuentas: CuentaInstagram[];
   creatorConfigs: CreatorConfig[];
   pipelineByModelo: Record<string, number>;
+  onboardingByModelo: Record<string, "borrador" | "enviado">;
 }) {
   const [modelos, setModelos] = useState(initialModelos);
   const [cuentas, setCuentas] = useState(initialCuentas);
@@ -321,6 +323,19 @@ export function ModelosClient({
                   >
                     <Badge status={modelo.activa ? "cobrado" : "atrasado"}>{modelo.activa ? "Activa" : "Inactiva"}</Badge>
                   </button>
+                  <Link
+                    href={`/modelos/${modelo.id}#onboarding`}
+                    className={`ml-2 mt-2 inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                      onboardingByModelo[modelo.id] === "enviado"
+                        ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-300"
+                        : onboardingByModelo[modelo.id] === "borrador"
+                          ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                          : "border-white/10 bg-white/[0.04] text-white/40"
+                    }`}
+                  >
+                    Onboarding:{" "}
+                    {onboardingByModelo[modelo.id] === "enviado" ? "enviado" : onboardingByModelo[modelo.id] === "borrador" ? "a medias" : "sin empezar"}
+                  </Link>
                 </div>
               </div>
 

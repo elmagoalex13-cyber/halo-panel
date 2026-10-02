@@ -4,6 +4,7 @@ import { sesionActual } from "@/lib/portalAuth";
 import { urlR2 } from "@/lib/media";
 import { LoginForm } from "./LoginForm";
 import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
+import { sanearDatos } from "@/lib/onboarding";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mi portal" };
@@ -44,7 +45,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
   const sesion = await sesionActual(slug);
   if (!sesion || sesion.modeloId !== modelo.id) return <LoginForm slug={slug} nombre={modelo.nombre} />;
 
-  const [encargosRes, entregasRes] = await Promise.all([
+  const [encargosRes, entregasRes, onboardingRes] = await Promise.all([
     supabase
       .from("encargos")
       .select("id, tipo_video, estado, instrucciones, fecha_limite, created_at, referencia:referencias(id, url_original, url_r2, thumbnail_url, descripcion, tipo_video)")
@@ -59,6 +60,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
       .like("r2_key", `bruto/${modelo.id}/%`)
       .order("recibido_at", { ascending: false })
       .limit(12),
+    supabase.from("modelo_onboarding").select("datos, estado").eq("modelo_id", modelo.id).maybeSingle(),
   ]);
 
   const pendientes: Pendiente[] = ((encargosRes.data ?? []) as unknown as Array<{
@@ -77,5 +79,10 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
 
   const entregas = (entregasRes.data ?? []) as Entrega[];
 
-  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} />;
+  const onboarding = {
+    datos: sanearDatos(onboardingRes.data?.datos ?? {}),
+    estado: (onboardingRes.data?.estado === "enviado" ? "enviado" : "borrador") as "borrador" | "enviado",
+  };
+
+  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} />;
 }

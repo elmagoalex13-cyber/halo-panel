@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SubirBoton } from "./SubirBoton";
+import { OnboardingForm } from "./OnboardingForm";
+import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 
 export type Referencia = {
   id: string;
@@ -231,17 +233,72 @@ function SubidaLibre({ tipo }: { tipo: number }) {
   );
 }
 
+function TarjetaOnboarding({
+  datos,
+  estado,
+  onAbrir,
+}: {
+  datos: DatosOnboarding;
+  estado: "borrador" | "enviado";
+  onAbrir: () => void;
+}) {
+  const progreso = progresoOnboarding(datos);
+  const empezado = progreso > 0 || Object.keys(datos).some((k) => k !== "limites" && k !== "revisado");
+  const enviado = estado === "enviado";
+  return (
+    <section
+      className={`space-y-3 rounded-2xl border p-4 sm:rounded-3xl ${
+        enviado ? "border-emerald-400/25 bg-emerald-500/[0.06]" : "border-[#8B5CF6]/40 bg-[#8B5CF6]/[0.10]"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-white">Tu perfil de creadora</h2>
+          <p className="text-sm text-white/55">
+            {enviado
+              ? "Recibido. Puedes revisarlo o cambiar lo que quieras cuando quieras."
+              : empezado
+                ? "Lo tienes a medias: se guarda solo, sigue por donde lo dejaste."
+                : "Cuéntanos quién eres para preparar tu personaje. Son unos 10 minutos y se guarda solo."}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${enviado ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-400 text-black"}`}>
+          {enviado ? "Enviado" : "Pendiente"}
+        </span>
+      </div>
+      {!enviado ? (
+        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full bg-[#8B5CF6] transition-all" style={{ width: `${progreso}%` }} />
+        </div>
+      ) : null}
+      <button type="button" onClick={onAbrir} className={`${enviado ? "btn-secondary" : "btn-primary"} h-11 w-full text-sm`}>
+        {enviado ? "Ver o editar mis respuestas" : empezado ? "Continuar mi perfil" : "Empezar mi perfil"}
+      </button>
+    </section>
+  );
+}
+
 export function PortalClient({
   nombre,
+  slug,
   pendientes,
   entregas,
+  onboarding,
 }: {
   nombre: string;
   slug: string;
   pendientes: Pendiente[];
   entregas: Entrega[];
+  onboarding: { datos: DatosOnboarding; estado: "borrador" | "enviado" };
 }) {
   const router = useRouter();
+  const [onboardingAbierto, setOnboardingAbierto] = useState(false);
+  const [onboardingDatos, setOnboardingDatos] = useState(onboarding.datos);
+  const [onboardingEstado, setOnboardingEstado] = useState(onboarding.estado);
+  const alCambiarOnboarding = useCallback((d: DatosOnboarding, e: "borrador" | "enviado") => {
+    setOnboardingDatos(d);
+    setOnboardingEstado(e);
+  }, []);
   const [tabActiva, setTabActiva] = useState(1);
   const [videoAbierto, setVideoAbierto] = useState<Pendiente | null>(null);
   const conteos = useMemo(() => Object.fromEntries(TABS.map((tab) => [tab.tipo, pendientes.filter((p) => p.tipo === tab.tipo).length])), [pendientes]);
@@ -266,6 +323,18 @@ export function PortalClient({
           Salir
         </button>
       </header>
+
+      <TarjetaOnboarding datos={onboardingDatos} estado={onboardingEstado} onAbrir={() => setOnboardingAbierto(true)} />
+
+      {onboardingAbierto ? (
+        <OnboardingForm
+          slug={slug}
+          datosIniciales={onboardingDatos}
+          estadoInicial={onboardingEstado}
+          onCerrar={() => setOnboardingAbierto(false)}
+          onCambio={alCambiarOnboarding}
+        />
+      ) : null}
 
       <Seccion titulo="Tus videos" sub="Entra en cada apartado para ver lo pendiente y subir el contenido correcto.">
         <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
