@@ -4,8 +4,9 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { CreatorConfigSummary } from "../CreatorConfigSummary";
 import { PortalAccesoButton } from "../PortalAccesoButton";
-import { CopiarOnboarding } from "./CopiarOnboarding";
-import { LIMITES, SECCIONES, onboardingATexto, progresoOnboarding, sanearDatos, valorLegible } from "@/lib/onboarding";
+import { FichaTabs, type Pestana } from "./FichaTabs";
+import { OnboardingFicha } from "./OnboardingFicha";
+import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
 import type { CreatorConfig, SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 
@@ -21,18 +22,6 @@ const ESTADO_BADGE: Record<string, string> = {
   publicado: "badge-publicado",
   rechazado: "badge-rechazado",
 };
-
-function fechaHora(valor: string, segundos = false) {
-  return new Date(valor).toLocaleString("es-ES", {
-    timeZone: "Europe/Madrid",
-    day: "2-digit",
-    month: "short",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    ...(segundos ? { second: "2-digit" } : {}),
-  });
-}
 
 const SOCIAL_LABEL: Record<SocialNetwork, string> = {
   instagram: "Instagram",
@@ -164,211 +153,218 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   const pendientes = encargos.filter((e) => e.estado !== "entregado");
   const facturacionMes = facturacion[0];
 
+  const pctOnboarding = progresoOnboarding(onboardingDatos);
+  const onboardingEnviado = onboarding?.estado === "enviado";
+
+  const kpis: Array<[string, string, string?]> = [
+    ["Ingresos mes", facturacionMes ? formatCurrency(Number(facturacionMes.ingresos_brutos)) : "—"],
+    ["Comisión", facturacionMes ? formatCurrency(Number(facturacionMes.comision_agencia)) : "—", "text-halo-accent"],
+    ["Suscriptores", facturacionMes?.suscriptores_activos?.toLocaleString("es") ?? "—"],
+    ["En pipeline", String(pipeline.length)],
+  ];
+
+  const resumen = (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="card !p-4 lg:col-span-2">
+        <h2 className="mb-3 font-display text-xs font-semibold uppercase tracking-wider text-halo-subtle">Ficha</h2>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-2.5 text-sm sm:grid-cols-2">
+          {[
+            ["Nombre real", modelo.nombre_real],
+            ["Email", modelo.email],
+            ["Teléfono", modelo.telefono],
+            ["Comisión agencia", modelo.porcentaje_comision != null ? `${modelo.porcentaje_comision}%` : null],
+            ["Portal", modelo.portal_token ? `/m/${modelo.portal_token}` : "Sin acceso creado"],
+            ["Notas", modelo.notas],
+          ].map(([k, v]) => (
+            <div key={k as string}>
+              <dt className="text-[11px] uppercase tracking-wider text-halo-subtle">{k}</dt>
+              <dd className="mt-0.5 break-words text-halo-text">{v || "—"}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="mt-4 flex flex-wrap gap-1.5 border-t border-halo-border pt-3">
+          <span className="badge">{totalVideos} vídeos en total</span>
+          {Object.entries(porEstado).map(([estado, n]) => (
+            <span key={estado} className={`badge ${ESTADO_BADGE[estado] ?? ""}`}>
+              {n} {estadoLabel(estado).toLowerCase()}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <a href="#onboarding" className="card block !p-4 transition hover:border-[#8B5CF6]/40">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-halo-subtle">Onboarding</h2>
+            <span className={`badge ${onboardingEnviado ? "bg-green-500/20 text-green-400" : onboarding ? "bg-amber-500/15 text-amber-300" : ""}`}>
+              {onboardingEnviado ? "Enviado" : onboarding ? "A medias" : "Sin empezar"}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#A78BFA]" style={{ width: `${pctOnboarding}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-halo-subtle">{pctOnboarding}% de lo obligatorio · ver respuestas →</p>
+        </a>
+        <a href="#videos" className="card block !p-4 transition hover:border-[#8B5CF6]/40">
+          <h2 className="mb-1 font-display text-xs font-semibold uppercase tracking-wider text-halo-subtle">Por grabar</h2>
+          <p className="font-display text-3xl font-semibold text-halo-text">{pendientes.length}</p>
+          <p className="text-xs text-halo-subtle">referencias pendientes · ver vídeos →</p>
+        </a>
+      </div>
+    </div>
+  );
+
+  const videos = (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <ListaCard titulo="Pendientes de grabar" total={pendientes.length} vacio="No tiene referencias asignadas. Asígnalas desde Instagram → Referencias.">
+        {pendientes.map((e) => (
+          <div key={e.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
+            <span className="badge badge-editando flex-shrink-0">Pendiente</span>
+            <span className="flex-1 truncate text-sm text-halo-text">{e.instrucciones || (e.tipo_video ? `Tipo ${e.tipo_video.replace(/\D/g, "")}` : "Con referencia")}</span>
+            <span className="font-mono text-xs text-halo-subtle">{formatDate(e.created_at)}</span>
+          </div>
+        ))}
+      </ListaCard>
+
+      <ListaCard titulo="Pipeline" total={pipeline.length} vacio="Vacío">
+        {pipeline.map((video) => (
+          <div key={video.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
+            <span className={`badge flex-shrink-0 ${ESTADO_BADGE[video.estado] ?? "badge"}`}>{estadoLabel(video.estado)}</span>
+            <span className="flex-1 truncate text-sm text-halo-text">{video.titulo ?? `#${video.id.slice(-6)}`}</span>
+            <span className="font-mono text-xs text-halo-subtle">{formatDate(video.recibido_at)}</span>
+          </div>
+        ))}
+      </ListaCard>
+
+      <ListaCard titulo="Últimas publicaciones" total={ultimasPublicaciones.length} vacio="Sin publicaciones">
+        {ultimasPublicaciones.map((publicacion) => (
+          <div key={publicacion.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
+            <span className="w-20 font-mono text-xs text-halo-subtle">{formatDate(publicacion.publicado_at, "dd MMM yy")}</span>
+            <span className="flex-1 truncate text-sm text-halo-text">{publicacion.titulo ?? `#${publicacion.id.slice(-6)}`}</span>
+            {publicacion.cuentas_instagram?.username ? <span className="font-mono text-xs text-halo-subtle">@{publicacion.cuentas_instagram.username}</span> : null}
+          </div>
+        ))}
+      </ListaCard>
+    </div>
+  );
+
+  const redes = cuentas.length ? (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {cuentas.map((cuenta) => {
+        const urgencia = cuenta.diasSinPublicar === null ? "unknown" : cuenta.diasSinPublicar >= 7 ? "critical" : cuenta.diasSinPublicar >= 4 ? "warning" : "ok";
+        const red = cuenta.red_social ?? "instagram";
+        return (
+          <div key={cuenta.id} className={`card flex flex-col gap-3 !p-4 ${urgencia === "critical" ? "border-red-500/30" : urgencia === "warning" ? "border-amber-500/30" : ""}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-mono font-semibold text-halo-text">@{cuenta.username}</div>
+                <div className="mt-1 text-xs text-halo-subtle">{SOCIAL_LABEL[red]}</div>
+              </div>
+              {red === "instagram" ? (
+                <span className={`badge text-xs ${urgencia === "critical" ? "bg-red-500/15 text-red-400" : urgencia === "warning" ? "bg-amber-500/15 text-amber-400" : urgencia === "ok" ? "bg-green-500/15 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>
+                  {cuenta.diasSinPublicar === null ? "Sin datos" : cuenta.diasSinPublicar === 0 ? "Publicó hoy" : `${cuenta.diasSinPublicar}d sin publicar`}
+                </span>
+              ) : (
+                <span className={`badge text-xs ${cuenta.activa ? "bg-green-500/15 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>{cuenta.activa ? "Activa" : "Pausada"}</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded bg-halo-muted/40 p-2">
+                <div className={`font-mono text-lg font-bold ${cuenta.publicadosMes < 4 ? "text-red-400" : "text-halo-text"}`}>{cuenta.publicadosMes}</div>
+                <div className="text-xs text-halo-subtle">Publicados (mes)</div>
+              </div>
+              <div className="rounded bg-halo-muted/40 p-2">
+                <div className="font-mono text-lg font-bold text-halo-text">{cuenta.seguidores ? `${(cuenta.seguidores / 1000).toFixed(1)}k` : "—"}</div>
+                <div className="text-xs text-halo-subtle">Seguidores</div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  ) : (
+    <div className="card py-8 text-center text-sm text-halo-subtle">Esta modelo no tiene cuentas de redes todavía.</div>
+  );
+
+  const perfil = config ? (
+    <CreatorConfigSummary config={config} />
+  ) : (
+    <div className="card py-8 text-center text-sm text-halo-subtle">Aún no hay perfil de creadora configurado (se hace desde el listado de Modelos).</div>
+  );
+
+  const pestanas: Pestana[] = [
+    { id: "resumen", label: "Resumen", icono: "◈", contenido: resumen },
+    {
+      id: "onboarding",
+      label: "Onboarding",
+      icono: "📝",
+      aviso: onboarding ? (onboardingEnviado ? null : "a medias") : "nuevo",
+      contenido: <OnboardingFicha modelo={{ id: modelo.id, nombre: modelo.nombre }} onboarding={onboarding} datos={onboardingDatos} historial={onboardingHistorial} />,
+    },
+    { id: "videos", label: "Vídeos", icono: "🎞", aviso: pendientes.length ? String(pendientes.length) : null, contenido: videos },
+    { id: "redes", label: "Redes", icono: "◎", aviso: cuentas.length ? String(cuentas.length) : null, contenido: redes },
+    { id: "perfil", label: "Perfil", icono: "✦", contenido: perfil },
+  ];
+
   return (
     <PanelLayout>
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
           <Link href="/modelos" className="text-sm text-halo-subtle hover:text-halo-text">
             ← Modelos
           </Link>
-          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-halo-accent/30 bg-halo-accent/20">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full border border-halo-accent/30 bg-halo-accent/20">
             <span className="font-display text-lg font-bold text-halo-accent">{modelo.nombre.charAt(0).toUpperCase()}</span>
           </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold text-halo-text">{modelo.nombre}</h1>
-            <p className="text-sm text-halo-subtle">Alta: {formatDate(modelo.created_at)}</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <a href="#onboarding" className="btn-secondary px-3 py-1.5 text-xs">
-              Onboarding {onboarding ? (onboarding.estado === "enviado" ? "· enviado ✓" : "· a medias") : "· sin empezar"}
-            </a>
-            <PortalAccesoButton modeloId={modelo.id} nombre={modelo.nombre} />
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-2xl font-bold text-halo-text">{modelo.nombre}</h1>
+            <p className="text-xs text-halo-subtle">Alta: {formatDate(modelo.created_at)}</p>
           </div>
           <span className={`badge ${modelo.activa ? "bg-green-500/20 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>{modelo.activa ? "Activa" : "Inactiva"}</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">Ingresos mes</div><div className="font-display text-2xl font-bold text-halo-text">{facturacionMes ? formatCurrency(Number(facturacionMes.ingresos_brutos)) : "—"}</div></div>
-          <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">Comision</div><div className="font-display text-2xl font-bold text-halo-accent">{facturacionMes ? formatCurrency(Number(facturacionMes.comision_agencia)) : "—"}</div></div>
-          <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">Suscriptores</div><div className="font-display text-2xl font-bold text-halo-text">{facturacionMes?.suscriptores_activos?.toLocaleString("es") ?? "—"}</div></div>
-          <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">En pipeline</div><div className="font-display text-2xl font-bold text-halo-text">{pipeline.length}</div></div>
-        </div>
-
-        <div id="onboarding" className="card scroll-mt-6">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Onboarding de creadora</h2>
-            {onboarding ? (
-              <>
-                <span className={`badge ${onboarding.estado === "enviado" ? "bg-green-500/20 text-green-400" : "bg-amber-500/15 text-amber-300"}`}>
-                  {onboarding.estado === "enviado" ? `Enviado ${onboarding.enviado_at ? formatDate(onboarding.enviado_at) : ""}` : "A medias"}
-                </span>
-                <span className="badge">{progresoOnboarding(onboardingDatos)}% obligatorios</span>
-                <span className="text-xs text-halo-subtle">Última edición: {fechaHora(onboarding.updated_at)}</span>
-                <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <CopiarOnboarding texto={onboardingATexto(modelo.nombre, onboardingDatos)} />
-                  <a href={`/api/modelos/${modelo.id}/onboarding?formato=txt`} className="btn-secondary px-3 py-1.5 text-xs">Descargar .txt</a>
-                  <a href={`/api/modelos/${modelo.id}/onboarding?formato=json`} className="btn-secondary px-3 py-1.5 text-xs">Copia de seguridad .json</a>
-                </div>
-              </>
-            ) : (
-              <span className="text-sm text-halo-subtle">Todavía no ha empezado el formulario del portal.</span>
-            )}
+          <div className="ml-auto">
+            <PortalAccesoButton modeloId={modelo.id} nombre={modelo.nombre} />
           </div>
-
-          {onboarding ? (
-            <>
-              <div className="grid grid-cols-1 gap-x-8 gap-y-5 lg:grid-cols-2">
-                {SECCIONES.map((seccion) => (
-                  <div key={seccion.id}>
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-halo-accent">{seccion.titulo}</h3>
-                    <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 text-sm">
-                      {seccion.campos.map((campo) => (
-                        <div key={campo.id} className="contents">
-                          <dt className="text-halo-subtle">{campo.label}</dt>
-                          <dd className="whitespace-pre-wrap break-words text-halo-text">{valorLegible(campo, onboardingDatos) || "—"}</dd>
-                        </div>
-                      ))}
-                      {seccion.limites ? (
-                        <div className="contents">
-                          <dt className="text-halo-subtle">Límites marcados (NO hace)</dt>
-                          <dd className="text-halo-text">
-                            {(onboardingDatos.limites ?? []).length
-                              ? (onboardingDatos.limites ?? []).map((lid) => LIMITES.find((l) => l.id === lid)?.es ?? lid).join(", ")
-                              : "Ninguno de la lista"}
-                          </dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                  </div>
-                ))}
-              </div>
-              <details className="mt-5 border-t border-halo-border pt-3 text-sm">
-                <summary className="cursor-pointer text-halo-subtle">Historial de versiones guardadas ({onboardingHistorial.length}{onboardingHistorial.length === 50 ? "+" : ""}) — nunca se borran</summary>
-                <ul className="mt-2 space-y-1 font-mono text-xs text-halo-subtle">
-                  {onboardingHistorial.map((h) => (
-                    <li key={h.id}>
-                      {fechaHora(h.created_at, true)} · {h.origen}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-xs text-halo-subtle">El .json de copia de seguridad incluye el contenido completo de cada versión.</p>
-              </details>
-            </>
-          ) : null}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="card">
-            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Ficha</h2>
-            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2 text-sm">
-              {[
-                ["Nombre real", modelo.nombre_real],
-                ["Email", modelo.email],
-                ["Telefono", modelo.telefono],
-                ["Comision agencia", modelo.porcentaje_comision != null ? `${modelo.porcentaje_comision}%` : null],
-                ["Portal", modelo.portal_token ? `/m/${modelo.portal_token}` : "Sin acceso creado"],
-                ["Notas", modelo.notas],
-              ].map(([k, v]) => (
-                <div key={k as string} className="contents">
-                  <dt className="text-halo-subtle">{k}</dt>
-                  <dd className="break-words text-halo-text">{v || "—"}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="mt-4 flex flex-wrap gap-1.5 border-t border-halo-border pt-3">
-              <span className="badge">{totalVideos} videos en total</span>
-              {Object.entries(porEstado).map(([estado, n]) => (
-                <span key={estado} className={`badge ${ESTADO_BADGE[estado] ?? ""}`}>
-                  {n} {estadoLabel(estado).toLowerCase()}
-                </span>
-              ))}
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+          {kpis.map(([label, value, color]) => (
+            <div key={label} className="card !p-3">
+              <div className="truncate text-[10px] uppercase tracking-wider text-halo-subtle sm:text-xs">{label}</div>
+              <div className={`mt-0.5 truncate font-display text-base font-bold sm:text-xl ${color ?? "text-halo-text"}`}>{value}</div>
             </div>
-          </div>
-          <div className="card">
-            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Videos pendientes de grabar ({pendientes.length})</h2>
-            {encargos.length === 0 ? (
-              <p className="text-sm text-halo-subtle">No tiene referencias asignadas. Asignalas desde Instagram → Referencias.</p>
-            ) : (
-              <div className="space-y-2">
-                {encargos.map((e) => (
-                  <div key={e.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
-                    <span className={`badge flex-shrink-0 ${e.estado === "entregado" ? "badge-aprobado" : "badge-editando"}`}>{e.estado === "entregado" ? "Entregado" : "Pendiente"}</span>
-                    <span className="flex-1 truncate text-sm text-halo-text">{e.instrucciones || (e.tipo_video ? `Tipo ${e.tipo_video.replace(/\D/g, "")}` : "Con referencia")}</span>
-                    <span className="font-mono text-xs text-halo-subtle">{formatDate(e.created_at)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          ))}
         </div>
 
-        {config ? (
-          <div>
-            <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Perfil de creadora</h2>
-            <CreatorConfigSummary config={config} />
-          </div>
-        ) : null}
-
-        <div>
-          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Redes sociales</h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {cuentas.map((cuenta) => {
-              const urgencia = cuenta.diasSinPublicar === null ? "unknown" : cuenta.diasSinPublicar >= 7 ? "critical" : cuenta.diasSinPublicar >= 4 ? "warning" : "ok";
-              const red = cuenta.red_social ?? "instagram";
-              return (
-                <div key={cuenta.id} className={`card flex flex-col gap-3 ${urgencia === "critical" ? "border-red-500/30" : urgencia === "warning" ? "border-amber-500/30" : ""}`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-mono font-semibold text-halo-text">@{cuenta.username}</div>
-                      <div className="mt-1 text-xs text-halo-subtle">{SOCIAL_LABEL[red]}</div>
-                    </div>
-                    {red === "instagram" ? (
-                      <span className={`badge text-xs ${urgencia === "critical" ? "bg-red-500/15 text-red-400" : urgencia === "warning" ? "bg-amber-500/15 text-amber-400" : urgencia === "ok" ? "bg-green-500/15 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>
-                        {cuenta.diasSinPublicar === null ? "Sin datos" : cuenta.diasSinPublicar === 0 ? "Publico hoy" : `${cuenta.diasSinPublicar}d sin publicar`}
-                      </span>
-                    ) : (
-                      <span className={`badge text-xs ${cuenta.activa ? "bg-green-500/15 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>
-                        {cuenta.activa ? "Activa" : "Pausada"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded bg-halo-muted/40 p-2"><div className={`font-mono text-lg font-bold ${cuenta.publicadosMes < 4 ? "text-red-400" : "text-halo-text"}`}>{cuenta.publicadosMes}</div><div className="text-xs text-halo-subtle">Publicados (mes)</div></div>
-                    <div className="rounded bg-halo-muted/40 p-2"><div className="font-mono text-lg font-bold text-halo-text">{cuenta.seguidores ? `${(cuenta.seguidores / 1000).toFixed(1)}k` : "—"}</div><div className="text-xs text-halo-subtle">Seguidores</div></div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="card">
-            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Pipeline ({pipeline.length})</h2>
-            {pipeline.length === 0 ? <p className="text-sm text-halo-subtle">Vacio</p> : (
-              <div className="space-y-2">{pipeline.map((video) => (
-                <div key={video.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
-                  <span className={`badge flex-shrink-0 ${ESTADO_BADGE[video.estado] ?? "badge"}`}>{estadoLabel(video.estado)}</span>
-                  <span className="flex-1 truncate text-sm text-halo-text">{video.titulo ?? `#${video.id.slice(-6)}`}</span>
-                  <span className="font-mono text-xs text-halo-subtle">{formatDate(video.recibido_at)}</span>
-                </div>
-              ))}</div>
-            )}
-          </div>
-          <div className="card">
-            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Ultimas publicaciones</h2>
-            {ultimasPublicaciones.length === 0 ? <p className="text-sm text-halo-subtle">Sin publicaciones</p> : (
-              <div className="space-y-2">{ultimasPublicaciones.map((publicacion) => (
-                <div key={publicacion.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
-                  <span className="w-20 font-mono text-xs text-halo-subtle">{formatDate(publicacion.publicado_at, "dd MMM yy")}</span>
-                  <span className="flex-1 truncate text-sm text-halo-text">{publicacion.titulo ?? `#${publicacion.id.slice(-6)}`}</span>
-                  {publicacion.cuentas_instagram?.username ? <span className="font-mono text-xs text-halo-subtle">@{publicacion.cuentas_instagram.username}</span> : null}
-                </div>
-              ))}</div>
-            )}
-          </div>
-        </div>
+        <FichaTabs pestanas={pestanas} inicial="resumen" />
       </div>
     </PanelLayout>
+  );
+}
+
+// Lista compacta: muestra las primeras filas y deja el resto plegado, para que la ficha no se haga interminable.
+function ListaCard({ titulo, total, vacio, children, max = 6 }: { titulo: string; total: number; vacio: string; children: React.ReactNode[]; max?: number }) {
+  const filas = Array.isArray(children) ? children : [children];
+  const visibles = filas.slice(0, max);
+  const resto = filas.slice(max);
+  return (
+    <div className="card !p-4">
+      <h2 className="mb-3 flex items-center justify-between font-display text-xs font-semibold uppercase tracking-wider text-halo-subtle">
+        {titulo}
+        <span className="badge">{total}</span>
+      </h2>
+      {filas.length === 0 ? (
+        <p className="text-sm text-halo-subtle">{vacio}</p>
+      ) : (
+        <>
+          <div>{visibles}</div>
+          {resto.length ? (
+            <details className="mt-1">
+              <summary className="cursor-pointer py-1.5 text-xs font-semibold text-halo-accent">Ver {resto.length} más</summary>
+              <div>{resto}</div>
+            </details>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 }
