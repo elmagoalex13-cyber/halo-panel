@@ -29,6 +29,14 @@ const SOCIAL_LABEL: Record<SocialNetwork, string> = {
   tiktok: "TikTok",
 };
 
+function urlCuenta(red: SocialNetwork, username: string, url?: string | null) {
+  if (url && /^https?:\/\//i.test(url.trim())) return url.trim();
+  const u = username.replace(/^@/, "").trim();
+  if (red === "tiktok") return `https://www.tiktok.com/@${u}`;
+  if (red === "twitter") return `https://x.com/${u}`;
+  return `https://www.instagram.com/${u}/`;
+}
+
 function inferSocial(redSocial?: SocialNetwork | null, url?: string | null): SocialNetwork {
   if (redSocial) return redSocial;
   if (/tiktok\.com/i.test(url ?? "")) return "tiktok";
@@ -257,7 +265,9 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
           <div key={cuenta.id} className={`card flex flex-col gap-3 !p-4 ${urgencia === "critical" ? "border-red-500/30" : urgencia === "warning" ? "border-amber-500/30" : ""}`}>
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-mono font-semibold text-halo-text">@{cuenta.username}</div>
+                <a href={urlCuenta(red, cuenta.username, cuenta.url)} target="_blank" rel="noopener noreferrer" className="font-mono font-semibold text-halo-text hover:text-halo-accent">
+                  @{cuenta.username} <span aria-hidden="true">↗</span>
+                </a>
                 <div className="mt-1 text-xs text-halo-subtle">{SOCIAL_LABEL[red]}</div>
               </div>
               {red === "instagram" ? (
@@ -268,6 +278,14 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
                 <span className={`badge text-xs ${cuenta.activa ? "bg-green-500/15 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>{cuenta.activa ? "Activa" : "Pausada"}</span>
               )}
             </div>
+            <a
+              href={urlCuenta(red, cuenta.username, cuenta.url)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary w-full py-2 text-center text-xs font-semibold"
+            >
+              Abrir en {SOCIAL_LABEL[red]} ↗
+            </a>
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded bg-halo-muted/40 p-2">
                 <div className={`font-mono text-lg font-bold ${cuenta.publicadosMes < 4 ? "text-red-400" : "text-halo-text"}`}>{cuenta.publicadosMes}</div>

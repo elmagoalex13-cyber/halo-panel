@@ -28,20 +28,23 @@ export type Entrega = {
 };
 
 const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Parar imagen", 4: "Con referencia" };
-const TABS = [
-  { tipo: 1, titulo: "Hablado", desc: "Videos hablando a camara con subtitulos.", etiquetaSubida: "Subir hablado" },
-  { tipo: 2, titulo: "Frases + musica", desc: "Gestos o escenas cortas para frase y musica.", etiquetaSubida: "Subir gesto" },
-  { tipo: 3, titulo: "Parar imagen", desc: "Videos para editar con congelado.", etiquetaSubida: "Subir video" },
-  { tipo: 4, titulo: "Referencias", desc: "Videos concretos que debes imitar.", etiquetaSubida: "Subir imitacion" },
+const TIPOS = [
+  { tipo: 1, corto: "Hablado", desc: "Videos hablando a cámara. Nosotros ponemos los subtítulos.", icono: "🎙", etiquetaSubida: "Subir hablado" },
+  { tipo: 2, corto: "Frases + música", desc: "Gestos o escenas cortas. Nosotros añadimos la frase y la música.", icono: "🎵", etiquetaSubida: "Subir gesto" },
+  { tipo: 3, corto: "Parar imagen", desc: "Videos para la edición de parar imagen.", icono: "⏸", etiquetaSubida: "Subir video" },
+  { tipo: 4, corto: "Referencias", desc: "Videos concretos que debes imitar.", icono: "🎯", etiquetaSubida: "Subir imitación" },
 ] as const;
 const TEXTO_ENCARGO: Record<number, string> = {
-  1: "Grabate hablando a camara. Le pondremos los subtitulos.",
-  2: "Graba un gesto o escena corta. Nosotros anadimos la frase y la musica.",
-  3: "Graba un video para que podamos hacer la edicion de parar imagen.",
-  4: "Mira la referencia y sube tu version.",
+  1: "Grábate hablando a cámara.",
+  2: "Graba un gesto o escena corta.",
+  3: "Graba un video para parar imagen.",
+  4: "Mira la referencia y sube tu versión.",
 };
+const POR_PAGINA = 5;
 
-function VideoReferencia({ r, grande = false }: { r: Referencia; grande?: boolean }) {
+type Pestana = "grabar" | "subir" | "subidos";
+
+function VideoReferencia({ r }: { r: Referencia }) {
   return (
     <div className="overflow-hidden rounded-2xl bg-black ring-1 ring-white/10">
       {r.video ? (
@@ -51,7 +54,7 @@ function VideoReferencia({ r, grande = false }: { r: Referencia; grande?: boolea
           controls
           playsInline
           preload="metadata"
-          className={`mx-auto aspect-[9/16] w-full object-contain ${grande ? "max-h-[72dvh]" : "max-h-[60dvh]"}`}
+          className="mx-auto aspect-[9/16] max-h-[72dvh] w-full object-contain"
         />
       ) : (
         <div className="grid aspect-[9/16] max-h-[40dvh] w-full place-items-center p-4 text-center text-sm text-white/40">
@@ -68,39 +71,22 @@ function VideoReferencia({ r, grande = false }: { r: Referencia; grande?: boolea
   );
 }
 
-function ModalVideo({
-  pendiente,
-  onClose,
-}: {
-  pendiente: Pendiente | null;
-  onClose: () => void;
-}) {
+function ModalVideo({ pendiente, onClose }: { pendiente: Pendiente | null; onClose: () => void }) {
   if (!pendiente?.referencia) return null;
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 p-3 backdrop-blur-md sm:p-4" role="dialog" aria-modal="true">
-      <div className="mx-auto flex min-h-dvh w-full max-w-[min(94vw,440px)] flex-col justify-center py-4">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="mx-auto flex min-h-dvh w-full max-w-[min(94vw,440px)] flex-col justify-center gap-3 py-4">
+        <div className="flex items-center justify-between">
           <span className="badge">{NOMBRE_TIPO[pendiente.tipo]}</span>
           <button type="button" onClick={onClose} className="min-h-11 rounded-full border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white">
             Cerrar
           </button>
         </div>
-        <VideoReferencia key={pendiente.id} r={pendiente.referencia} grande />
+        <VideoReferencia key={pendiente.id} r={pendiente.referencia} />
+        {pendiente.referencia.descripcion ? <p className="text-sm text-white/60">&quot;{pendiente.referencia.descripcion}&quot;</p> : null}
         {pendiente.instrucciones ? <p className="rounded-xl bg-white/[0.08] px-3 py-2 text-sm text-white/80">{pendiente.instrucciones}</p> : null}
       </div>
     </div>
-  );
-}
-
-function Seccion({ titulo, sub, children }: { titulo: string; sub?: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="font-display text-lg font-semibold text-white">{titulo}</h2>
-        {sub ? <p className="text-sm text-white/40">{sub}</p> : null}
-      </div>
-      {children}
-    </section>
   );
 }
 
@@ -140,95 +126,70 @@ function CompletarBoton({ encargoId }: { encargoId: string }) {
   );
 }
 
-function TarjetaPendiente({ p }: { p: Pendiente }) {
+function limite(fecha: string | null) {
+  if (!fecha) return null;
+  const d = new Date(fecha);
+  const dias = Math.ceil((d.getTime() - Date.now()) / 86400000);
+  const texto = d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+  if (dias < 0) return { texto: `Venció el ${texto}`, clase: "text-red-300" };
+  if (dias <= 1) return { texto: dias === 0 ? "Para hoy" : "Para mañana", clase: "text-amber-300" };
+  return { texto: `Para el ${texto}`, clase: "text-white/40" };
+}
+
+function FilaPorGrabar({ p, onVer }: { p: Pendiente; onVer: (p: Pendiente) => void }) {
   const esReferencia = p.tipo === 4;
-  const tieneVideoPedido = Boolean(p.referencia);
+  const tipo = TIPOS.find((t) => t.tipo === p.tipo);
+  const lim = limite(p.fecha_limite);
+  const miniatura = p.referencia?.thumb;
 
   return (
-    <article className="space-y-3 rounded-2xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-3 sm:rounded-3xl sm:p-4">
-      <div className="flex items-center justify-between">
-        <span className="badge">{NOMBRE_TIPO[p.tipo]}</span>
-        {p.fecha_limite ? <span className="text-xs text-white/40">Para el {new Date(p.fecha_limite).toLocaleDateString("es-ES")}</span> : null}
-      </div>
-      <p className="text-sm text-white/55">{TEXTO_ENCARGO[p.tipo] ?? "Sube el video pedido."}</p>
-      {p.referencia ? (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/35">{esReferencia ? "Referencia que debes imitar" : "Video pedido"}</p>
-          <VideoReferencia r={p.referencia} />
+    <article className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={() => (p.referencia ? onVer(p) : undefined)}
+          disabled={!p.referencia}
+          aria-label={p.referencia ? `Ver referencia ${NOMBRE_TIPO[p.tipo]}` : undefined}
+          className="group relative h-24 w-[54px] shrink-0 overflow-hidden rounded-xl bg-black ring-1 ring-white/10 disabled:cursor-default"
+        >
+          {miniatura ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={miniatura} alt="" className="h-full w-full object-cover" />
+          ) : p.referencia?.video ? (
+            <video src={p.referencia.video} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+          ) : (
+            <span className="grid h-full w-full place-items-center text-2xl">{tipo?.icono}</span>
+          )}
+          {p.referencia ? (
+            <span className="absolute inset-0 grid place-items-center bg-black/25">
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-black/65 text-white ring-1 ring-white/25">
+                <svg className="ml-0.5 h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M6 4l6 4-6 4V4z" />
+                </svg>
+              </span>
+            </span>
+          ) : null}
+        </button>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="badge text-[10px]">{NOMBRE_TIPO[p.tipo]}</span>
+            {lim ? <span className={`text-xs ${lim.clase}`}>{lim.texto}</span> : null}
+          </div>
+          <p className="line-clamp-3 text-sm text-white/75">{p.instrucciones || p.referencia?.descripcion || TEXTO_ENCARGO[p.tipo]}</p>
+          {p.referencia ? (
+            <button type="button" onClick={() => onVer(p)} className="text-xs font-semibold text-[#A78BFA]">
+              {esReferencia ? "Ver referencia" : "Ver video pedido"}
+            </button>
+          ) : null}
         </div>
-      ) : null}
-      {p.referencia?.descripcion ? <p className="text-sm text-white/60">&quot;{p.referencia.descripcion}&quot;</p> : null}
-      {p.instrucciones ? <p className="rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white/80">{p.instrucciones}</p> : null}
-      {esReferencia ? (
-        <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta="Subir mi imitacion" />
-      ) : tieneVideoPedido ? (
-        <CompletarBoton encargoId={p.id} />
-      ) : (
-        <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta="Subir video" />
-      )}
-    </article>
-  );
-}
-
-function TarjetaVideoPedido({ p, onOpen }: { p: Pendiente; onOpen: (p: Pendiente) => void }) {
-  const esReferencia = p.tipo === 4;
-
-  return (
-    <article className="min-w-0 space-y-2 rounded-2xl border border-[#8B5CF6]/25 bg-[#8B5CF6]/[0.06] p-2.5 sm:p-3">
-      <button
-        type="button"
-        onClick={() => onOpen(p)}
-        className="group relative block aspect-[9/16] w-full overflow-hidden rounded-xl bg-black text-left ring-1 ring-white/10"
-        aria-label={`Ver referencia ${NOMBRE_TIPO[p.tipo]}`}
-      >
-        {p.referencia?.thumb ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.referencia.thumb} alt="" className="h-full w-full object-cover" />
-        ) : p.referencia?.video ? (
-          <video
-            src={p.referencia.video}
-            className="h-full w-full object-cover"
-            muted
-            playsInline
-            preload="metadata"
-          />
-        ) : (
-          <span className="grid h-full w-full place-items-center px-2 text-center text-xs text-white/40">Sin portada</span>
-        )}
-        <span className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-95 transition group-hover:bg-black/0">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-black/65 text-white ring-1 ring-white/25">
-            <svg className="ml-0.5 h-5 w-5" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M6 4l6 4-6 4V4z" />
-            </svg>
-          </span>
-        </span>
-        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2 text-[11px] font-semibold text-white">
-          Ver referencia
-        </span>
-      </button>
-      <div className="space-y-1">
-        <span className="badge text-[10px]">{NOMBRE_TIPO[p.tipo]}</span>
-        {p.instrucciones ? <p className="line-clamp-2 text-xs text-white/55">{p.instrucciones}</p> : null}
       </div>
       {esReferencia ? (
-        <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta="Subir imitacion" />
-      ) : (
+        <SubirBoton tipo={p.tipo} encargoId={p.id} referenciaId={p.referencia?.id} etiqueta="Subir mi imitación" />
+      ) : p.referencia ? (
         <CompletarBoton encargoId={p.id} />
+      ) : (
+        <SubirBoton tipo={p.tipo} encargoId={p.id} etiqueta="Subir video" />
       )}
-    </article>
-  );
-}
-
-function SubidaLibre({ tipo }: { tipo: number }) {
-  const tab = TABS.find((t) => t.tipo === tipo);
-  if (!tab || tipo === 4) return null;
-  return (
-    <article className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 sm:rounded-3xl sm:p-4">
-      <div>
-        <h3 className="font-semibold text-white">Subir {tab.titulo.toLowerCase()}</h3>
-        <p className="text-sm text-white/45">{tab.desc}</p>
-      </div>
-      <SubirBoton tipo={tipo} etiqueta={tab.etiquetaSubida} />
     </article>
   );
 }
@@ -299,21 +260,32 @@ export function PortalClient({
     setOnboardingDatos(d);
     setOnboardingEstado(e);
   }, []);
-  const [tabActiva, setTabActiva] = useState(1);
+
+  const [pestana, setPestana] = useState<Pestana>("grabar");
+  const [filtroTipo, setFiltroTipo] = useState<number | null>(null);
+  const [mostrarTodos, setMostrarTodos] = useState(false);
   const [videoAbierto, setVideoAbierto] = useState<Pendiente | null>(null);
-  const conteos = useMemo(() => Object.fromEntries(TABS.map((tab) => [tab.tipo, pendientes.filter((p) => p.tipo === tab.tipo).length])), [pendientes]);
-  const pendientesActivos = useMemo(() => pendientes.filter((p) => p.tipo === tabActiva), [pendientes, tabActiva]);
-  const pendientesConVideo = useMemo(() => pendientesActivos.filter((p) => p.referencia), [pendientesActivos]);
-  const pendientesSinVideo = useMemo(() => pendientesActivos.filter((p) => !p.referencia), [pendientesActivos]);
-  const tab = TABS.find((t) => t.tipo === tabActiva) ?? TABS[0];
+
+  const conteos = useMemo(
+    () => Object.fromEntries(TIPOS.map((t) => [t.tipo, pendientes.filter((p) => p.tipo === t.tipo).length])) as Record<number, number>,
+    [pendientes],
+  );
+  const visibles = useMemo(() => pendientes.filter((p) => filtroTipo === null || p.tipo === filtroTipo), [pendientes, filtroTipo]);
+  const lista = mostrarTodos ? visibles : visibles.slice(0, POR_PAGINA);
 
   async function salir() {
     await fetch("/api/portal/logout", { method: "POST" });
     router.refresh();
   }
 
+  const pestanas: Array<{ id: Pestana; label: string; n: number | null }> = [
+    { id: "grabar", label: "Por grabar", n: pendientes.length },
+    { id: "subir", label: "Subir vídeos", n: null },
+    { id: "subidos", label: "Subidos", n: entregas.length },
+  ];
+
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-3xl space-y-6 px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pt-6 md:space-y-8">
+    <main className="mx-auto min-h-dvh w-full max-w-3xl space-y-5 px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pt-6">
       <header className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-white/40">Hola</p>
@@ -336,86 +308,141 @@ export function PortalClient({
         />
       ) : null}
 
-      <Seccion titulo="Tus videos" sub="Entra en cada apartado para ver lo pendiente y subir el contenido correcto.">
-        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
-          {TABS.map((item) => {
-            const activo = item.tipo === tabActiva;
-            const count = conteos[item.tipo] ?? 0;
-            return (
-              <button
-                key={item.tipo}
-                type="button"
-                onClick={() => setTabActiva(item.tipo)}
-                className={`flex min-h-16 items-center justify-between gap-2 rounded-2xl border px-3 py-2 text-left transition ${
-                  activo ? "border-[#8B5CF6]/70 bg-[#8B5CF6]/20 text-white" : "border-white/10 bg-white/[0.04] text-white/55"
-                }`}
-              >
-                <span className="min-w-0 text-sm font-semibold leading-tight">{item.titulo}</span>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${count ? "bg-amber-400 text-black" : "bg-white/10 text-white/45"}`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => setPestana("grabar")}
+          className={`rounded-2xl border p-4 text-left transition ${pendientes.length ? "border-amber-400/40 bg-amber-400/10" : "border-white/10 bg-white/[0.04]"}`}
+        >
+          <p className="text-xs uppercase tracking-wider text-white/45">Por grabar</p>
+          <p className="mt-1 font-display text-4xl font-semibold text-white">{pendientes.length}</p>
+          <p className="text-xs text-white/45">{pendientes.length === 1 ? "video pendiente" : "videos pendientes"}</p>
+        </button>
+        <button type="button" onClick={() => setPestana("subidos")} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition">
+          <p className="text-xs uppercase tracking-wider text-white/45">Subidos</p>
+          <p className="mt-1 font-display text-4xl font-semibold text-white">{entregas.length}</p>
+          <p className="text-xs text-white/45">{entregas.length === 1 ? "video enviado" : "videos enviados"}</p>
+        </button>
+      </div>
 
-        <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:rounded-3xl sm:p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-display text-xl font-semibold text-white">{tab.titulo}</h2>
-              <p className="text-sm text-white/45">{tab.desc}</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-[#8B5CF6]/20 px-2.5 py-1 text-xs font-semibold text-[#ddd6fe]">
-              {conteos[tab.tipo] ?? 0} pendientes
-            </span>
-          </div>
+      <div role="tablist" className="grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+        {pestanas.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={pestana === t.id}
+            onClick={() => setPestana(t.id)}
+            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold transition ${
+              pestana === t.id ? "bg-[#8B5CF6]/30 text-white" : "text-white/50"
+            }`}
+          >
+            {t.label}
+            {t.n ? (
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${t.id === "grabar" && pestana !== t.id ? "bg-amber-400 text-black" : "bg-white/15 text-white"}`}>
+                {t.n}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
 
-          {pendientesActivos.length ? (
-            <div className="space-y-4">
-              {pendientesConVideo.length ? (
-                <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
-                  {pendientesConVideo.map((p) => (
-                    <TarjetaVideoPedido key={p.id} p={p} onOpen={setVideoAbierto} />
-                  ))}
-                </div>
+      {pestana === "grabar" ? (
+        <section className="space-y-3">
+          {pendientes.length ? (
+            <>
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFiltroTipo(null);
+                    setMostrarTodos(false);
+                  }}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${filtroTipo === null ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 text-white/50"}`}
+                >
+                  Todos · {pendientes.length}
+                </button>
+                {TIPOS.filter((t) => conteos[t.tipo]).map((t) => (
+                  <button
+                    key={t.tipo}
+                    type="button"
+                    onClick={() => {
+                      setFiltroTipo(filtroTipo === t.tipo ? null : t.tipo);
+                      setMostrarTodos(false);
+                    }}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${filtroTipo === t.tipo ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 text-white/50"}`}
+                  >
+                    {t.icono} {t.corto} · {conteos[t.tipo]}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                {lista.map((p) => (
+                  <FilaPorGrabar key={p.id} p={p} onVer={setVideoAbierto} />
+                ))}
+              </div>
+
+              {visibles.length > POR_PAGINA ? (
+                <button type="button" onClick={() => setMostrarTodos((v) => !v)} className="btn-secondary h-11 w-full text-sm">
+                  {mostrarTodos ? "Ver menos" : `Ver los ${visibles.length - POR_PAGINA} restantes`}
+                </button>
               ) : null}
-              {pendientesSinVideo.length ? (
-                <div className="space-y-3">
-                  {pendientesSinVideo.map((p) => (
-                    <TarjetaPendiente key={p.id} p={p} />
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            </>
           ) : (
-            <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/40">
-              No tienes videos pendientes en este apartado.
+            <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center text-sm text-white/45">
+              No tienes videos por grabar ahora mismo. ¡Todo al día! 🎉
             </p>
           )}
+        </section>
+      ) : null}
 
-          {tab.tipo === 4 ? null : <SubidaLibre tipo={tab.tipo} />}
-        </div>
-      </Seccion>
+      {pestana === "subir" ? (
+        <section className="space-y-3">
+          <p className="text-sm text-white/45">Sube aquí tus videos libres. Para imitar una referencia, hazlo desde «Por grabar».</p>
+          {TIPOS.filter((t) => t.tipo !== 4).map((t) => (
+            <article key={t.tipo} className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/[0.06] text-xl" aria-hidden="true">
+                  {t.icono}
+                </span>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-white">{t.corto}</h3>
+                  <p className="text-xs text-white/45">{t.desc}</p>
+                </div>
+                {conteos[t.tipo] ? (
+                  <span className="ml-auto shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-black">{conteos[t.tipo]} pedidos</span>
+                ) : null}
+              </div>
+              <SubirBoton tipo={t.tipo} etiqueta={t.etiquetaSubida} />
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {pestana === "subidos" ? (
+        <section>
+          {entregas.length ? (
+            <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+              {entregas.map((e) => (
+                <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-white/85">{e.titulo ?? "Video"}</p>
+                    <p className="text-xs text-white/35">
+                      {NOMBRE_TIPO[e.tipo ?? 1]} · {new Date(e.recibido_at).toLocaleDateString("es-ES")}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">Subido</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center text-sm text-white/45">Todavía no has subido ningún video.</p>
+          )}
+        </section>
+      ) : null}
 
       <ModalVideo pendiente={videoAbierto} onClose={() => setVideoAbierto(null)} />
-
-      {entregas.length > 0 ? (
-        <Seccion titulo="Tus videos subidos">
-          <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-            {entregas.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-white/85">{e.titulo ?? "Video"}</p>
-                  <p className="text-xs text-white/35">
-                    {NOMBRE_TIPO[e.tipo ?? 1]} · {new Date(e.recibido_at).toLocaleDateString("es-ES")}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">Subido</span>
-              </li>
-            ))}
-          </ul>
-        </Seccion>
-      ) : null}
     </main>
   );
 }

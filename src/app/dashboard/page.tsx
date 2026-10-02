@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { AtSign, CheckCircle2, Clapperboard, Clock3, TrendingUp, UserCheck, Users, Wallet } from "lucide-react";
+import { AtSign, CalendarDays, CheckCircle2, Clapperboard, Clock3, TrendingUp, UserCheck, Users, Wallet } from "lucide-react";
 import { publerActivo } from "@/lib/publer";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { GlassCard } from "@/components/GlassCard";
@@ -123,6 +123,28 @@ export default async function DashboardPage({
   const runnerProcesando = piezas.filter((v) => v.estado === "editando" && v.estado_procesamiento === "procesando").length;
   const runnerError = piezas.filter((v) => v.estado_procesamiento === "error").length;
 
+  // Dias de contenido: reels aprobados que aun no han salido, entre lo que consumen las cuentas
+  // de IG de la modelo (2 reels al dia por cuenta; los trial reels son aparte).
+  const REELS_POR_CUENTA_DIA = 2;
+  const UMBRAL_DIAS = 3;
+  const ahoraContenido = Date.now();
+  const contenidoModelos = modelos
+    .map((modelo) => {
+      const cuentasIG = cuentasReales.filter((c) => c.modelo_id === modelo.id && c.activa !== false).length;
+      const propias = piezas.filter((v) => v.modelo_id === modelo.id);
+      const stock = propias.filter(
+        (v) => v.estado === "aprobado" && !(v.publicado_at && new Date(v.publicado_at).getTime() <= ahoraContenido),
+      ).length;
+      const enCamino = propias.filter((v) => v.estado === "en_aprobacion" || v.estado === "editando").length;
+      const consumoDia = cuentasIG * REELS_POR_CUENTA_DIA;
+      return { modelo, cuentasIG, stock, enCamino, consumoDia, dias: consumoDia ? stock / consumoDia : null };
+    })
+    .filter((c): c is typeof c & { dias: number } => c.dias !== null)
+    .sort((a, b) => a.dias - b.dias);
+  const diasContenidoMin = contenidoModelos.length ? contenidoModelos[0].dias : null;
+  const contenidoBajo = contenidoModelos.filter((c) => c.dias <= UMBRAL_DIAS);
+  const fmtDias = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 1 });
+
   const aprobados = videos.filter((video) => video.estado === "aprobado" && withinPeriodo(video.aprobado_at ?? video.recibido_at)).length;
   const completados = videos.filter((video) => video.estado === "publicado" && withinPeriodo(video.aprobado_at ?? video.recibido_at)).length;
   const periodoLabel = periodo === "mes" ? "Este mes" : periodo === "semana" ? "Esta semana" : "Todo el tiempo";
@@ -154,6 +176,17 @@ export default async function DashboardPage({
   const onboardingPendientes = modelos.filter((m) => m.activa && onboardingPorModelo.get(m.id)?.estado !== "enviado");
   type NotifNivel = "rojo" | "amarillo" | "verde";
   const notificaciones: { nivel: NotifNivel; texto: string; href?: string }[] = [
+    ...(contenidoBajo.length > 0
+      ? [
+          {
+            nivel: "rojo" as NotifNivel,
+            texto: `Contenido para solo ${fmtDias(contenidoBajo[0].dias)} día${contenidoBajo[0].dias === 1 ? "" : "s"}: ${contenidoBajo
+              .map((c) => `${c.modelo.nombre} (${fmtDias(c.dias)} d · ${c.stock} reels para ${c.cuentasIG} cuenta${c.cuentasIG === 1 ? "" : "s"})`)
+              .join(", ")}`,
+            href: "/asignar",
+          },
+        ]
+      : []),
     ...(aprobacionUrgente.length > 0
       ? [{ nivel: "rojo" as NotifNivel, texto: `${aprobacionUrgente.length} vídeo${aprobacionUrgente.length > 1 ? "s" : ""} llevan más de 24h esperando aprobación`, href: "/aprobacion" }]
       : []),
@@ -224,8 +257,19 @@ export default async function DashboardPage({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile label="Modelos activas" value={modelosActivas} icon={Users} subtitle={`de ${modelos.length} registradas`} />
+        <StatTile
+          label="Días de contenido"
+          value={diasContenidoMin === null ? "—" : fmtDias(diasContenidoMin)}
+          icon={CalendarDays}
+          glow={diasContenidoMin !== null && diasContenidoMin <= UMBRAL_DIAS ? "purple" : undefined}
+          subtitle={
+            diasContenidoMin === null
+              ? "sin cuentas de IG activas"
+              : `${contenidoModelos[0].modelo.nombre}, la que menos tiene · ${REELS_POR_CUENTA_DIA} reels/día por cuenta`
+          }
+        />
         <StatTile label="Vídeos en sistema" value={videos.length} icon={Clapperboard} subtitle="en total" />
         <StatTile
           label="Por revisar"
@@ -237,6 +281,48 @@ export default async function DashboardPage({
         <StatTile label="Aprobados esta semana" value={aprobadosSemana} icon={UserCheck} subtitle="últimos 7 días" />
         <StatTile label="Publicados" value={publicados} icon={CheckCircle2} subtitle="en total" />
       </div>
+
+      <GlassCard className="mt-6 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-white">Días de contenido por modelo</h2>
+            <p className="text-xs text-white/40">
+              Reels aprobados que aún no han salido ÷ ({REELS_POR_CUENTA_DIA} reels al día × cuentas de IG activas). Aviso rojo con {UMBRAL_DIAS} días o menos.
+            </p>
+          </div>
+          <Link href="/asignar" className="text-xs font-semibold text-[#A78BFA] hover:underline">
+            Asignar vídeos →
+          </Link>
+        </div>
+        {contenidoModelos.length ? (
+          <ul className="mt-4 space-y-3">
+            {contenidoModelos.map((c) => {
+              const nivel = c.dias <= UMBRAL_DIAS ? "rojo" : c.dias <= 7 ? "amarillo" : "verde";
+              const color = { rojo: "text-red-300", amarillo: "text-amber-300", verde: "text-emerald-300" }[nivel];
+              const barra = { rojo: "bg-red-400", amarillo: "bg-amber-400", verde: "bg-emerald-400" }[nivel];
+              return (
+                <li key={c.modelo.id}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <Link href={`/modelos/${c.modelo.id}`} className="font-medium text-white hover:text-[#A78BFA]">
+                      {c.modelo.nombre}
+                    </Link>
+                    <span className="text-xs text-white/40">
+                      {c.stock} reel{c.stock === 1 ? "" : "s"} aprobado{c.stock === 1 ? "" : "s"} · {c.cuentasIG} cuenta{c.cuentasIG === 1 ? "" : "s"} · sale {c.consumoDia}/día
+                      {c.enCamino ? ` · +${c.enCamino} en camino` : ""}
+                    </span>
+                    <span className={`font-display text-lg font-semibold ${color}`}>{fmtDias(c.dias)} días</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                    <div className={`h-full rounded-full ${barra}`} style={{ width: `${Math.min(100, (c.dias / 14) * 100)}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-white/40">Ninguna modelo tiene cuentas de Instagram activas todavía.</p>
+        )}
+      </GlassCard>
 
       <GlassCard className="mt-6 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
