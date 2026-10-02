@@ -11,6 +11,7 @@ import { cicloOnce } from "./queue.mjs";
 import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
 import { cicloTrials } from "./trials.mjs";
+import { backupOnboarding } from "./backup_onboarding.mjs";
 
 const falta = faltanVariables();
 if (falta.length) {
@@ -62,3 +63,8 @@ async function avisarPanel() {
   }
 }
 setInterval(avisarPanel, 10 * 60000);
+
+// Copia de seguridad del onboarding de creadoras (disco del VPS + bucket privado de Supabase).
+// Solo escribe si hubo cambios y nunca borra copias antiguas.
+setTimeout(() => backupOnboarding(supabase), 30000);
+setInterval(() => backupOnboarding(supabase), 15 * 60000);

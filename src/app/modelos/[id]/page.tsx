@@ -179,6 +179,9 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
             <p className="text-sm text-halo-subtle">Alta: {formatDate(modelo.created_at)}</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <a href="#onboarding" className="btn-secondary px-3 py-1.5 text-xs">
+              Onboarding {onboarding ? (onboarding.estado === "enviado" ? "· enviado ✓" : "· a medias") : "· sin empezar"}
+            </a>
             <PortalAccesoButton modeloId={modelo.id} nombre={modelo.nombre} />
           </div>
           <span className={`badge ${modelo.activa ? "bg-green-500/20 text-green-400" : "bg-halo-muted text-halo-subtle"}`}>{modelo.activa ? "Activa" : "Inactiva"}</span>
@@ -189,51 +192,6 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
           <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">Comision</div><div className="font-display text-2xl font-bold text-halo-accent">{facturacionMes ? formatCurrency(Number(facturacionMes.comision_agencia)) : "—"}</div></div>
           <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">Suscriptores</div><div className="font-display text-2xl font-bold text-halo-text">{facturacionMes?.suscriptores_activos?.toLocaleString("es") ?? "—"}</div></div>
           <div className="card"><div className="mb-1 text-xs uppercase tracking-wider text-halo-subtle">En pipeline</div><div className="font-display text-2xl font-bold text-halo-text">{pipeline.length}</div></div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="card">
-            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Ficha</h2>
-            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2 text-sm">
-              {[
-                ["Nombre real", modelo.nombre_real],
-                ["Email", modelo.email],
-                ["Telefono", modelo.telefono],
-                ["Comision agencia", modelo.porcentaje_comision != null ? `${modelo.porcentaje_comision}%` : null],
-                ["Portal", modelo.portal_token ? `/m/${modelo.portal_token}` : "Sin acceso creado"],
-                ["Notas", modelo.notas],
-              ].map(([k, v]) => (
-                <div key={k as string} className="contents">
-                  <dt className="text-halo-subtle">{k}</dt>
-                  <dd className="break-words text-halo-text">{v || "—"}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="mt-4 flex flex-wrap gap-1.5 border-t border-halo-border pt-3">
-              <span className="badge">{totalVideos} videos en total</span>
-              {Object.entries(porEstado).map(([estado, n]) => (
-                <span key={estado} className={`badge ${ESTADO_BADGE[estado] ?? ""}`}>
-                  {n} {estadoLabel(estado).toLowerCase()}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="card">
-            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Videos pendientes de grabar ({pendientes.length})</h2>
-            {encargos.length === 0 ? (
-              <p className="text-sm text-halo-subtle">No tiene referencias asignadas. Asignalas desde Instagram → Referencias.</p>
-            ) : (
-              <div className="space-y-2">
-                {encargos.map((e) => (
-                  <div key={e.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
-                    <span className={`badge flex-shrink-0 ${e.estado === "entregado" ? "badge-aprobado" : "badge-editando"}`}>{e.estado === "entregado" ? "Entregado" : "Pendiente"}</span>
-                    <span className="flex-1 truncate text-sm text-halo-text">{e.instrucciones || (e.tipo_video ? `Tipo ${e.tipo_video.replace(/\D/g, "")}` : "Con referencia")}</span>
-                    <span className="font-mono text-xs text-halo-subtle">{formatDate(e.created_at)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         <div id="onboarding" className="card scroll-mt-6">
@@ -297,6 +255,51 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
               </details>
             </>
           ) : null}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="card">
+            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Ficha</h2>
+            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2 text-sm">
+              {[
+                ["Nombre real", modelo.nombre_real],
+                ["Email", modelo.email],
+                ["Telefono", modelo.telefono],
+                ["Comision agencia", modelo.porcentaje_comision != null ? `${modelo.porcentaje_comision}%` : null],
+                ["Portal", modelo.portal_token ? `/m/${modelo.portal_token}` : "Sin acceso creado"],
+                ["Notas", modelo.notas],
+              ].map(([k, v]) => (
+                <div key={k as string} className="contents">
+                  <dt className="text-halo-subtle">{k}</dt>
+                  <dd className="break-words text-halo-text">{v || "—"}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-4 flex flex-wrap gap-1.5 border-t border-halo-border pt-3">
+              <span className="badge">{totalVideos} videos en total</span>
+              {Object.entries(porEstado).map(([estado, n]) => (
+                <span key={estado} className={`badge ${ESTADO_BADGE[estado] ?? ""}`}>
+                  {n} {estadoLabel(estado).toLowerCase()}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Videos pendientes de grabar ({pendientes.length})</h2>
+            {encargos.length === 0 ? (
+              <p className="text-sm text-halo-subtle">No tiene referencias asignadas. Asignalas desde Instagram → Referencias.</p>
+            ) : (
+              <div className="space-y-2">
+                {encargos.map((e) => (
+                  <div key={e.id} className="flex items-center gap-3 border-b border-halo-border py-1.5 last:border-0">
+                    <span className={`badge flex-shrink-0 ${e.estado === "entregado" ? "badge-aprobado" : "badge-editando"}`}>{e.estado === "entregado" ? "Entregado" : "Pendiente"}</span>
+                    <span className="flex-1 truncate text-sm text-halo-text">{e.instrucciones || (e.tipo_video ? `Tipo ${e.tipo_video.replace(/\D/g, "")}` : "Con referencia")}</span>
+                    <span className="font-mono text-xs text-halo-subtle">{formatDate(e.created_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {config ? (

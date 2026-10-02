@@ -12,14 +12,17 @@ import { CreadorasFilter } from "./CreadorasFilter";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
+import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
 import type { FacturacionModelo, LibraryContent, Modelo } from "@/types";
 
 export const dynamic = "force-dynamic";
 
+type OnboardingResumen = { modelo_id: string; estado: "borrador" | "enviado"; enviado_at: string | null; updated_at: string; progreso: number };
+
 type WithModelName<T> = T & { modelos?: { nombre?: string | null } | null };
 
 async function loadDashboardData() {
-  const vacio = { videos: [] as LibraryContent[], modelos: [] as Modelo[], facturacion: [] as FacturacionModelo[], trials: [] as Array<{ estado: string; publicado_at: string | null }> };
+  const vacio = { videos: [] as LibraryContent[], modelos: [] as Modelo[], facturacion: [] as FacturacionModelo[], trials: [] as Array<{ estado: string; publicado_at: string | null }>, onboarding: [] as OnboardingResumen[] };
   let trials: Array<{ estado: string; publicado_at: string | null }> = [];
   if (!canUseSupabase()) return vacio;
 
@@ -27,11 +30,19 @@ async function loadDashboardData() {
     const supabase = createAdminClient();
     const now = new Date();
     const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const [videosResult, modelosResult, facturacionResult] = await Promise.all([
+    const [videosResult, modelosResult, facturacionResult, onboardingResult] = await Promise.all([
       supabase.from("library_content").select("*, modelos(nombre)").order("recibido_at", { ascending: false }).limit(5000),
       supabase.from("modelos").select("*"),
       supabase.from("facturacion_modelos").select("*, modelos(nombre)").gte("periodo_inicio", mesInicio),
+      supabase.from("modelo_onboarding").select("modelo_id, estado, enviado_at, updated_at, datos"),
     ]);
+    const onboarding = ((onboardingResult.data ?? []) as Array<{ modelo_id: string; estado: string; enviado_at: string | null; updated_at: string; datos: unknown }>).map((row) => ({
+      modelo_id: row.modelo_id,
+      estado: (row.estado === "enviado" ? "enviado" : "borrador") as "borrador" | "enviado",
+      enviado_at: row.enviado_at,
+      updated_at: row.updated_at,
+      progreso: progresoOnboarding(sanearDatos(row.datos)),
+    }));
 
     const todas = (videosResult.data ?? []) as Array<WithModelName<LibraryContent> & { tipo?: number | null }>;
     trials = todas.filter((v) => v.tipo === 5).map((v) => ({ estado: v.estado, publicado_at: (v as { publicado_at?: string | null }).publicado_at ?? null }));
@@ -44,7 +55,7 @@ async function loadDashboardData() {
       modelo_nombre: row.modelos?.nombre ?? "Sin modelo",
     })) as FacturacionModelo[];
 
-    return { videos, modelos: (modelosResult.data ?? []) as Modelo[], facturacion, trials };
+    return { videos, modelos: (modelosResult.data ?? []) as Modelo[], facturacion, trials, onboarding };
   } catch {
     return vacio;
   }
@@ -63,7 +74,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion, trials }, cuentasReales] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales()]);
+  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales()]);
   const cuentasIG = loadCuentasIG(cuentasReales);
 
   const now = new Date();
@@ -135,6 +146,12 @@ export default async function DashboardPage({
       .sort((a, b) => new Date(b.recibido_at).getTime() - new Date(a.recibido_at).getTime())[0];
     return !last || new Date(last.recibido_at).getTime() < d7ago;
   });
+  const onboardingPorModelo = new Map(onboarding.map((o) => [o.modelo_id, o]));
+  const onboardingNuevos = modelos.filter((m) => {
+    const o = onboardingPorModelo.get(m.id);
+    return o?.estado === "enviado" && o.enviado_at && new Date(o.enviado_at).getTime() >= d7ago;
+  });
+  const onboardingPendientes = modelos.filter((m) => m.activa && onboardingPorModelo.get(m.id)?.estado !== "enviado");
   type NotifNivel = "rojo" | "amarillo" | "verde";
   const notificaciones: { nivel: NotifNivel; texto: string; href?: string }[] = [
     ...(aprobacionUrgente.length > 0
@@ -151,6 +168,12 @@ export default async function DashboardPage({
       : []),
     ...(runnerError > 0
       ? [{ nivel: "rojo" as NotifNivel, texto: `${runnerError} vídeo${runnerError > 1 ? "s" : ""} con error en el runner de edición`, href: "/aprobacion" }]
+      : []),
+    ...(onboardingNuevos.length > 0
+      ? [{ nivel: "verde" as NotifNivel, texto: `Onboarding recibido: ${onboardingNuevos.map((m) => m.nombre).join(", ")}`, href: `/modelos/${onboardingNuevos[0].id}#onboarding` }]
+      : []),
+    ...(onboardingPendientes.length > 0
+      ? [{ nivel: "amarillo" as NotifNivel, texto: `Onboarding sin enviar: ${onboardingPendientes.map((m) => m.nombre).join(", ")}` }]
       : []),
     ...(enAprobacion > 0 && aprobacionUrgente.length === 0
       ? [{ nivel: "verde" as NotifNivel, texto: `${enAprobacion} vídeo${enAprobacion > 1 ? "s" : ""} listo${enAprobacion > 1 ? "s" : ""} para revisar`, href: "/aprobacion" }]
@@ -256,6 +279,44 @@ export default async function DashboardPage({
           <span className="badge">{trialsProgramados} programados</span>
           <span className="badge">{trialsPublicados} publicados</span>
         </div>
+      </GlassCard>
+
+      <GlassCard className="mt-6 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-white">Onboarding de creadoras</h2>
+            <p className="text-xs text-white/40">Lo que rellenan en su portal. Se guarda para siempre, con historial de versiones.</p>
+          </div>
+          <span className="badge">
+            {modelos.filter((m) => onboardingPorModelo.get(m.id)?.estado === "enviado").length} de {modelos.length} enviados
+          </span>
+        </div>
+        <ul className="mt-4 divide-y divide-white/[0.06]">
+          {modelos.map((m) => {
+            const o = onboardingPorModelo.get(m.id);
+            return (
+              <li key={m.id}>
+                <Link href={`/modelos/${m.id}#onboarding`} className="flex flex-wrap items-center gap-3 py-2.5 text-sm transition hover:text-[#A78BFA]">
+                  <span className="min-w-0 flex-1 truncate font-medium text-white">{m.nombre}</span>
+                  <span
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                      o?.estado === "enviado"
+                        ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-300"
+                        : o
+                          ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                          : "border-white/10 bg-white/[0.04] text-white/40"
+                    }`}
+                  >
+                    {o?.estado === "enviado" ? "Enviado" : o ? `A medias · ${o.progreso}%` : "Sin empezar"}
+                  </span>
+                  <span className="w-28 text-right text-xs text-white/35">
+                    {o ? new Date(o.updated_at).toLocaleDateString("es-ES", { day: "2-digit", month: "short", timeZone: "Europe/Madrid" }) : "—"}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </GlassCard>
 
       <GlassCard className="mt-6 p-5">

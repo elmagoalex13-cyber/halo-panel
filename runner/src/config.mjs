@@ -47,6 +47,7 @@ export const config = {
   trialColchon: parseInt(process.env.TRIAL_COLCHON ?? "9", 10),
   trialHoras: parseFloat(process.env.TRIAL_HORAS ?? "3"),
   panelUrl: (process.env.PANEL_URL ?? "").replace(/\/+$/, ""),
+  backupDir: strEnv("BACKUP_DIR", "/opt/halo-backups"),
   cronSecret: process.env.CRON_SECRET,
   scraperDias: parseInt(process.env.SCRAPER_DIAS ?? "14", 10),
   scraperHoras: parseFloat(process.env.SCRAPER_HORAS ?? "24"),
