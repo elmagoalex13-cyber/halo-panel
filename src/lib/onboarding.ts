@@ -112,13 +112,11 @@ export const SECCIONES: Seccion[] = [
   {
     id: "customs",
     titulo: "Customs y videollamadas",
-    intro: "Qué ofreces a parte del contenido normal y a qué precio.",
+    intro: "Qué ofreces aparte del contenido normal.",
     campos: [
       { id: "customs", label: "¿Haces customs?", tipo: "sino" },
       { id: "customs_info", label: "Info y límites de los customs", tipo: "textarea", max: 1500 },
-      { id: "customs_precios", label: "Precios de customs", tipo: "textarea", max: 1500, placeholder: "Ej.: vídeo 1 min: 40 $, 3 min: 90 $…" },
       { id: "videollamadas", label: "¿Haces videollamadas?", tipo: "sino" },
-      { id: "videollamadas_precios", label: "Precios de videollamadas", tipo: "textarea", max: 1000 },
       { id: "videollamadas_disponibilidad", label: "Disponibilidad para videollamadas", tipo: "textarea", max: 1000, placeholder: "Ej.: lunes a viernes de 18:00 a 22:00 (hora de Argentina)" },
     ],
   },
@@ -157,7 +155,7 @@ export const SECCIONES: Seccion[] = [
   },
   {
     id: "historia",
-    titulo: "Tu historia y redes",
+    titulo: "Tu historia",
     intro: "Lo que tus fans pueden saber de ti: de dónde vienes, qué te gusta, tus planes favoritos, tu día a día.",
     campos: [
       {
@@ -169,10 +167,6 @@ export const SECCIONES: Seccion[] = [
         max: 1500,
         placeholder: "Ej.: Nací en Venezuela y vivo en Argentina. Soy dulce y divertida. Me encanta el café, la música latina, las caminatas al atardecer y probar recetas nuevas…",
       },
-      { id: "instagram", label: "Instagram (si es orgánico)", tipo: "text", max: 120, placeholder: "@usuario" },
-      { id: "twitter", label: "Twitter / X", tipo: "text", max: 120, placeholder: "@usuario" },
-      { id: "tiktok", label: "TikTok", tipo: "text", max: 120, placeholder: "@usuario" },
-      { id: "otras_redes", label: "Otras redes", tipo: "text", max: 300 },
       { id: "notas_extra", label: "Notas extra", tipo: "textarea", max: 2000 },
     ],
   },
