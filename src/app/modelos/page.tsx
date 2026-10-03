@@ -1,7 +1,8 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { ModelosClient } from "./ModelosClient";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
-import type { CreatorConfig, CuentaInstagram, Modelo } from "@/types";
+import { versionesFotos } from "@/lib/fotosModelos";
+import type { CuentaInstagram, Modelo } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ async function loadModelos() {
   const vacio = {
     modelos: [] as Modelo[],
     cuentas: [] as CuentaInstagram[],
-    creatorConfigs: [] as CreatorConfig[],
+    fotoByModelo: {} as Record<string, number>,
     pipelineByModelo: {} as Record<string, number>,
     onboardingByModelo: {} as Record<string, "borrador" | "enviado">,
   };
@@ -17,12 +18,12 @@ async function loadModelos() {
 
   try {
     const supabase = createAdminClient();
-    const [modelosResult, cuentasResult, creatorConfigsResult, pipelineResult, onboardingResult] = await Promise.all([
+    const [modelosResult, cuentasResult, pipelineResult, onboardingResult, fotoByModelo] = await Promise.all([
       supabase.from("modelos").select("*").order("nombre"),
       supabase.from("cuentas_instagram").select("*").order("username"),
-      supabase.from("creator_configs").select("*"),
       supabase.from("library_content").select("modelo_id, estado").limit(5000),
       supabase.from("modelo_onboarding").select("modelo_id, estado"),
+      versionesFotos(),
     ]);
     const onboardingByModelo: Record<string, "borrador" | "enviado"> = {};
     ((onboardingResult.data ?? []) as Array<{ modelo_id: string; estado: string }>).forEach((row) => {
@@ -37,7 +38,7 @@ async function loadModelos() {
     return {
       modelos: (modelosResult.data ?? []) as Modelo[],
       cuentas: (cuentasResult.data ?? []) as CuentaInstagram[],
-      creatorConfigs: (creatorConfigsResult.data ?? []) as CreatorConfig[],
+      fotoByModelo,
       pipelineByModelo,
       onboardingByModelo,
     };
@@ -47,7 +48,7 @@ async function loadModelos() {
 }
 
 export default async function ModelosPage() {
-  const { modelos, cuentas, creatorConfigs, pipelineByModelo, onboardingByModelo } = await loadModelos();
+  const { modelos, cuentas, pipelineByModelo, onboardingByModelo, fotoByModelo } = await loadModelos();
 
   return (
     <PanelLayout>
@@ -57,7 +58,7 @@ export default async function ModelosPage() {
           <h1 className="mt-2 font-display text-4xl font-semibold text-white">Modelos</h1>
         </div>
       </div>
-      <ModelosClient modelos={modelos} cuentas={cuentas} creatorConfigs={creatorConfigs} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} />
+      <ModelosClient modelos={modelos} cuentas={cuentas} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} fotoByModelo={fotoByModelo} />
     </PanelLayout>
   );
 }

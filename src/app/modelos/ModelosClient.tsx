@@ -2,14 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AtSign, ChevronDown, ChevronUp, Pencil, Plug, Plus, Trash2 } from "lucide-react";
+import { AtSign, Pencil, Plug, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/Badge";
 import { GlassCard } from "@/components/GlassCard";
-import { CreatorConfigSummary } from "./CreatorConfigSummary";
-import { CreatorConfigWizard } from "./CreatorConfigWizard";
+import { FotoModelo } from "./FotoModelo";
 import { PortalAccesoButton } from "./PortalAccesoButton";
-import { emptyCreatorConfig } from "@/lib/creatorConfig";
-import type { CreatorConfig, CuentaInstagram, MetricoolEstado, Modelo, SocialNetwork } from "@/types";
+import type { CuentaInstagram, MetricoolEstado, Modelo, SocialNetwork } from "@/types";
 
 const METRICOOL_DOT: Record<MetricoolEstado, string> = {
   conectada: "bg-emerald-400",
@@ -58,21 +56,18 @@ function redCuenta(cuenta: CuentaInstagram): SocialNetwork {
 export function ModelosClient({
   modelos: initialModelos,
   cuentas: initialCuentas,
-  creatorConfigs: initialCreatorConfigs,
   pipelineByModelo,
   onboardingByModelo,
+  fotoByModelo,
 }: {
   modelos: Modelo[];
   cuentas: CuentaInstagram[];
-  creatorConfigs: CreatorConfig[];
   pipelineByModelo: Record<string, number>;
   onboardingByModelo: Record<string, "borrador" | "enviado">;
+  fotoByModelo: Record<string, number>;
 }) {
   const [modelos, setModelos] = useState(initialModelos);
   const [cuentas, setCuentas] = useState(initialCuentas);
-  const [creatorConfigs, setCreatorConfigs] = useState<Record<string, CreatorConfig>>(() =>
-    Object.fromEntries(initialCreatorConfigs.map((config) => [config.modelo_id, config])),
-  );
   const [modal, setModal] = useState<ModalState>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -83,9 +78,7 @@ export function ModelosClient({
   const [metricoolModal, setMetricoolModal] = useState<CuentaInstagram | null>(null);
   const [metricoolBlogId, setMetricoolBlogId] = useState("");
   const [metricoolSaving, setMetricoolSaving] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedPortalId, setCopiedPortalId] = useState<string | null>(null);
-  const [wizardModeloId, setWizardModeloId] = useState<string | null>(null);
 
   const cuentasPorModelo = useMemo(() => {
     const map: Record<string, CuentaInstagram[]> = {};
@@ -270,21 +263,6 @@ export function ModelosClient({
     }
   }
 
-  async function saveCreatorConfig(config: CreatorConfig) {
-    if (!wizardModeloId) return;
-    const res = await fetch(`/api/modelos/${wizardModeloId}/creator-config`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(config),
-    });
-    const payload = await res.json();
-    if (res.ok && payload.data) {
-      setCreatorConfigs((prev) => ({ ...prev, [wizardModeloId]: payload.data as CreatorConfig }));
-      setExpandedId(wizardModeloId);
-    }
-    setWizardModeloId(null);
-  }
-
   return (
     <>
       <div className="mb-5 flex justify-end">
@@ -298,15 +276,11 @@ export function ModelosClient({
           const pipelineCount = pipelineByModelo[modelo.id] ?? 0;
           const cuentasModelo = cuentasPorModelo[modelo.id] ?? [];
           const draftCuenta = cuentaDrafts[modelo.id] ?? { red_social: "instagram" as SocialNetwork, username: "" };
-          const config = creatorConfigs[modelo.id];
-          const isExpanded = expandedId === modelo.id;
 
           return (
             <GlassCard key={modelo.id} className="flex h-full flex-col p-5">
               <div className="flex items-start gap-4">
-                <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.04] font-display text-2xl font-semibold text-white">
-                  {modelo.nombre.slice(0, 1)}
-                </div>
+                <FotoModelo modeloId={modelo.id} nombre={modelo.nombre} version={fotoByModelo[modelo.id] ?? null} className="h-20 w-20 rounded-2xl text-3xl" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <Link href={`/modelos/${modelo.id}`} className="truncate font-display text-2xl font-semibold text-white hover:text-[#A78BFA]">
@@ -342,43 +316,6 @@ export function ModelosClient({
               <div className="mt-6 grid grid-cols-2 gap-3">
                 <Metric label="Pipeline" value={pipelineCount.toString()} />
                 <Metric label="Redes" value={cuentasModelo.length.toString()} />
-              </div>
-
-              <div className="mt-5">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">Creator config</p>
-                  <div className="flex items-center gap-2">
-                    {config ? (
-                      <button
-                        onClick={() => setExpandedId(isExpanded ? null : modelo.id)}
-                        className="flex items-center gap-1 text-xs font-semibold text-[#A78BFA] hover:underline"
-                      >
-                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        {isExpanded ? "Ocultar" : "Ver ficha completa"}
-                      </button>
-                    ) : null}
-                    <button onClick={() => setWizardModeloId(modelo.id)} className="btn-secondary px-2.5 py-1 text-xs">
-                      {config ? "Editar" : "Configurar"}
-                    </button>
-                    <PortalAccesoButton modeloId={modelo.id} nombre={modelo.nombre} />
-                  </div>
-                </div>
-
-                {config ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {config.age ? <span className="badge">{config.age} anos</span> : null}
-                    {config.origin ? <span className="badge">{config.origin}</span> : null}
-                    {config.archetype ? <span className="badge">{config.archetype}</span> : null}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-[color:var(--text-muted)]">Sin configurar todavia.</p>
-                )}
-
-                {isExpanded && config ? (
-                  <div className="mt-3">
-                    <CreatorConfigSummary config={config} />
-                  </div>
-                ) : null}
               </div>
 
               <div className="mt-5 flex-1">
@@ -475,9 +412,12 @@ export function ModelosClient({
                 {cuentaErrors[modelo.id] ? <p className="mt-1.5 text-xs text-red-300">{cuentaErrors[modelo.id]}</p> : null}
               </div>
 
-              {modelo.portal_token ? (
-                <div className="mt-4 border-t border-white/[0.05] pt-4">
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/30">Portal de subida</p>
+              <div className="mt-4 border-t border-white/[0.05] pt-4">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">Portal de subida</p>
+                  <PortalAccesoButton modeloId={modelo.id} nombre={modelo.nombre} />
+                </div>
+                {modelo.portal_token ? (
                   <div className="flex items-center gap-1.5">
                     <a
                       href={`/m/${modelo.portal_token}`}
@@ -498,8 +438,10 @@ export function ModelosClient({
                       {copiedPortalId === modelo.id ? "✓ Copiado" : "Copiar"}
                     </button>
                   </div>
-                </div>
-              ) : null}
+                ) : (
+                  <p className="text-xs text-[color:var(--text-muted)]">Aún no tiene acceso al portal: pulsa «Portal» para crearlo.</p>
+                )}
+              </div>
             </GlassCard>
           );
         })}
@@ -630,13 +572,6 @@ export function ModelosClient({
         </div>
       ) : null}
 
-      {wizardModeloId ? (
-        <CreatorConfigWizard
-          initial={creatorConfigs[wizardModeloId] ?? emptyCreatorConfig(wizardModeloId)}
-          onCancel={() => setWizardModeloId(null)}
-          onSave={saveCreatorConfig}
-        />
-      ) : null}
     </>
   );
 }
