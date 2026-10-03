@@ -2,14 +2,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
-import { CreatorConfigSummary } from "../CreatorConfigSummary";
 import { PortalAccesoButton } from "../PortalAccesoButton";
 import { FichaTabs, type Pestana } from "./FichaTabs";
 import { FotoModelo } from "../FotoModelo";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { OnboardingFicha } from "./OnboardingFicha";
 import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
-import type { CreatorConfig, SocialNetwork } from "@/types";
+import type { SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 
 export const revalidate = 0;
@@ -103,13 +102,12 @@ async function getModeloDetail(id: string) {
   const supabase = createAdminClient();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-  const [{ data: modelo }, { data: cuentas }, { data: pipeline }, { data: ultimasPublicaciones }, { data: facturacionHistorica }, { data: config }, { data: encargos }, { data: conteo }, { data: onboardingRow }, { data: onboardingHistorial }, fotos] = await Promise.all([
+  const [{ data: modelo }, { data: cuentas }, { data: pipeline }, { data: ultimasPublicaciones }, { data: facturacionHistorica }, { data: encargos }, { data: conteo }, { data: onboardingRow }, { data: onboardingHistorial }, fotos] = await Promise.all([
     supabase.from("modelos").select("*").eq("id", id).single(),
     supabase.from("cuentas_instagram").select("*").eq("modelo_id", id),
     supabase.from("library_content").select("id, titulo, tipo_video, estado, recibido_at").eq("modelo_id", id).not("estado", "in", "(publicado,archivado)").order("recibido_at", { ascending: false }).limit(20),
     supabase.from("library_content").select("id, titulo, tipo_video, publicado_at, cuenta_id, cuentas_instagram(username)").eq("modelo_id", id).eq("estado", "publicado").order("publicado_at", { ascending: false }).limit(15),
     supabase.from("facturacion_modelos").select("periodo_inicio, ingresos_brutos, comision_agencia, suscriptores_activos").eq("modelo_id", id).order("periodo_inicio", { ascending: false }).limit(6),
-    supabase.from("creator_configs").select("*").eq("modelo_id", id).maybeSingle(),
     supabase.from("encargos").select("id, tipo_video, estado, instrucciones, fecha_limite, created_at").eq("modelo_id", id).order("created_at", { ascending: false }).limit(20),
     supabase.from("library_content").select("estado").eq("modelo_id", id),
     supabase.from("modelo_onboarding").select("datos, estado, enviado_at, updated_at").eq("modelo_id", id).maybeSingle(),
@@ -137,7 +135,6 @@ async function getModeloDetail(id: string) {
     fotoVersion: fotos[id] ?? null,
     onboarding: (onboardingRow ?? null) as { datos: unknown; estado: string; enviado_at: string | null; updated_at: string } | null,
     onboardingHistorial: (onboardingHistorial ?? []) as Array<{ id: string; origen: string; created_at: string }>,
-    config: (config ?? null) as CreatorConfig | null,
     encargos: (encargos ?? []) as Encargo[],
     porEstado,
     totalVideos: (conteo ?? []).length,
@@ -160,7 +157,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   const data = await getModeloDetail(id);
   if (!data) notFound();
 
-  const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion, config, encargos, porEstado, totalVideos, onboarding, onboardingHistorial, fotoVersion } = data;
+  const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion, encargos, porEstado, totalVideos, onboarding, onboardingHistorial, fotoVersion } = data;
   const onboardingDatos = sanearDatos(onboarding?.datos ?? {});
   const pendientes = encargos.filter((e) => e.estado !== "entregado");
   const facturacionMes = facturacion[0];
@@ -308,8 +305,6 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
     <div className="card py-8 text-center text-sm text-halo-subtle">Esta modelo no tiene cuentas de redes todavía.</div>
   );
 
-  const perfil = config ? <CreatorConfigSummary config={config} /> : null;
-
   const pestanas: Pestana[] = [
     { id: "resumen", label: "Resumen", icono: "◈", contenido: resumen },
     {
@@ -321,7 +316,6 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
     },
     { id: "videos", label: "Vídeos", icono: "🎞", aviso: pendientes.length ? String(pendientes.length) : null, contenido: videos },
     { id: "redes", label: "Redes", icono: "◎", aviso: cuentas.length ? String(cuentas.length) : null, contenido: redes },
-    ...(perfil ? [{ id: "perfil", label: "Perfil (antiguo)", icono: "✦", contenido: perfil }] : []),
   ];
 
   return (

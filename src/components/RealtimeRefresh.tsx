@@ -10,7 +10,7 @@ function tablesForPath(pathname: string) {
   if (pathname.startsWith("/leads")) return ["leads"];
   if (pathname.startsWith("/asignar")) return ["encargos", "referencias", "modelos"];
   if (pathname.startsWith("/instagram")) return ["referencias_cuentas", "referencias_videos", "cuentas_instagram", "modelos"];
-  if (pathname.startsWith("/modelos")) return ["modelos", "cuentas_instagram", "encargos", "creator_configs"];
+  if (pathname.startsWith("/modelos")) return ["modelos", "cuentas_instagram", "encargos"];
   if (pathname.startsWith("/frases")) return ["banco_frases_canciones"];
   if (pathname.startsWith("/facturacion")) return ["facturacion_modelos"];
   if (pathname.startsWith("/landings")) return ["landing_events"];

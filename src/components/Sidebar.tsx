@@ -19,6 +19,23 @@ const NAV = [
   { href: "/ajustes", label: "Ajustes", icon: "⚙" },
 ];
 
+export const EVENTO_MODELOS = "halo:modelos-actualizados";
+
+type ModeloMenu = { id: string; nombre: string; activa: boolean; portal_token: string | null; foto: number | null };
+
+function AvatarMini({ modelo }: { modelo: ModeloMenu }) {
+  return (
+    <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full border border-white/[0.12] bg-white/[0.06] text-[11px] font-semibold text-white/80">
+      {modelo.foto ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/api/modelos/${modelo.id}/foto?v=${modelo.foto}`} alt="" className="h-full w-full object-cover" />
+      ) : (
+        modelo.nombre.slice(0, 1).toUpperCase()
+      )}
+    </span>
+  );
+}
+
 const MOBILE_PRIMARY = ["/dashboard", "/aprobacion", "/leads", "/modelos"];
 
 interface SidebarProps {
@@ -31,6 +48,45 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
   const [counts, setCounts] = useState({ approval: pendingAprobacion, leads: pendingLeads });
+  const [modelos, setModelos] = useState<ModeloMenu[]>([]);
+  const [modelosAbierto, setModelosAbierto] = useState(true);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("halo-sidebar-modelos") === "cerrado") setModelosAbierto(false);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    async function cargarModelos() {
+      try {
+        const res = await fetch("/api/panel/modelos", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { modelos?: ModeloMenu[] };
+        if (!disposed) setModelos(data.modelos ?? []);
+      } catch {
+        // El menu no debe bloquear la navegacion si falla la lista.
+      }
+    }
+    void cargarModelos();
+    window.addEventListener("focus", cargarModelos);
+    window.addEventListener(EVENTO_MODELOS, cargarModelos);
+    return () => {
+      disposed = true;
+      window.removeEventListener("focus", cargarModelos);
+      window.removeEventListener(EVENTO_MODELOS, cargarModelos);
+    };
+  }, []);
+
+  function alternarModelos() {
+    setModelosAbierto((abierto) => {
+      try {
+        localStorage.setItem("halo-sidebar-modelos", abierto ? "cerrado" : "abierto");
+      } catch {}
+      return !abierto;
+    });
+  }
 
   useEffect(() => {
     let disposed = false;
@@ -104,11 +160,12 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
               const { href, label, icon, leadsBadge } = item;
               const active = activeFor(href);
               const badgeText = badgeFor(item);
+              const esModelos = href === "/modelos";
               return (
+                <div key={href} className={esModelos ? "relative" : undefined}>
                 <Link
-                  key={href}
                   href={href}
-                  className={`group relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                  className={`group relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-150 ${esModelos ? "pr-10 " : ""}${
                     active
                       ? "border-[#A78BFA]/30 bg-[#8B5CF6]/[0.16] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-8px_rgba(139,92,246,0.6)]"
                       : "border-transparent text-white/50 hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white/85"
@@ -126,6 +183,52 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                     </span>
                   ) : null}
                 </Link>
+                {esModelos ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={alternarModelos}
+                      aria-expanded={modelosAbierto}
+                      aria-label={modelosAbierto ? "Ocultar modelos" : "Mostrar modelos"}
+                      className="absolute right-2 top-[11px] grid h-6 w-6 place-items-center rounded-lg text-xs text-white/45 transition hover:bg-white/[0.08] hover:text-white"
+                    >
+                      <span className={`inline-block transition-transform ${modelosAbierto ? "rotate-180" : ""}`}>▾</span>
+                    </button>
+                    {modelosAbierto && modelos.length ? (
+                      <ul className="mt-1 flex flex-col gap-0.5 border-l border-white/[0.08] pl-2 ml-5">
+                        {modelos.map((m) => {
+                          const activo = pathname === `/modelos/${m.id}`;
+                          return (
+                            <li key={m.id} className="group/m flex items-center gap-1">
+                              <Link
+                                href={`/modelos/${m.id}`}
+                                className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] transition ${
+                                  activo ? "bg-[#8B5CF6]/[0.16] text-white" : "text-white/55 hover:bg-white/[0.05] hover:text-white/90"
+                                } ${m.activa ? "" : "opacity-50"}`}
+                              >
+                                <AvatarMini modelo={m} />
+                                <span className="truncate">{m.nombre}</span>
+                              </Link>
+                              {m.portal_token ? (
+                                <a
+                                  href={`/m/${m.portal_token}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={`Abrir el portal de ${m.nombre}`}
+                                  aria-label={`Abrir el portal de ${m.nombre}`}
+                                  className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs text-white/35 transition hover:bg-white/[0.08] hover:text-[#C4B5FD]"
+                                >
+                                  ↗
+                                </a>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : null}
+                  </>
+                ) : null}
+                </div>
               );
             })}
           </div>
@@ -196,6 +299,24 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                 x
               </button>
             </div>
+            {modelos.length ? (
+              <div className="mb-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/35">Modelos</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {modelos.map((m) => (
+                    <Link
+                      key={m.id}
+                      href={`/modelos/${m.id}`}
+                      onClick={() => setMoreOpen(false)}
+                      className={`flex min-h-12 items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-white/[0.035] px-3 text-sm font-semibold text-white/75 ${m.activa ? "" : "opacity-50"}`}
+                    >
+                      <AvatarMini modelo={m} />
+                      <span className="min-w-0 flex-1 truncate">{m.nombre}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-2">
               {moreItems.map((item) => {
                 const active = activeFor(item.href);

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
+import { EVENTO_MODELOS } from "@/components/Sidebar";
 
 const LADO_MAX = 640;
 
@@ -49,6 +50,7 @@ export function FotoModelo({
       const j = (await res.json().catch(() => null)) as { v?: number; error?: string } | null;
       if (!res.ok) throw new Error(j?.error ?? "No se pudo subir la foto");
       setV(j?.v ?? Date.now());
+      window.dispatchEvent(new Event(EVENTO_MODELOS));
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo subir la foto");
     } finally {
@@ -63,7 +65,10 @@ export function FotoModelo({
     setError(null);
     const res = await fetch(`/api/modelos/${modeloId}/foto`, { method: "DELETE" });
     setSubiendo(false);
-    if (res.ok) setV(null);
+    if (res.ok) {
+      setV(null);
+      window.dispatchEvent(new Event(EVENTO_MODELOS));
+    }
     else setError("No se pudo quitar la foto");
   }
 
