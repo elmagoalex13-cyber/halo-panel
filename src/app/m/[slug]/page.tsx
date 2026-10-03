@@ -58,6 +58,8 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
       .select("id, titulo, tipo, recibido_at")
       .eq("modelo_id", modelo.id)
       .like("r2_key", `bruto/${modelo.id}/%`)
+      // Los fragmentos de 6 s que se sacan de una misma subida (titulo "... · parte 2/5") no cuentan como subidas nuevas.
+      .or("titulo.is.null,titulo.not.ilike.*· parte *")
       .order("recibido_at", { ascending: false })
       .limit(12),
     supabase.from("modelo_onboarding").select("datos, estado").eq("modelo_id", modelo.id).maybeSingle(),

@@ -24,7 +24,8 @@ import {
   transcribeWithWhisper,
   wordTimedFromSegments,
 } from "./whisper.mjs";
-import { renderTipo1, renderTipo2, renderTipo3, renderTipo4 } from "./ffmpeg.mjs";
+import { getDuration, renderTipo1, renderTipo2, renderTipo3, renderTipo4 } from "./ffmpeg.mjs";
+import { DURACION_TIPO2, dividirEnFragmentos, planificarFragmentos } from "./fragmentos.mjs";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
@@ -114,8 +115,17 @@ export async function procesarTipo(tipo, pieza) {
           audioRef = undefined;
         }
       }
-      await renderTipo2(rawPath, outPath, { frase: pieza.frase_quemada ?? "", audioRefPath: audioRef, layout_json: pieza.layout_json ?? null });
+      // Ventana de 6 s: si la pieza ya tiene recorte_inicio (es un fragmento, o un rehacer) se usa tal
+      // cual; si no, es la primera vez y se decide cuantos fragmentos salen del original.
+      let inicio = Number.isFinite(Number(pieza.recorte_inicio)) && pieza.recorte_inicio !== null ? Number(pieza.recorte_inicio) : null;
+      if (inicio === null) {
+        const inicios = planificarFragmentos(await getDuration(rawPath));
+        inicio = inicios[0];
+        if (inicios.length > 1) await dividirEnFragmentos(supabase, pieza, rawKey, inicios);
+      }
+      await renderTipo2(rawPath, outPath, { frase: pieza.frase_quemada ?? "", audioRefPath: audioRef, layout_json: pieza.layout_json ?? null, inicio });
       fraseQuemada = pieza.frase_quemada ?? "";
+      trimUsado = { start: inicio, end: inicio + DURACION_TIPO2 };
     } else if (tipo === 3) {
       const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
       await renderTipo3(rawPath, subs?.assPath, outPath, 2, { trim: subs?.trim });

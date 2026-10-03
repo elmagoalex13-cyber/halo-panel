@@ -6,6 +6,7 @@ import path from "path";
 const execFileAsync = promisify(execFile);
 
 import { config } from "./config.mjs";
+import { DURACION_TIPO2 } from "./fragmentos.mjs";
 
 const FFMPEG = config.ffmpeg;
 const FFPROBE = config.ffprobe;
@@ -325,7 +326,7 @@ export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {})
  * @param {string} [opts.audioRefPath] - Ruta del audio de referencia (si existe)
  * @param {{ bloques?: Array<{ texto?: string; posicion?: string; color?: string; negrita?: boolean; fontsize?: number }> }} [opts.layout_json]
  */
-export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath, layout_json } = {}) {
+export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath, layout_json, inicio = 0 } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   const hdr = await needsHdrTonemap(inputPath);
   const assPath = path.join(path.dirname(outputPath), "frase_tipo2.ass");
@@ -339,20 +340,27 @@ export async function renderTipo2(inputPath, outputPath, { frase, audioRefPath, 
     const bloques = hasLayoutJson
       ? layout_json.bloques
       : [{ texto: layoutTipo2Text(frase), fontsize: 56, color: "#FFFFFF", negrita: true }];
-    const duration = await getDuration(inputPath);
-    await writeTipo2AssMulti(assPath, bloques, { duration: Math.max(1, duration) });
+    await writeTipo2AssMulti(assPath, bloques, { duration: DURACION_TIPO2 });
     overlayFilters.push(`subtitles='${escapeFilterValue(assPath)}':fontsdir='/usr/share/fonts'`);
   }
 
+  // Siempre exactamente DURACION_TIPO2 s: se corta la ventana que empieza en `inicio`, y si el
+  // original es mas corto se repite en bucle hasta completarla.
+  const duracionEntrada = await getDuration(inputPath);
+  const enBucle = duracionEntrada < DURACION_TIPO2 - 0.05;
+
   const buildArgs = (useHdr) => {
     const vf = [buildVideoFilter({ hdr: useHdr }), ...overlayFilters].join(",");
-    const args = ["-y", "-i", inputPath];
+    const args = ["-y"];
+    if (enBucle) args.push("-stream_loop", "-1");
+    else if (inicio > 0) args.push("-ss", String(inicio));
+    args.push("-i", inputPath);
     if (audioRefPath) {
-      args.push("-i", audioRefPath, "-map", "0:v", "-map", "1:a");
+      args.push("-i", audioRefPath, "-map", "0:v", "-map", "1:a", "-af", "apad");
     }
     args.push("-vf", vf);
-    pushEncodeArgs(args, { shortest: true });
-    args.push(outputPath);
+    pushEncodeArgs(args);
+    args.push("-t", String(DURACION_TIPO2), outputPath);
     return args;
   };
 
