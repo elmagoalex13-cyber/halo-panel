@@ -1,6 +1,7 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
+import { versionesFotos } from "@/lib/fotosModelos";
 import { MesaClient, type VideoRow } from "./MesaClient";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +11,12 @@ type SearchParams = {
   tab?: string;
 };
 
-const ESTADOS_VALIDOS = ["en_aprobacion", "aprobado", "editando"] as const;
+const ESTADOS_VALIDOS = ["en_aprobacion", "aprobado", "publicado", "editando"] as const;
 type ApprovalEstado = (typeof ESTADOS_VALIDOS)[number];
 
 type SupabaseApprovalRow = {
   id: string;
+  modelo_id?: string | null;
   titulo: string | null;
   tipo_video: string | null;
   tipo?: number | null;
@@ -87,10 +89,11 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
 
   try {
     const supabase = createAdminClient();
+    const fotos = await versionesFotos();
     const primary = await supabase
       .from("library_content")
       .select(`
-        id, titulo, tipo_video, tipo, estado, recibido_at, publicado_at,
+        id, modelo_id, titulo, tipo_video, tipo, estado, recibido_at, publicado_at,
         r2_key, r2_key_referencia, r2_key_original, video_procesado_url, estado_procesamiento, error_mensaje,
         caption, frase_quemada, correcciones, recorte_inicio, recorte_fin,
         modelo:modelos(nombre),
@@ -108,6 +111,8 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
 
     return ((data ?? []) as unknown as SupabaseApprovalRow[]).map((row) => ({
       id: row.id,
+      modelo_id: row.modelo_id ?? null,
+      modelo_foto: row.modelo_id ? (fotos[row.modelo_id] ?? null) : null,
       titulo: row.titulo,
       tipo_video: tipoVideoEfectivo(row.tipo_video, row.tipo),
       estado: row.estado,
@@ -118,7 +123,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       video_procesado_url: row.video_procesado_url ?? null,
       estado_procesamiento: row.estado_procesamiento ?? null,
       error_mensaje: row.error_mensaje ?? null,
-      programado_at: row.estado === "aprobado" ? row.publicado_at : null,
+      programado_at: row.estado === "aprobado" || row.estado === "publicado" ? row.publicado_at : null,
       caption: row.caption ?? "",
       frase_quemada: row.frase_quemada ?? "",
       correcciones: row.correcciones ?? "",
@@ -140,6 +145,7 @@ export default async function AprobacionPage({ searchParams }: { searchParams: P
   const mainTabs = [
     { href: "/aprobacion?estado=en_aprobacion", estado: "en_aprobacion", label: "En aprobación" },
     { href: "/aprobacion?estado=aprobado", estado: "aprobado", label: "Aprobados (programados / para descargar)" },
+    { href: "/aprobacion?estado=publicado", estado: "publicado", label: "Publicados" },
     { href: "/aprobacion?estado=editando", estado: "editando", label: "Rehacer IA" },
   ];
 

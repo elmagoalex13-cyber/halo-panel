@@ -4,9 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { estadoLabel, formatDate, tipoVideoLabel } from "@/lib/utils";
 import { urlR2, videoBrutoAlternativas, videoEditado } from "@/lib/media";
+import { AvatarModelo } from "@/components/AvatarModelo";
 
 export interface VideoRow {
   id: string;
+  modelo_id?: string | null;
+  modelo_foto?: number | null;
   titulo: string | null;
   tipo_video: string | null;
   estado: string;
@@ -375,6 +378,8 @@ export function MesaClient({
   const [originalOpen, setOriginalOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [modeloFiltro, setModeloFiltro] = useState("todos");
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [publicando, setPublicando] = useState(false);
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [changeLoading, setChangeLoading] = useState(false);
   const [changeVideoError, setChangeVideoError] = useState<string | null>(null);
@@ -384,6 +389,7 @@ export function MesaClient({
   const [quickRehacer, setQuickRehacer] = useState<{ row: VideoRow; nota: string } | null>(null);
 
   useEffect(() => {
+    setSeleccion(new Set());
     setRows(initialRows);
     setSelected(null);
     setRefOpen(false);
@@ -391,15 +397,26 @@ export function MesaClient({
     setActionMessage(null);
   }, [initialRows, currentEstado]);
 
-  const modeloNombres = useMemo(() => Array.from(new Set(rows.map((row) => row.modelo_nombre))).sort(), [rows]);
+  const modelosChips = useMemo(() => {
+    const mapa = new Map<string, { clave: string; nombre: string; id: string | null; foto: number | null; total: number }>();
+    for (const row of rows) {
+      const clave = row.modelo_id ?? row.modelo_nombre;
+      const previo = mapa.get(clave);
+      if (previo) previo.total += 1;
+      else mapa.set(clave, { clave, nombre: row.modelo_nombre, id: row.modelo_id ?? null, foto: row.modelo_foto ?? null, total: 1 });
+    }
+    return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [rows]);
+  // Si la modelo filtrada se queda sin videos (ej. los acabas de marcar como publicados), vuelve a "Todas".
+  const filtroModelo = modeloFiltro !== "todos" && !modelosChips.some((m) => m.clave === modeloFiltro) ? "todos" : modeloFiltro;
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
-        const modeloOk = modeloFiltro === "todos" || row.modelo_nombre === modeloFiltro;
+        const modeloOk = filtroModelo === "todos" || (row.modelo_id ?? row.modelo_nombre) === filtroModelo;
         const tipoOk = tipoFiltro === "todos" || row.tipo_video === tipoFiltro;
         return modeloOk && tipoOk;
       }),
-    [rows, modeloFiltro, tipoFiltro],
+    [rows, filtroModelo, tipoFiltro],
   );
 
   const closePopup = useCallback(() => {
@@ -521,6 +538,53 @@ export function MesaClient({
   );
 
 
+  const puedeMarcar = currentEstado === "aprobado" || currentEstado === "publicado";
+  const seleccionVisible = filteredRows.filter((row) => seleccion.has(row.id));
+
+  function alternarSeleccion(id: string) {
+    setSeleccion((previa) => {
+      const siguiente = new Set(previa);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
+  }
+
+  function alternarTodos() {
+    setSeleccion((previa) =>
+      filteredRows.length > 0 && filteredRows.every((row) => previa.has(row.id)) ? new Set() : new Set(filteredRows.map((row) => row.id)),
+    );
+  }
+
+  async function marcarPublicado(ids: string[], publicado: boolean) {
+    if (!ids.length) return;
+    setPublicando(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/aprobacion/publicado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, publicado }),
+      });
+      const payload = (await res.json().catch(() => null)) as { error?: string; cambiados?: string[] } | null;
+      if (!res.ok) {
+        setActionMessage(payload?.error ?? "No se pudo actualizar.");
+        return;
+      }
+      const cambiados = new Set(payload?.cambiados ?? ids);
+      setRows((previas) => previas.filter((row) => !cambiados.has(row.id)));
+      setSeleccion(new Set());
+      setActionMessage(
+        publicado
+          ? `${cambiados.size} video${cambiados.size === 1 ? "" : "s"} marcado${cambiados.size === 1 ? "" : "s"} como publicado${cambiados.size === 1 ? "" : "s"}.`
+          : `${cambiados.size} video${cambiados.size === 1 ? "" : "s"} vuelto${cambiados.size === 1 ? "" : "s"} a aprobados.`,
+      );
+      router.refresh();
+    } finally {
+      setPublicando(false);
+    }
+  }
+
   async function generarCaption() {
     if (!selected) return;
     setCaptionLoading(true);
@@ -572,31 +636,77 @@ export function MesaClient({
           </p>
           {actionMessage ? <p className="mt-1 text-xs text-[#22D3EE]">{actionMessage}</p> : null}
         </div>
-        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-          <select
-            value={modeloFiltro}
-            onChange={(event) => setModeloFiltro(event.target.value)}
-            className="input-base min-w-0 py-1.5 text-xs"
-          >
-            <option value="todos">Todas las modelos</option>
-            {modeloNombres.map((modelo) => (
-              <option key={modelo} value={modelo}>
-                {modelo}
-              </option>
+        <select
+          value={tipoFiltro}
+          onChange={(event) => setTipoFiltro(event.target.value)}
+          className="input-base min-w-0 py-1.5 text-xs sm:w-auto"
+        >
+          {TIPO_FILTROS.map((tipo) => (
+            <option key={tipo.value} value={tipo.value}>
+              {tipo.label}
+            </option>
+          ))}
+        </select>
+
+        {modelosChips.length > 1 ? (
+          <div className="flex w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+            <button
+              type="button"
+              onClick={() => setModeloFiltro("todos")}
+              className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                filtroModelo === "todos" ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"
+              }`}
+            >
+              Todas
+              <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{rows.length}</span>
+            </button>
+            {modelosChips.map((m) => (
+              <button
+                key={m.clave}
+                type="button"
+                onClick={() => setModeloFiltro(filtroModelo === m.clave ? "todos" : m.clave)}
+                aria-pressed={filtroModelo === m.clave}
+                className={`flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition ${
+                  filtroModelo === m.clave ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"
+                }`}
+              >
+                <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-6 w-6 text-[10px]" />
+                {m.nombre}
+                <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{m.total}</span>
+              </button>
             ))}
-          </select>
-          <select
-            value={tipoFiltro}
-            onChange={(event) => setTipoFiltro(event.target.value)}
-            className="input-base min-w-0 py-1.5 text-xs"
-          >
-            {TIPO_FILTROS.map((tipo) => (
-              <option key={tipo.value} value={tipo.value}>
-                {tipo.label}
-              </option>
-            ))}
-          </select>
-        </div>
+          </div>
+        ) : null}
+
+        {puedeMarcar && filteredRows.length ? (
+          <div className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-white/60">
+              <input
+                type="checkbox"
+                checked={filteredRows.length > 0 && filteredRows.every((row) => seleccion.has(row.id))}
+                onChange={alternarTodos}
+                className="h-4 w-4 accent-[#8B5CF6]"
+              />
+              Seleccionar todos ({filteredRows.length})
+            </label>
+            <button
+              type="button"
+              disabled={publicando || seleccionVisible.length === 0}
+              onClick={() => marcarPublicado(seleccionVisible.map((row) => row.id), currentEstado === "aprobado")}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
+                currentEstado === "aprobado"
+                  ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                  : "border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
+              }`}
+            >
+              {publicando
+                ? "..."
+                : currentEstado === "aprobado"
+                  ? `✓ Marcar ${seleccionVisible.length || ""} como publicados`.replace("  ", " ")
+                  : `↺ Volver ${seleccionVisible.length || ""} a aprobados`.replace("  ", " ")}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {filteredRows.length === 0 ? (
@@ -617,10 +727,22 @@ export function MesaClient({
                 key={row.id}
                 className="group grid w-full grid-cols-[58px_1fr] gap-3 border-b border-white/[0.06] p-3 text-left transition-all duration-150 last:border-b-0 hover:border-[#8B5CF6]/35 hover:bg-white/[0.055] sm:grid-cols-[68px_1fr_auto] sm:gap-4 sm:p-4"
               >
+                <div className="relative h-24 w-[54px] sm:h-28 sm:w-[63px]">
+                {puedeMarcar ? (
+                  <label className="absolute left-1 top-1 z-10 grid h-6 w-6 cursor-pointer place-items-center rounded-md bg-black/70 ring-1 ring-white/25">
+                    <input
+                      type="checkbox"
+                      checked={seleccion.has(row.id)}
+                      onChange={() => alternarSeleccion(row.id)}
+                      aria-label={`Seleccionar ${row.titulo ?? row.id}`}
+                      className="h-4 w-4 accent-[#8B5CF6]"
+                    />
+                  </label>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => openPopup(row)}
-                  className="relative h-24 w-[54px] overflow-hidden rounded-xl bg-black text-left ring-1 ring-white/[0.08] sm:h-28 sm:w-[63px]"
+                  className="relative h-full w-full overflow-hidden rounded-xl bg-black text-left ring-1 ring-white/[0.08]"
                   aria-label={`Revisar ${row.titulo ?? row.id}`}
                 >
                   {url ? (
@@ -642,6 +764,7 @@ export function MesaClient({
                     </div>
                   </div>
                 </button>
+                </div>
 
                 <button type="button" onClick={() => openPopup(row)} className="min-w-0 self-center text-left">
                   <div className="flex flex-wrap items-center gap-2">
@@ -650,9 +773,12 @@ export function MesaClient({
                       {estadoLabel(row.estado)}
                     </span>
                   </div>
-                  <p className="mt-1 truncate text-xs text-white/45">
-                    {row.modelo_nombre}
-                    {row.cuenta_username ? ` · @${row.cuenta_username}` : ""}
+                  <p className="mt-1.5 flex items-center gap-2 truncate text-xs text-white/55">
+                    <AvatarModelo id={row.modelo_id} nombre={row.modelo_nombre} foto={row.modelo_foto} className="h-6 w-6 text-[10px]" />
+                    <span className="truncate">
+                      {row.modelo_nombre}
+                      {row.cuenta_username ? ` · @${row.cuenta_username}` : ""}
+                    </span>
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="text-[10px] uppercase tracking-[0.18em] text-white/30">
@@ -669,7 +795,7 @@ export function MesaClient({
                   <span className={`badge px-2.5 py-1 text-[9px] ${ESTADO_BADGE[row.estado] ?? "badge"}`}>
                     {row.estado === "aprobado" ? (row.programado_at ? "Programado" : "Sin programar") : estadoLabel(row.estado)}
                   </span>
-                  {row.estado === "aprobado" && row.programado_at ? (
+                  {(row.estado === "aprobado" || row.estado === "publicado") && row.programado_at ? (
                     <p className="mt-1 text-[10px] text-white/40">
                       {new Date(row.programado_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                     </p>
@@ -712,6 +838,26 @@ export function MesaClient({
                         </button>
                       ) : null}
                     </>
+                  ) : null}
+                  {row.estado === "aprobado" ? (
+                    <button
+                      type="button"
+                      onClick={() => marcarPublicado([row.id], true)}
+                      disabled={publicando}
+                      className="rounded-lg border border-emerald-500/35 bg-emerald-500/12 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400/70 hover:bg-emerald-500/20 disabled:opacity-40"
+                    >
+                      ✓ Marcar publicado
+                    </button>
+                  ) : null}
+                  {row.estado === "publicado" ? (
+                    <button
+                      type="button"
+                      onClick={() => marcarPublicado([row.id], false)}
+                      disabled={publicando}
+                      className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-40"
+                    >
+                      ↺ Volver a aprobado
+                    </button>
                   ) : null}
                   <button
                     type="button"
