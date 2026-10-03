@@ -36,6 +36,15 @@ function AvatarMini({ modelo }: { modelo: ModeloMenu }) {
   );
 }
 
+// Cada pagina monta su propia barra lateral, asi que al navegar se desmonta y se vuelve a montar:
+// sin esto la lista de modelos y los contadores se vaciaban unos instantes (parpadeo). El modulo
+// sobrevive a la navegacion en el navegador; en el servidor nunca se rellena (solo lo hacen efectos).
+const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number } | null } = {
+  modelos: [],
+  modelosAbierto: null,
+  counts: null,
+};
+
 const MOBILE_PRIMARY = ["/dashboard", "/aprobacion", "/leads", "/modelos"];
 
 interface SidebarProps {
@@ -47,14 +56,19 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [counts, setCounts] = useState({ approval: pendingAprobacion, leads: pendingLeads });
-  const [modelos, setModelos] = useState<ModeloMenu[]>([]);
-  const [modelosAbierto, setModelosAbierto] = useState(true);
+  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads });
+  const [modelos, setModelos] = useState<ModeloMenu[]>(cache.modelos);
+  const [modelosAbierto, setModelosAbierto] = useState(cache.modelosAbierto ?? true);
 
   useEffect(() => {
+    if (cache.modelosAbierto !== null) return;
     try {
-      if (localStorage.getItem("halo-sidebar-modelos") === "cerrado") setModelosAbierto(false);
-    } catch {}
+      const abierto = localStorage.getItem("halo-sidebar-modelos") !== "cerrado";
+      cache.modelosAbierto = abierto;
+      setModelosAbierto(abierto);
+    } catch {
+      cache.modelosAbierto = true;
+    }
   }, []);
 
   useEffect(() => {
@@ -64,7 +78,8 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
         const res = await fetch("/api/panel/modelos", { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as { modelos?: ModeloMenu[] };
-        if (!disposed) setModelos(data.modelos ?? []);
+        cache.modelos = data.modelos ?? [];
+        if (!disposed) setModelos(cache.modelos);
       } catch {
         // El menu no debe bloquear la navegacion si falla la lista.
       }
@@ -80,12 +95,12 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   }, []);
 
   function alternarModelos() {
-    setModelosAbierto((abierto) => {
-      try {
-        localStorage.setItem("halo-sidebar-modelos", abierto ? "cerrado" : "abierto");
-      } catch {}
-      return !abierto;
-    });
+    const siguiente = !modelosAbierto;
+    cache.modelosAbierto = siguiente;
+    setModelosAbierto(siguiente);
+    try {
+      localStorage.setItem("halo-sidebar-modelos", siguiente ? "abierto" : "cerrado");
+    } catch {}
   }
 
   useEffect(() => {
@@ -96,12 +111,11 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
         const res = await fetch("/api/panel/counts", { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as { approval?: number; leads?: number };
-        if (!disposed) {
-          setCounts({
-            approval: Number(data.approval ?? 0),
-            leads: Number(data.leads ?? 0),
-          });
-        }
+        cache.counts = {
+          approval: Number(data.approval ?? 0),
+          leads: Number(data.leads ?? 0),
+        };
+        if (!disposed) setCounts(cache.counts);
       } catch {
         // El menú no debe bloquear la navegación si los contadores fallan.
       }
