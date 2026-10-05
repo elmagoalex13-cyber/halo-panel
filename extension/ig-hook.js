@@ -5,13 +5,17 @@
 // (en una pestana oculta Instagram no carga mas reels al hacer scroll).
 (() => {
   if (window.__halo) return;
-  const store = { items: new Map(), respuestas: 0, consulta: null, cursor: null, hayMas: false };
+  const store = { items: new Map(), respuestas: 0, consulta: null, inicial: null, cursor: null, hayMas: false };
   window.__halo = store;
 
   const fetchOriginal = window.fetch;
   const num = (v) => Math.max(0, Number(v ?? 0) || 0);
   const PROPIO = /clips.*user|user.*clips|user_timeline|feed__user|profile.*(reel|post)|XDTUserDict/i;
   const ES_CONSULTA_REELS = /ProfileReelsTabContentQuery_connection/;
+  const ES_CONSULTA_INICIAL = /^PolarisProfileReelsTabContentQuery$/;
+  const NOMBRE_CONEXION = "PolarisProfileReelsTabContentQuery_connection";
+  // Identificador de la consulta paginada; solo se usa si la pagina no llego a lanzarla (pestana oculta).
+  const DOC_CONEXION = "28989741540630190";
 
   function walk(o, d, propio, acc) {
     if (!o || typeof o !== "object" || d > 14) return;
@@ -52,6 +56,7 @@
         store.cursor = acc.pageInfo.end_cursor ?? null;
         store.hayMas = Boolean(acc.pageInfo.has_next_page);
         if (peticion && ES_CONSULTA_REELS.test(peticion.nombre)) store.consulta = peticion;
+        if (peticion && ES_CONSULTA_INICIAL.test(peticion.nombre)) store.inicial = peticion;
       }
     } catch {
       /* no era JSON */
@@ -105,8 +110,20 @@
   };
 
   // Pide paginas siguientes repitiendo la consulta de la propia pagina con el cursor. Devuelve cuantas paginas pidio.
+  // La consulta paginada es la inicial con otro doc_id y estas variables (cursor `after`, `first`, `id`).
+  function derivarConsulta(ini) {
+    const p = new URLSearchParams(ini.cuerpo);
+    const v = JSON.parse(p.get("variables") || "{}");
+    p.set("doc_id", DOC_CONEXION);
+    p.set("fb_api_req_friendly_name", NOMBRE_CONEXION);
+    const nv = { after: null, data: v.data, first: 12, id: v.user_id ?? v.data?.target_user_id };
+    for (const k in v) if (k.startsWith("__relay_internal__")) nv[k] = v[k];
+    p.set("variables", JSON.stringify(nv));
+    return { ...ini, cuerpo: p.toString(), cabeceras: { ...ini.cabeceras, "X-FB-Friendly-Name": NOMBRE_CONEXION }, nombre: NOMBRE_CONEXION };
+  }
+
   store.paginar = async function (maximo) {
-    const c = store.consulta;
+    const c = store.consulta ?? (store.inicial ? derivarConsulta(store.inicial) : null);
     if (!c) return { ok: false, motivo: "sin_consulta", paginas: 0 };
     let paginas = 0;
     let ultimoCursor = null;

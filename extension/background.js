@@ -124,14 +124,17 @@ async function recogerReelsEnPagina(maximo) {
   // Esperar a que la pagina cargue la primera tanda de reels (hasta 10 s).
   for (let i = 0; i < 20 && !antes(); i++) await espera(500);
   // y a que lance la consulta que luego se repite para paginar (hasta 8 s mas).
-  for (let i = 0; i < 16 && antes() && !window.__halo.consulta; i++) await espera(500);
-  await espera(800);
+  for (let i = 0; i < 8 && antes() && !window.__halo.consulta; i++) await espera(500);
+  await espera(500);
   let paginacion = { ok: true, paginas: 0 };
   if (antes() && antes() < maximo) {
     // En una pestana en segundo plano Instagram no carga mas reels al hacer scroll: se repite su
     // propia consulta pidiendo las paginas siguientes.
-    paginacion = await window.__halo.paginar(maximo);
-    if (!paginacion.ok && paginacion.motivo === "limite") paginacion.detalle = "Instagram limita las peticiones (429)";
+    try {
+      paginacion = await window.__halo.paginar(maximo);
+    } catch (e) {
+      paginacion = { ok: false, motivo: `error: ${String(e?.message ?? e).slice(0, 80)}`, paginas: 0 };
+    }
   }
   const estado = estadoPagina();
   if (estado !== "ok" && !antes()) return { ok: false, motivo: estado === "login" ? "login" : "cuenta", detalle: estado === "login" ? "Instagram pide iniciar sesión" : estado === "privada" ? "Cuenta privada" : "La cuenta no existe o no está disponible" };
