@@ -22,7 +22,7 @@
         vistas: num(o.play_count ?? o.ig_play_count),
         likes: num(o.like_count),
         comentarios: num(o.comment_count),
-        compartidos: num(o.reshare_count ?? o.share_count),
+        compartidos: num(o.media_repost_count ?? o.reshare_count ?? o.share_count),
         fecha: o.taken_at ? new Date(o.taken_at * 1000).toISOString() : null,
         miniatura: o.image_versions2?.candidates?.[0]?.url ?? null,
         esVideo: o.media_type === 2 || o.product_type === "clips" || Boolean(o.video_versions?.length),

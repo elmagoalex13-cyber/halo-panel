@@ -175,7 +175,7 @@ async function detallarReelsEnPagina(codigos) {
         vistas: num(it.play_count ?? it.ig_play_count ?? it.view_count),
         likes: num(it.like_count),
         comentarios: num(it.comment_count),
-        compartidos: num(it.reshare_count ?? it.share_count),
+        compartidos: num(it.media_repost_count ?? it.reshare_count ?? it.share_count),
         videoUrl: it.video_versions?.[0]?.url ?? null,
         miniatura: it.image_versions2?.candidates?.[0]?.url ?? null,
         descripcion: it.caption?.text ?? null,
@@ -375,11 +375,74 @@ async function ejecutar({ modo, categoria, dias }) {
   }
 }
 
+/* ------------------------ actualizar metricas existentes ------------------------ */
+
+// Vuelve a pedir el detalle de los videos ya guardados (sin descargar nada) y actualiza visitas,
+// likes, comentarios y compartidos (reposts) en el panel.
+async function refrescarMetricas({ modo }) {
+  if (corriendo) throw new Error("Ya hay un análisis en marcha");
+  corriendo = true;
+  cancelar = false;
+  const resumen = { nuevos: 0, analizados: 0, errores: 0, cuentas: 0 };
+  let tabInfo = null;
+  const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
+  await guardarEstado({ corriendo: true, modo: "metricas", categoria: null, inicio: Date.now(), fin: null, log: [], cuentas: [], resumen: null });
+  try {
+    const { videos } = await panel(`/api/extension/metricas?modo=${modo}`);
+    if (!videos.length) {
+      await log("No hay vídeos pendientes de actualizar.", "ok");
+      return;
+    }
+    await log(`${videos.length} vídeo(s) por actualizar (sin volver a descargarlos).`);
+    tabInfo = await pestanaInstagram();
+    if (!tabInfo.creada) await abrirURL(tabInfo.tab.id, "https://www.instagram.com/");
+    const LOTE = 20;
+    for (let i = 0; i < videos.length; i += LOTE) {
+      if (cancelar) {
+        await log("Cancelado.", "aviso");
+        break;
+      }
+      const lote = videos.slice(i, i + LOTE);
+      const det = await detallarReels(tabInfo.tab.id, lote.map((v) => v.codigo));
+      const porCodigo = new Map((det.detalles ?? []).map((d) => [d.codigo, d]));
+      const actualizaciones = lote
+        .filter((v) => porCodigo.has(v.codigo))
+        .map((v) => {
+          const d = porCodigo.get(v.codigo);
+          return { id: v.id, vistas: d.vistas, likes: d.likes, comentarios: d.comentarios, compartidos: d.compartidos };
+        });
+      if (actualizaciones.length) {
+        const r = await panel("/api/extension/metricas", { method: "POST", body: JSON.stringify({ modo, actualizaciones }) });
+        resumen.nuevos += r.hechos ?? 0;
+      }
+      resumen.analizados += lote.length;
+      await log(`${Math.min(i + LOTE, videos.length)}/${videos.length} vídeos revisados`);
+      if (!det.ok) {
+        resumen.errores++;
+        await log(det.motivo === "limite" ? "Instagram pide ir más despacio: espera unos minutos y repite (lo ya actualizado se conserva)." : "Instagram pide iniciar sesión.", "aviso");
+        break;
+      }
+    }
+  } catch (e) {
+    await log(e.message, "error");
+    resumen.errores++;
+  } finally {
+    clearInterval(keepAlive);
+    if (tabInfo?.creada) chrome.tabs.remove(tabInfo.tab.id).catch(() => {});
+    corriendo = false;
+    await log(`Terminado: ${resumen.nuevos} vídeo(s) actualizado(s)${resumen.errores ? `, ${resumen.errores} aviso(s)` : ""}.`, resumen.errores ? "aviso" : "ok");
+    await guardarEstado({ corriendo: false, fin: Date.now(), resumen });
+  }
+}
+
 /* --------------------------------- mensajes --------------------------------- */
 
 chrome.runtime.onMessage.addListener((msg, _sender, responder) => {
   if (msg?.type === "scan") {
     ejecutar(msg).catch((e) => log(e.message, "error"));
+    responder({ ok: true });
+  } else if (msg?.type === "refresh") {
+    refrescarMetricas(msg).catch((e) => log(e.message, "error"));
     responder({ ok: true });
   } else if (msg?.type === "cancel") {
     cancelar = true;

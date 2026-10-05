@@ -4,6 +4,7 @@ const POR_DEFECTO = "https://halo-panel.vercel.app";
 function pintar(estado) {
   const e = estado ?? { corriendo: false, log: [], cuentas: [] };
   $("analizar").disabled = e.corriendo;
+  $("metricas").disabled = e.corriendo;
   $("analizar").textContent = e.corriendo ? "Analizando…" : "Analizar";
   $("cancelar").hidden = !e.corriendo;
 
@@ -56,6 +57,7 @@ $("analizar").addEventListener("click", async () => {
   await chrome.storage.local.set({ ultimo: datos });
   chrome.runtime.sendMessage({ type: "scan", ...datos });
 });
+$("metricas").addEventListener("click", () => chrome.runtime.sendMessage({ type: "refresh", modo: $("modo").value }));
 $("cancelar").addEventListener("click", () => chrome.runtime.sendMessage({ type: "cancel" }));
 $("guardar").addEventListener("click", async () => {
   const panelUrl = $("panelUrl").value.trim().replace(/\/+$/, "") || POR_DEFECTO;

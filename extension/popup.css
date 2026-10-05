@@ -22,3 +22,4 @@ details { margin-top: 12px; font-size: 12px; }
 summary { cursor: pointer; color: #8b8b9a; }
 details label { margin-top: 8px; }
 details a { margin-left: 10px; color: #a78bfa; }
+.ancho { width: 100%; margin-bottom: 8px; }

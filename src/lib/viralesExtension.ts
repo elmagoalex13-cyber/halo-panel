@@ -117,6 +117,8 @@ export function tagsMetricas(reel: ReelViral, categoria: string) {
     `m:comentarios=${reel.comentarios}`,
     `m:compartidos=${reel.compartidos}`,
     `meta:tasa_comentarios=${ratio(reel.comentarios, reel.vistas).toFixed(5)}`,
+    `meta:tasa_compartidos=${ratio(reel.compartidos, reel.vistas).toFixed(5)}`,
+    `meta:metricas=${new Date().toISOString().slice(0, 10)}`,
     `meta:viral_score=${reel.viralScore.toFixed(3)}`,
     `meta:estilo_score=${reel.estiloScore.toFixed(3)}`,
     "meta:origen=extension",

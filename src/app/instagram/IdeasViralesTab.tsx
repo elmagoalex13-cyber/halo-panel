@@ -28,7 +28,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   const [dias, setDias] = useState(0);
   const [cuenta, setCuenta] = useState("todas");
   const [categoria, setCategoria] = useState("todas");
-  const [orden, setOrden] = useState<"score" | "vistas" | "likes" | "comentarios" | "reciente">("score");
+  const [orden, setOrden] = useState<"score" | "vistas" | "likes" | "comentarios" | "compartidos" | "reciente">("score");
   const [enviando, setEnviando] = useState<ReferenciaVideo | null>(null);
   const [elegidas, setElegidas] = useState<string[]>([]);
   const [nota, setNota] = useState("");
@@ -56,6 +56,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
         if (orden === "score") return mb.viralScore - ma.viralScore;
         if (orden === "likes") return mb.likes - ma.likes;
         if (orden === "comentarios") return mb.comentarios - ma.comentarios;
+        if (orden === "compartidos") return mb.tasaCompartidos - ma.tasaCompartidos;
         if (orden === "reciente") return new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime();
         return mb.vistas - ma.vistas;
       });
@@ -184,6 +185,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
             <option value="vistas">Más vistas</option>
             <option value="likes">Más likes</option>
             <option value="comentarios">Más comentarios</option>
+            <option value="compartidos">Más compartidos (tasa)</option>
             <option value="reciente">Más recientes</option>
           </select>
         </div>
@@ -227,6 +229,9 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                   <Metrica label="Visitas" valor={compacto(m.vistas)} />
                   <Metrica label="Likes" valor={compacto(m.likes)} sub={pct(m.tasaLikes)} />
                   <Metrica label="Comentarios" valor={compacto(m.comentarios)} sub={pct(m.tasaComentarios)} />
+                  <div className="col-span-2">
+                    <Metrica label="Compartidos" valor={compacto(m.compartidos)} sub={`${pct(m.tasaCompartidos)} de las visitas`} />
+                  </div>
                 </div>
 
                 {v.descripcion ? <p className="line-clamp-2 text-xs text-white/45">{v.descripcion}</p> : null}

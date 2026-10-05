@@ -86,6 +86,14 @@ export function ExtensionBoton({ modo }: { modo: "referencias" | "propias" }) {
           {corriendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
           {corriendo ? `Analizando ${hechas}/${total}…` : modo === "referencias" ? "Buscar virales con la extensión" : "Buscar virales de mis modelos"}
         </button>
+        <button
+          onClick={() => window.postMessage({ source: "halo-panel", type: "refresh", modo }, window.location.origin)}
+          disabled={detectada !== true || corriendo}
+          title="Vuelve a leer visitas, likes, comentarios y compartidos de los vídeos ya guardados (sin descargarlos otra vez)"
+          className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+        >
+          Actualizar métricas
+        </button>
         {corriendo ? (
           <button onClick={() => window.postMessage({ source: "halo-panel", type: "cancel" }, window.location.origin)} className="btn-secondary px-3 py-1.5 text-xs">
             Cancelar

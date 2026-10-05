@@ -18,6 +18,8 @@ window.addEventListener("message", (event) => {
     });
   } else if (type === "scan") {
     chrome.runtime.sendMessage({ type: "scan", modo: event.data.modo, categoria: event.data.categoria, dias: event.data.dias }, () => void chrome.runtime.lastError);
+  } else if (type === "refresh") {
+    chrome.runtime.sendMessage({ type: "refresh", modo: event.data.modo }, () => void chrome.runtime.lastError);
   } else if (type === "cancel") {
     chrome.runtime.sendMessage({ type: "cancel" }, () => void chrome.runtime.lastError);
   }

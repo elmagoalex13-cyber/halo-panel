@@ -47,7 +47,7 @@ export function ViralesPropiosTab({ virales: iniciales }: { virales: ViralPropio
   const [vista, setVista] = useState<Vista>("pendiente");
   const [cuenta, setCuenta] = useState("todas");
   const [dias, setDias] = useState(0);
-  const [orden, setOrden] = useState<"score" | "vistas" | "reciente">("score");
+  const [orden, setOrden] = useState<"score" | "vistas" | "compartidos" | "reciente">("score");
   const [error, setError] = useState<string | null>(null);
 
   const cuentas = useMemo(() => Array.from(new Set(virales.map((v) => v.username))).sort(), [virales]);
@@ -62,6 +62,7 @@ export function ViralesPropiosTab({ virales: iniciales }: { virales: ViralPropio
       .sort((a, b) => {
         if (orden === "reciente") return new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime();
         if (orden === "vistas") return b.vistas - a.vistas;
+        if (orden === "compartidos") return (b.vistas ? b.compartidos / b.vistas : 0) - (a.vistas ? a.compartidos / a.vistas : 0);
         return (b.viral_score ?? 0) - (a.viral_score ?? 0);
       });
   }, [virales, vista, cuenta, dias, orden]);
@@ -116,6 +117,7 @@ export function ViralesPropiosTab({ virales: iniciales }: { virales: ViralPropio
           <select value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} className="input-base py-1.5 text-xs">
             <option value="score">Mejor score</option>
             <option value="vistas">Más vistas</option>
+            <option value="compartidos">Más compartidos (tasa)</option>
             <option value="reciente">Más recientes</option>
           </select>
         </div>
@@ -151,6 +153,9 @@ export function ViralesPropiosTab({ virales: iniciales }: { virales: ViralPropio
                   <Metrica label="Score" valor={v.viral_score ? v.viral_score.toFixed(1).replace(".", ",") : "n/d"} />
                   <Metrica label="Likes" valor={compacto(v.likes)} sub={v.vistas ? pct((v.likes / v.vistas) * 100) : undefined} />
                   <Metrica label="Comentarios" valor={compacto(v.comentarios)} sub={v.vistas ? pct((v.comentarios / v.vistas) * 100) : undefined} />
+                  <div className="col-span-2">
+                    <Metrica label="Compartidos" valor={compacto(v.compartidos)} sub={v.vistas ? `${pct((v.compartidos / v.vistas) * 100)} de las visitas` : undefined} />
+                  </div>
                 </div>
                 {v.descripcion ? <p className="line-clamp-2 text-xs text-white/45">{v.descripcion}</p> : null}
 
