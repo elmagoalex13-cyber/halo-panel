@@ -5,6 +5,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { formatDate } from "@/lib/utils";
 import { TIPOS_EDICION, nombreTipo } from "@/lib/tiposEdicion";
 import { compacto, metricasDe, pct } from "@/lib/viral";
+import { ExtensionBoton } from "./ExtensionBoton";
 import type { ReferenciaVideo } from "@/types";
 
 function urlVideo(url: string | null | undefined) {
@@ -143,6 +144,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
 
   return (
     <div className="space-y-4">
+      <ExtensionBoton modo="referencias" />
       <div className="flex flex-wrap items-center gap-2">
         {(["pendiente", "aprobado", "descartado"] as const).map((x) => (
           <button

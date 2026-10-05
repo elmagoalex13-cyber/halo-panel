@@ -3,6 +3,8 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { CuentasTab } from "./CuentasTab";
 import { ReferenciasTab } from "./ReferenciasTab";
 import { IdeasViralesTab } from "./IdeasViralesTab";
+import { ViralesPropiosTab, type ViralPropio } from "./ViralesPropiosTab";
+import { versionesFotos } from "@/lib/fotosModelos";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { Modelo, ReferenciaCuenta, ReferenciaVideo } from "@/types";
@@ -52,18 +54,54 @@ async function loadReferenciasVideos(): Promise<ReferenciaVideo[]> {
   }
 }
 
+async function loadViralesPropios(): Promise<ViralPropio[]> {
+  if (!canUseSupabase()) return [];
+  try {
+    const supabase = createAdminClient();
+    const [virales, cuentas, modelos, fotos] = await Promise.all([
+      supabase.from("virales_propios").select("*").order("fecha_publicacion", { ascending: false }).limit(2000),
+      supabase.from("cuentas_instagram").select("id, username, modelo_id"),
+      supabase.from("modelos").select("id, nombre"),
+      versionesFotos(),
+    ]);
+    if (virales.error) return [];
+    const cuentaPorId = new Map((cuentas.data ?? []).map((c) => [c.id as string, c]));
+    const nombrePorId = new Map((modelos.data ?? []).map((m) => [m.id as string, m.nombre as string]));
+    return (virales.data ?? []).map((v) => {
+      const c = cuentaPorId.get(v.cuenta_id);
+      const modeloId = (v.modelo_id ?? c?.modelo_id ?? null) as string | null;
+      return {
+        ...v,
+        vistas: Number(v.vistas),
+        likes: Number(v.likes),
+        comentarios: Number(v.comentarios),
+        compartidos: Number(v.compartidos),
+        viral_score: v.viral_score === null ? null : Number(v.viral_score),
+        mediana_cuenta: v.mediana_cuenta === null ? null : Number(v.mediana_cuenta),
+        modelo_id: modeloId,
+        username: (c?.username as string | undefined) ?? "?",
+        modelo_nombre: modeloId ? (nombrePorId.get(modeloId) ?? "") : "",
+        foto: modeloId ? (fotos[modeloId] ?? null) : null,
+      } as ViralPropio;
+    });
+  } catch {
+    return [];
+  }
+}
+
 export default async function InstagramPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const activeTab = tab === "referencias" ? "referencias" : tab === "ideas" ? "ideas" : "cuentas";
-  const [cuentasReales, referenciasCuentas, referenciasVideos, modelosActivos] = await Promise.all([
+  const activeTab = tab === "referencias" ? "referencias" : tab === "ideas" ? "ideas" : tab === "propios" ? "propios" : "cuentas";
+  const [cuentasReales, referenciasCuentas, referenciasVideos, modelosActivos, viralesPropios] = await Promise.all([
     loadCuentasInstagramReales(),
     loadReferencias(),
     loadReferenciasVideos(),
-        loadModelosActivos(),
+    loadModelosActivos(),
+    loadViralesPropios(),
   ]);
   const cuentas = loadCuentasIG(cuentasReales);
 
@@ -99,12 +137,22 @@ export default async function InstagramPage({
         >
           Ideas virales
         </Link>
+        <Link
+          href="/instagram?tab=propios"
+          className={`px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === "propios" ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"
+          }`}
+        >
+          Virales propios
+        </Link>
       </div>
 
       {activeTab === "cuentas" ? (
         <CuentasTab cuentas={cuentas} />
       ) : activeTab === "referencias" ? (
         <ReferenciasTab cuentas={referenciasCuentas} />
+      ) : activeTab === "propios" ? (
+        <ViralesPropiosTab virales={viralesPropios} />
       ) : (
         <IdeasViralesTab videos={referenciasVideos} modelos={modelosActivos.map((m) => ({ id: m.id, nombre: m.nombre }))} />
       )}

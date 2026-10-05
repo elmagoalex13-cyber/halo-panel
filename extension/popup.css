@@ -1,0 +1,24 @@
+:root { color-scheme: dark; }
+body { width: 340px; margin: 0; padding: 14px; background: #0d0d12; color: #e8e8f0; font: 13px/1.4 system-ui, sans-serif; }
+h1 { margin: 0; font-size: 16px; }
+.sub { margin: 2px 0 12px; color: #8b8b9a; font-size: 12px; }
+label { display: block; margin-bottom: 9px; font-size: 11px; color: #8b8b9a; }
+select, input { display: block; width: 100%; margin-top: 3px; padding: 7px 8px; border: 1px solid #2a2a36; border-radius: 8px; background: #17171f; color: #e8e8f0; font-size: 13px; box-sizing: border-box; }
+.botones { display: flex; gap: 8px; margin: 12px 0; }
+button { padding: 8px 12px; border: 0; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.primario { flex: 1; background: #8b5cf6; color: #fff; }
+.primario:disabled { opacity: .5; cursor: default; }
+.secundario { background: #23232e; color: #e8e8f0; }
+ul { margin: 0; padding: 0; list-style: none; max-height: 130px; overflow: auto; }
+li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 12px; border-bottom: 1px solid #1c1c26; }
+li span:last-child { color: #8b8b9a; white-space: nowrap; }
+li.hecho span:last-child { color: #34d399; }
+li.error span:last-child { color: #f87171; }
+#log { max-height: 120px; margin-top: 8px; overflow: auto; font-size: 11px; color: #8b8b9a; }
+#log .error { color: #f87171; }
+#log .ok { color: #34d399; }
+#log .aviso { color: #fbbf24; }
+details { margin-top: 12px; font-size: 12px; }
+summary { cursor: pointer; color: #8b8b9a; }
+details label { margin-top: 8px; }
+details a { margin-left: 10px; color: #a78bfa; }

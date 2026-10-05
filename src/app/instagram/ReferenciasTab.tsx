@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ExternalLink, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { formatDate } from "@/lib/utils";
+import { ExtensionBoton } from "./ExtensionBoton";
 import type { ReferenciaCuenta } from "@/types";
 
 const CATEGORIAS = [
@@ -139,6 +140,13 @@ export function ReferenciasTab({
             {saving ? "Anadiendo..." : "Anadir"}
           </button>
         </div>
+      </GlassCard>
+
+      <GlassCard className="p-4">
+        <p className="mb-2 text-sm text-white/60">
+          Abre estas cuentas con la extensión de Chrome y saca los reels más virales de las últimas dos semanas. Aparecen en «Ideas virales».
+        </p>
+        <ExtensionBoton modo="referencias" />
       </GlassCard>
 
       {cuentas.length === 0 ? (

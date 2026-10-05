@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>HALO Virales</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>HALO Virales</h1>
+    <p class="sub">Saca los reels más virales y los manda al panel.</p>
+
+    <label>Qué analizar
+      <select id="modo">
+        <option value="referencias">Cuentas de referencia → Ideas virales</option>
+        <option value="propias">Cuentas de mis modelos → Virales propios</option>
+      </select>
+    </label>
+    <label id="fila-categoria">Tipo de cuenta
+      <select id="categoria">
+        <option value="todas">Todos los tipos</option>
+        <option value="frases">Frases + música</option>
+        <option value="hablado">Contenido hablado</option>
+        <option value="referencia">Referencia visual</option>
+        <option value="general">General</option>
+      </select>
+    </label>
+    <label>Reels de los últimos
+      <select id="dias">
+        <option value="7">7 días</option>
+        <option value="14" selected>14 días</option>
+        <option value="21">21 días</option>
+        <option value="30">30 días</option>
+      </select>
+    </label>
+
+    <div class="botones">
+      <button id="analizar" class="primario">Analizar</button>
+      <button id="cancelar" class="secundario" hidden>Cancelar</button>
+    </div>
+
+    <ul id="cuentas"></ul>
+    <div id="log"></div>
+
+    <details>
+      <summary>Ajustes</summary>
+      <label>URL del panel
+        <input id="panelUrl" type="url" placeholder="https://halo-panel.vercel.app" />
+      </label>
+      <button id="guardar" class="secundario">Guardar</button>
+      <a id="abrirPanel" href="#" target="_blank">Abrir el panel</a>
+    </details>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>
