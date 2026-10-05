@@ -135,7 +135,7 @@ export function ajustesDe(body: { dias?: unknown; factor?: unknown; max?: unknow
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
   };
   return {
-    dias: acota(body.dias, AJUSTES_POR_DEFECTO.dias, 1, 60),
+    dias: acota(body.dias, AJUSTES_POR_DEFECTO.dias, 1, 365),
     factor: acota(body.factor, AJUSTES_POR_DEFECTO.factor, 1, 10),
     max: Math.round(acota(body.max, AJUSTES_POR_DEFECTO.max, 1, 30)),
   };

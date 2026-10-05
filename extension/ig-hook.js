@@ -1,21 +1,27 @@
 // Se inyecta en instagram.com (world MAIN, document_start). Instagram no deja leer los reels de un
-// perfil con una llamada directa: la propia pagina los descarga por GraphQL. Aqui solo se escuchan
-// esas respuestas (fetch y XHR) y se guardan las metricas en window.__halo; la extension las lee luego.
+// perfil con una llamada directa: la propia pagina los descarga por GraphQL. Aqui se escuchan esas
+// respuestas (fetch y XHR), se guardan las metricas en window.__halo y se recuerda la consulta de
+// "reels del perfil" para poder pedir las paginas siguientes aunque la pestana este en segundo plano
+// (en una pestana oculta Instagram no carga mas reels al hacer scroll).
 (() => {
   if (window.__halo) return;
-  const store = { items: new Map(), respuestas: 0 };
+  const store = { items: new Map(), respuestas: 0, consulta: null, cursor: null, hayMas: false };
   window.__halo = store;
 
+  const fetchOriginal = window.fetch;
   const num = (v) => Math.max(0, Number(v ?? 0) || 0);
-  const PROPIO = /clips.*user|user.*clips|user_timeline|feed__user|profile.*(reel|post)/i;
+  const PROPIO = /clips.*user|user.*clips|user_timeline|feed__user|profile.*(reel|post)|XDTUserDict/i;
+  const ES_CONSULTA_REELS = /ProfileReelsTabContentQuery_connection/;
 
-  function walk(o, d, propio) {
+  function walk(o, d, propio, acc) {
     if (!o || typeof o !== "object" || d > 14) return;
     if (Array.isArray(o)) {
-      for (const x of o) walk(x, d + 1, propio);
+      for (const x of o) walk(x, d + 1, propio, acc);
       return;
     }
+    if (o.page_info && o.page_info.end_cursor !== undefined && !acc.pageInfo) acc.pageInfo = o.page_info;
     if (typeof o.code === "string" && /^[A-Za-z0-9_-]{5,20}$/.test(o.code) && (o.play_count !== undefined || o.ig_play_count !== undefined)) {
+      acc.n++;
       const previo = store.items.get(o.code);
       store.items.set(o.code, {
         codigo: o.code,
@@ -30,42 +36,94 @@
         propio: Boolean(propio || previo?.propio),
       });
     }
-    for (const k in o) walk(o[k], d + 1, propio);
+    for (const k in o) walk(o[k], d + 1, propio, acc);
   }
 
-  function procesar(texto) {
+  function procesar(texto, peticion) {
     try {
       const j = JSON.parse(String(texto).replace(/^for \(;;\);/, ""));
       const data = j?.data ?? j;
       const propio = Object.keys(data && typeof data === "object" ? data : {}).some((k) => PROPIO.test(k));
+      const acc = { n: 0, pageInfo: null };
       store.respuestas++;
-      walk(data, 0, propio);
+      walk(data, 0, propio, acc);
+      // Respuesta de la lista de reels del perfil: recordar cursor y, si es la consulta paginable, la propia consulta.
+      if (acc.n && acc.pageInfo) {
+        store.cursor = acc.pageInfo.end_cursor ?? null;
+        store.hayMas = Boolean(acc.pageInfo.has_next_page);
+        if (peticion && ES_CONSULTA_REELS.test(peticion.nombre)) store.consulta = peticion;
+      }
     } catch {
       /* no era JSON */
     }
   }
 
-  const fetchOriginal = window.fetch;
+  const nombreDe = (cuerpo) => {
+    try {
+      return new URLSearchParams(String(cuerpo)).get("fb_api_req_friendly_name") ?? "";
+    } catch {
+      return "";
+    }
+  };
+
   window.fetch = async function (...args) {
     const res = await fetchOriginal.apply(this, args);
     try {
       const url = String(args[0]?.url ?? args[0]);
-      if (/graphql|api\/v1/.test(url)) res.clone().text().then(procesar).catch(() => {});
+      if (/graphql|api\/v1/.test(url)) res.clone().text().then((t) => procesar(t, null)).catch(() => {});
     } catch {
       /* ignorar */
     }
     return res;
   };
 
+  const abrir = XMLHttpRequest.prototype.open;
+  const cabecera = XMLHttpRequest.prototype.setRequestHeader;
   const enviar = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.send = function (...args) {
+  XMLHttpRequest.prototype.open = function (metodo, url) {
+    this.__halo = { metodo, url, cabeceras: {} };
+    return abrir.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+    if (this.__halo) this.__halo.cabeceras[k] = v;
+    return cabecera.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.send = function (cuerpo) {
     this.addEventListener("load", () => {
       try {
-        if (/graphql|api\/v1/.test(this.responseURL)) procesar(this.responseText);
+        if (!/graphql|api\/v1/.test(this.responseURL)) return;
+        const info = this.__halo;
+        const peticion = info && typeof cuerpo === "string"
+          ? { url: info.url, metodo: info.metodo, cabeceras: info.cabeceras, cuerpo, nombre: nombreDe(cuerpo) }
+          : null;
+        procesar(this.responseText, peticion);
       } catch {
         /* ignorar */
       }
     });
-    return enviar.apply(this, args);
+    return enviar.apply(this, arguments);
+  };
+
+  // Pide paginas siguientes repitiendo la consulta de la propia pagina con el cursor. Devuelve cuantas paginas pidio.
+  store.paginar = async function (maximo) {
+    const c = store.consulta;
+    if (!c) return { ok: false, motivo: "sin_consulta", paginas: 0 };
+    let paginas = 0;
+    let ultimoCursor = null;
+    while (store.items.size < maximo && store.hayMas && store.cursor && store.cursor !== ultimoCursor && paginas < 30) {
+      ultimoCursor = store.cursor;
+      const p = new URLSearchParams(c.cuerpo);
+      const variables = JSON.parse(p.get("variables") || "{}");
+      variables.after = store.cursor;
+      variables.first = 12;
+      p.set("variables", JSON.stringify(variables));
+      const url = c.url.startsWith("http") ? c.url : location.origin + c.url;
+      const res = await fetchOriginal(url, { method: c.metodo || "POST", credentials: "include", headers: c.cabeceras, body: p.toString() });
+      if (res.status === 429) return { ok: false, motivo: "limite", paginas };
+      procesar(await res.text(), c);
+      paginas++;
+      await new Promise((r) => setTimeout(r, 900 + Math.random() * 700));
+    }
+    return { ok: true, paginas };
   };
 })();

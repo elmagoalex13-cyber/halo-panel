@@ -121,14 +121,17 @@ async function recogerReelsEnPagina(maximo) {
   };
   if (!window.__halo) return { ok: false, motivo: "hook", detalle: "La extensión no pudo engancharse a Instagram. Recarga la extensión y la pestaña de Instagram." };
 
-  await espera(1500);
-  let estable = 0;
-  let previo = -1;
-  for (let i = 0; i < 8 && estable < 2 && antes() < maximo; i++) {
-    window.scrollTo(0, document.body.scrollHeight);
-    await espera(1600);
-    estable = antes() === previo ? estable + 1 : 0;
-    previo = antes();
+  // Esperar a que la pagina cargue la primera tanda de reels (hasta 10 s).
+  for (let i = 0; i < 20 && !antes(); i++) await espera(500);
+  // y a que lance la consulta que luego se repite para paginar (hasta 8 s mas).
+  for (let i = 0; i < 16 && antes() && !window.__halo.consulta; i++) await espera(500);
+  await espera(800);
+  let paginacion = { ok: true, paginas: 0 };
+  if (antes() && antes() < maximo) {
+    // En una pestana en segundo plano Instagram no carga mas reels al hacer scroll: se repite su
+    // propia consulta pidiendo las paginas siguientes.
+    paginacion = await window.__halo.paginar(maximo);
+    if (!paginacion.ok && paginacion.motivo === "limite") paginacion.detalle = "Instagram limita las peticiones (429)";
   }
   const estado = estadoPagina();
   if (estado !== "ok" && !antes()) return { ok: false, motivo: estado === "login" ? "login" : "cuenta", detalle: estado === "login" ? "Instagram pide iniciar sesión" : estado === "privada" ? "Cuenta privada" : "La cuenta no existe o no está disponible" };
@@ -136,7 +139,7 @@ async function recogerReelsEnPagina(maximo) {
   const todos = [...window.__halo.items.values()];
   const propios = todos.filter((r) => r.propio);
   const lista = (propios.length ? propios : todos).filter((r) => r.esVideo).slice(0, maximo);
-  return { ok: true, reels: lista, respuestas: window.__halo.respuestas };
+  return { ok: true, reels: lista, paginas: paginacion.paginas, avisoPaginacion: paginacion.ok ? null : paginacion.motivo };
 }
 
 // Dentro de la pagina: detalle de cada reel candidato (con pausa entre peticiones).
@@ -202,9 +205,9 @@ async function ejecutarEnPagina(tabId, func, args) {
   return result;
 }
 
-async function leerCuenta(tabId, username) {
+async function leerCuenta(tabId, username, maximo) {
   await abrirURL(tabId, `https://www.instagram.com/${encodeURIComponent(username)}/reels/`);
-  return (await ejecutarEnPagina(tabId, recogerReelsEnPagina, [40])) ?? { ok: false, motivo: "cuenta", detalle: "Sin respuesta de la pestaña de Instagram" };
+  return (await ejecutarEnPagina(tabId, recogerReelsEnPagina, [maximo])) ?? { ok: false, motivo: "cuenta", detalle: "Sin respuesta de la pestaña de Instagram" };
 }
 
 async function detallarReels(tabId, codigos) {
@@ -251,7 +254,10 @@ async function ejecutar({ modo, categoria, dias }) {
   corriendo = true;
   cancelar = false;
   const aj = await ajustes();
-  const diasUsados = Number(dias) > 0 ? Number(dias) : aj.dias;
+  // Referencias: reels recientes (14 dias, 36 ultimos). Modelos: sus mejores de los ultimos 6 meses (hasta 120 reels).
+  const diasUsados = Number(dias) > 0 ? Number(dias) : modo === "propias" ? 180 : aj.dias;
+  const maximoReels = modo === "propias" ? 120 : 36;
+  const maxPorCuenta = modo === "propias" ? 15 : 8;
   const resumen = { nuevos: 0, analizados: 0, errores: 0, cuentas: 0 };
   let tabInfo = null;
   const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
@@ -267,7 +273,7 @@ async function ejecutar({ modo, categoria, dias }) {
       await log(modo === "propias" ? "No hay cuentas de modelos activas en el panel." : "No hay cuentas de referencia activas con ese tipo.", "aviso");
       return;
     }
-    await log(`${cuentas.length} cuenta(s) · reels de los últimos ${diasUsados} días`);
+    await log(`${cuentas.length} cuenta(s) · hasta ${maximoReels} reels por cuenta · de los últimos ${diasUsados} días`);
 
     tabInfo = await pestanaInstagram();
     for (let i = 0; i < cuentas.length; i++) {
@@ -284,7 +290,7 @@ async function ejecutar({ modo, categoria, dias }) {
       };
       await marcar({ estado: "leyendo" });
       try {
-        const lectura = await leerCuenta(tabInfo.tab.id, cuenta.username);
+        const lectura = await leerCuenta(tabInfo.tab.id, cuenta.username, maximoReels);
         const fallo = async (detalle, motivo) => {
           const fatal = motivo === "login" || motivo === "limite";
           await log(`@${cuenta.username}: ${detalle}`, "error");
@@ -303,6 +309,7 @@ async function ejecutar({ modo, categoria, dias }) {
           continue;
         }
 
+        if (lectura.avisoPaginacion) await log(`@${cuenta.username}: solo se pudieron leer ${lectura.reels.length} reels (${lectura.avisoPaginacion === "limite" ? "Instagram limitó las peticiones" : "no se encontró la consulta de paginación"})`, "aviso");
         const sinMedios = (r) => {
           const { videoUrl, miniatura, ...resto } = r;
           void videoUrl;
@@ -312,7 +319,7 @@ async function ejecutar({ modo, categoria, dias }) {
         // 1) Con solo las metricas de la cuadricula, el panel dice que reels superan el umbral.
         const previo = await panel("/api/extension/analizar", {
           method: "POST",
-          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: lectura.reels.map(sinMedios), dias: diasUsados, fase: "candidatos" }),
+          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: lectura.reels.map(sinMedios), dias: diasUsados, max: maxPorCuenta, fase: "candidatos" }),
         });
         // 2) Solo de esos se pide el detalle (fecha, texto, audio, video).
         const reelsPorCodigo = new Map(lectura.reels.map((r) => [r.codigo, r]));
@@ -329,7 +336,7 @@ async function ejecutar({ modo, categoria, dias }) {
         // 3) El panel decide los definitivos (fecha, estilo...) y se suben.
         const analisis = await panel("/api/extension/analizar", {
           method: "POST",
-          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: [...reelsPorCodigo.values()].map(sinMedios), dias: diasUsados }),
+          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: [...reelsPorCodigo.values()].map(sinMedios), dias: diasUsados, max: maxPorCuenta }),
         });
         resumen.analizados += analisis.analizados;
         let subidos = 0;
