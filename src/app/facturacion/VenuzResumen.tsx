@@ -165,7 +165,7 @@ export function VenuzResumen({
   }
 
   const chip = (activo: boolean) =>
-    `rounded-full border px-3 py-1 text-xs transition-colors ${activo ? "border-[color:var(--accent)] bg-[color:var(--accent)]/15 text-white" : "border-white/10 text-[color:var(--text-secondary)] hover:text-white"}`;
+    `rounded-full border px-3 py-1 text-xs transition-colors ${activo ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/20 text-white" : "border-white/10 text-[color:var(--text-secondary)] hover:text-white"}`;
 
   if (!cuentas.length) {
     return (
@@ -258,7 +258,7 @@ export function VenuzResumen({
               <div className="mt-4 flex h-40 items-end gap-[3px]">
                 {porDia.map(([fecha, v]) => (
                   <div key={fecha} className="group relative flex-1" style={{ height: "100%" }}>
-                    <div className="absolute inset-x-0 bottom-0 rounded-t bg-[color:var(--accent)]/70 transition-colors group-hover:bg-[color:var(--accent)]" style={{ height: `${Math.max(2, (v / maxDia) * 100)}%` }} />
+                    <div className="absolute inset-x-0 bottom-0 rounded-t bg-[#8B5CF6]/80 transition-colors group-hover:bg-[#A78BFA]" style={{ height: `${Math.max(2, (v / maxDia) * 100)}%` }} />
                     <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-black/90 px-2 py-1 text-[10px] text-white group-hover:block">
                       {new Date(`${fecha}T00:00:00Z`).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "UTC" })} · {usd(v)}
                     </div>
