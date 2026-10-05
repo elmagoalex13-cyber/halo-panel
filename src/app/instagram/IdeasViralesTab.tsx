@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GlassCard } from "@/components/GlassCard";
 import { formatDate } from "@/lib/utils";
 import { TIPOS_EDICION, nombreTipo } from "@/lib/tiposEdicion";
@@ -24,6 +24,8 @@ type Vista = "pendiente" | "aprobado" | "descartado";
 
 export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: ReferenciaVideo[]; modelos: { id: string; nombre: string }[] }) {
   const [videos, setVideos] = useState(iniciales);
+  // Cuando el servidor manda datos nuevos (tras una actualizacion de la extension) se vuelven a cargar.
+  useEffect(() => setVideos(iniciales), [iniciales]);
   const [vista, setVista] = useState<Vista>("pendiente");
   const [dias, setDias] = useState(0);
   const [cuenta, setCuenta] = useState("todas");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { formatDate } from "@/lib/utils";
@@ -44,6 +44,7 @@ function urlVideo(key: string | null) {
 
 export function ViralesPropiosTab({ virales: iniciales }: { virales: ViralPropio[] }) {
   const [virales, setVirales] = useState(iniciales);
+  useEffect(() => setVirales(iniciales), [iniciales]);
   const [vista, setVista] = useState<Vista>("pendiente");
   const [cuenta, setCuenta] = useState("todas");
   const [dias, setDias] = useState(0);
