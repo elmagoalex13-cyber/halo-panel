@@ -38,7 +38,7 @@ export type VenuzMes = {
 
 export type ModeloLite = { id: string; nombre: string; foto: number | null };
 
-type Periodo = "mes" | "7d" | "30d" | "mesant" | "todo";
+type Periodo = "hoy" | "ayer" | "mes" | "7d" | "30d" | "mesant" | "todo";
 type Canal = "suscripciones" | "mensajes" | "tips" | "posts" | "referidos" | "streams";
 
 const CANALES: { key: Canal; label: string; color: string }[] = [
@@ -51,6 +51,8 @@ const CANALES: { key: Canal; label: string; color: string }[] = [
 ];
 
 const PERIODOS: { id: Periodo; label: string }[] = [
+  { id: "hoy", label: "Hoy" },
+  { id: "ayer", label: "Ayer" },
   { id: "mes", label: "Este mes" },
   { id: "mesant", label: "Mes anterior" },
   { id: "7d", label: "7 días" },
@@ -67,6 +69,8 @@ function rango(periodo: Periodo): [string, string] {
   const hoy = new Date();
   const y = hoy.getUTCFullYear();
   const m = hoy.getUTCMonth();
+  if (periodo === "hoy") return [dia(hoy), dia(hoy)];
+  if (periodo === "ayer") return [dia(new Date(hoy.getTime() - 86400000)), dia(new Date(hoy.getTime() - 86400000))];
   if (periodo === "mes") return [dia(new Date(Date.UTC(y, m, 1))), dia(hoy)];
   if (periodo === "mesant") return [dia(new Date(Date.UTC(y, m - 1, 1))), dia(new Date(Date.UTC(y, m, 0)))];
   if (periodo === "7d") return [dia(new Date(hoy.getTime() - 6 * 86400000)), dia(hoy)];
@@ -132,10 +136,17 @@ export function VenuzResumen({
 
   const porDia = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const d of filasSel) mapa.set(d.fecha, (mapa.get(d.fecha) ?? 0) + tot(d));
+    // Hoy / ayer son un solo dia: el grafico muestra los 14 dias que terminan en ese dia, para dar contexto.
+    const unDia = desde === hasta;
+    const desdeGrafico = unDia ? dia(new Date(new Date(`${hasta}T00:00:00Z`).getTime() - 13 * 86400000)) : desde;
+    for (const d of diarios) {
+      if (d.fecha < desdeGrafico || d.fecha > hasta) continue;
+      if (cuentaSel !== "todas" && d.cuenta_id !== cuentaSel) continue;
+      mapa.set(d.fecha, (mapa.get(d.fecha) ?? 0) + tot(d));
+    }
     return [...mapa.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filasSel, bruto]);
+  }, [diarios, desde, hasta, cuentaSel, bruto]);
   const maxDia = Math.max(1, ...porDia.map(([, v]) => v));
 
   const mesesSel = meses
@@ -195,6 +206,7 @@ export function VenuzResumen({
           <button onClick={() => setBruto(true)} className={chip(bruto)} title="Lo que pagan los fans, antes de la comisión de OnlyFans">Bruto</button>
         </div>
       </div>
+      <p className="-mt-2 text-[11px] text-[color:var(--text-secondary)]">Los días cuentan en UTC, igual que en Venuz.</p>
       <div className="flex flex-wrap gap-1.5">
         <button onClick={() => setCuentaSel("todas")} className={chip(cuentaSel === "todas")}>Todas las modelos</button>
         {cuentas.map((c) => {
@@ -252,13 +264,13 @@ export function VenuzResumen({
 
         {/* Por día */}
         <GlassCard className="p-5">
-          <h3 className="text-sm font-semibold text-white">Por día</h3>
+          <h3 className="text-sm font-semibold text-white">Por día{desde === hasta ? <span className="ml-2 text-xs font-normal text-[color:var(--text-secondary)]">últimos 14 días</span> : null}</h3>
           {porDia.length ? (
             <>
               <div className="mt-4 flex h-40 items-end gap-[3px]">
                 {porDia.map(([fecha, v]) => (
                   <div key={fecha} className="group relative flex-1" style={{ height: "100%" }}>
-                    <div className="absolute inset-x-0 bottom-0 rounded-t bg-[#8B5CF6]/80 transition-colors group-hover:bg-[#A78BFA]" style={{ height: `${Math.max(2, (v / maxDia) * 100)}%` }} />
+                    <div className="absolute inset-x-0 bottom-0 rounded-t opacity-80 transition-opacity group-hover:opacity-100" style={{ height: `${Math.max(2, (v / maxDia) * 100)}%`, backgroundColor: "#8B5CF6" }} />
                     <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-black/90 px-2 py-1 text-[10px] text-white group-hover:block">
                       {new Date(`${fecha}T00:00:00Z`).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "UTC" })} · {usd(v)}
                     </div>
