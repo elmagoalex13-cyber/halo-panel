@@ -24,8 +24,15 @@ export function ReferenciasTab({
   const [saving, setSaving] = useState(false);
   const [scrapingAll, setScrapingAll] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [filtroTipo, setFiltroTipo] = useState("todas");
   const [editModal, setEditModal] = useState<ReferenciaCuenta | null>(null);
   const [editForm, setEditForm] = useState({ categoria: "", notas: "" });
+
+  const tipoDe = (c: ReferenciaCuenta) => c.categoria || "sin_tipo";
+  const conteoTipo = (t: string) => cuentas.filter((c) => tipoDe(c) === t).length;
+  // Si la ultima cuenta de un tipo se borra o cambia de tipo, el filtro vuelve solo a "todas"
+  const filtroActivo = filtroTipo !== "todas" && conteoTipo(filtroTipo) === 0 ? "todas" : filtroTipo;
+  const visibles = filtroActivo === "todas" ? cuentas : cuentas.filter((c) => tipoDe(c) === filtroActivo);
 
   async function addCuenta() {
     if (!form.username.trim()) return;
@@ -155,7 +162,8 @@ export function ReferenciasTab({
         <>
           <div className="flex items-center justify-between">
             <p className="text-sm text-[color:var(--text-secondary)]">
-              {cuentas.length} cuenta{cuentas.length === 1 ? "" : "s"} de referencia
+              {visibles.length} cuenta{visibles.length === 1 ? "" : "s"} de referencia
+              {filtroActivo !== "todas" ? ` (de ${cuentas.length})` : ""}
             </p>
             <button
               onClick={scrapeTodas}
@@ -166,9 +174,22 @@ export function ReferenciasTab({
               {scrapingAll ? "Scrapeando todas..." : "Scrapear todas"}
             </button>
           </div>
+          <div className="flex flex-wrap gap-2">
+            {[{ value: "todas", label: "Todas" }, ...CATEGORIAS, { value: "sin_tipo", label: "Sin tipo" }]
+              .filter((t) => t.value === "todas" || conteoTipo(t.value) > 0)
+              .map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => setFiltroTipo(t.value)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filtroActivo === t.value ? "bg-[#8B5CF6] text-white" : "bg-white/[0.05] text-white/50 hover:text-white/80"}`}
+                >
+                  {t.label} ({t.value === "todas" ? cuentas.length : conteoTipo(t.value)})
+                </button>
+              ))}
+          </div>
           {aviso ? <p className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">{aviso}</p> : null}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {cuentas.map((cuenta) => (
+          {visibles.map((cuenta) => (
             <GlassCard key={cuenta.id} className="flex flex-col p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">

@@ -4,6 +4,14 @@ import { AJUSTES_POR_DEFECTO } from "@/lib/viralesExtension";
 
 export const dynamic = "force-dynamic";
 
+// Algunas cuentas se guardaron como enlace (https://www.instagram.com/usuario/) o con @: se deja solo el usuario.
+const usuarioDe = (v: unknown) =>
+  String(v ?? "")
+    .trim()
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/^@/, "")
+    .split(/[/?#]/)[0];
+
 // Lista de cuentas que la extension de Chrome tiene que abrir.
 //   ?modo=referencias[&categoria=frases|hablado|referencia|general]  -> cuentas de referencia activas
 //   ?modo=propias                                                    -> cuentas de Instagram de las modelos
@@ -23,7 +31,7 @@ export async function GET(req: NextRequest) {
       ajustes: AJUSTES_POR_DEFECTO,
       cuentas: (data ?? []).map((c) => ({
         id: c.id,
-        username: String(c.username).replace(/^@/, ""),
+        username: usuarioDe(c.username),
         categoria: c.categoria ?? "general",
         etiqueta: c.categoria ?? "general",
       })),
@@ -40,7 +48,7 @@ export async function GET(req: NextRequest) {
     type Fila = { id: string; username: string; url?: string | null; red_social?: string | null; modelos?: { nombre?: string | null; activa?: boolean | null } | null };
     const cuentas = ((data ?? []) as unknown as Fila[])
       .filter((c) => (c.red_social ? c.red_social === "instagram" : !c.url || /instagram\.com/i.test(c.url)) && c.modelos?.activa !== false)
-      .map((c) => ({ id: c.id, username: String(c.username).replace(/^@/, ""), categoria: null, etiqueta: c.modelos?.nombre ?? "" }));
+      .map((c) => ({ id: c.id, username: usuarioDe(c.username), categoria: null, etiqueta: c.modelos?.nombre ?? "" }));
     return NextResponse.json({ modo, ajustes: AJUSTES_POR_DEFECTO, cuentas });
   }
 
