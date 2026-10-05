@@ -10,7 +10,7 @@ export async function POST() {
 
   const supabase = createAdminClient();
   const { error } = await supabase.from("log_agentes").insert({
-    agente: "venuz-sync-pedido",
+    agente: "venuz_sync",
     accion: "solicitud",
     resultado: "ok",
     detalle: { source: "manual", triggered_at: new Date().toISOString() },
@@ -29,7 +29,7 @@ export async function GET() {
   const { data } = await supabase
     .from("log_agentes")
     .select("created_at, resultado, duracion_ms, detalle")
-    .eq("agente", "venuz-sync")
+    .eq("agente", "venuz_sync")
     .eq("accion", "sync")
     .order("created_at", { ascending: false })
     .limit(1)

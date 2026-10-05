@@ -44,7 +44,7 @@ async function loadData() {
       supabase.from("venuz_cuentas").select("id, nombre, username, avatar_url, modelo_id, activa, estado_conexion, suscriptores").order("nombre"),
       supabase.from("venuz_ingresos_diarios").select("*").order("fecha", { ascending: false }).limit(20000),
       supabase.from("venuz_resumen_mensual").select("*").order("mes", { ascending: false }).limit(500),
-      supabase.from("log_agentes").select("created_at, resultado, detalle").eq("agente", "venuz-sync").eq("accion", "sync").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("log_agentes").select("created_at, resultado, detalle").eq("agente", "venuz_sync").eq("accion", "sync").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       versionesFotos(),
     ]);
 
@@ -70,7 +70,7 @@ async function loadData() {
 
 export default async function FacturacionPage() {
   const { rows, modelos, cuentas, diarios, meses, modelosLite, lastSync } = await loadData();
-  const syncOk = lastSync?.resultado === "ok";
+  const syncOk = lastSync?.resultado === "ok" && !lastSync.detalle?.problemas?.length;
 
   return (
     <PanelLayout>

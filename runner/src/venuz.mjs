@@ -14,8 +14,9 @@ import { config } from "./config.mjs";
 const API = "https://crm-api-next.venuz.ai";
 const ORIGEN = "https://app.venuz.ai";
 const TROZO_DIAS = 30; // la API se consulta por trozos de ~1 mes
-const AGENTE = "venuz-sync";
-const AGENTE_PEDIDO = "venuz-sync-pedido";
+// log_agentes solo admite agente 'venuz_sync' y resultado 'ok'/'error': la peticion del panel es
+// accion 'solicitud', el resultado de cada vuelta es accion 'sync' (los avisos van en detalle.problemas).
+const AGENTE = "venuz_sync";
 
 const num = (v) => {
   const n = Number(v);
@@ -321,7 +322,7 @@ export async function cicloVenuz(supabase) {
     }
 
     const { data: pedido } = await supabase
-      .from("log_agentes").select("created_at").eq("agente", AGENTE_PEDIDO)
+      .from("log_agentes").select("created_at").eq("agente", AGENTE).eq("accion", "solicitud")
       .order("created_at", { ascending: false }).limit(1);
     const pedidoAt = pedido?.[0] ? new Date(pedido[0].created_at).getTime() : 0;
 
@@ -334,8 +335,8 @@ export async function cicloVenuz(supabase) {
     const t0 = Date.now();
     try {
       const r = await sincronizarVenuz(supabase);
-      const resultado = r.problemas.length ? (r.diasGuardados ? "parcial" : "error") : "ok";
-      if (resultado !== "error") ultimaOk = Date.now();
+      const resultado = r.problemas.length && !r.diasGuardados ? "error" : "ok";
+      if (resultado === "ok") ultimaOk = Date.now();
       await registrar(supabase, resultado, "sync", { origen: porPedido ? "manual" : "programado", ...r }, Date.now() - t0);
       console.log(`[venuz] sync ${resultado}: ${r.cuentas} cuentas, ${r.diasGuardados} dias, ${r.mesesGuardados} resumenes mensuales${r.problemas.length ? `, ${r.problemas.length} avisos` : ""}`);
     } catch (err) {

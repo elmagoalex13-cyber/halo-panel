@@ -81,7 +81,7 @@ async function loadVenuzMes(): Promise<VenuzMes | null> {
     const [diarios, cuentas, sync] = await Promise.all([
       supabase.from("venuz_ingresos_diarios").select("cuenta_id, total, total_bruto, mensajes, suscripciones").gte("fecha", inicio).limit(5000),
       supabase.from("venuz_cuentas").select("id, nombre"),
-      supabase.from("log_agentes").select("created_at").eq("agente", "venuz-sync").eq("accion", "sync").in("resultado", ["ok", "parcial"]).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("log_agentes").select("created_at").eq("agente", "venuz_sync").eq("accion", "sync").eq("resultado", "ok").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     const filas = (diarios.data ?? []) as Array<{ cuenta_id: string; total: number | string; total_bruto: number | string; mensajes: number | string; suscripciones: number | string }>;
     if (!filas.length && !sync.data) return null;
