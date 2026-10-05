@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const body = (await req.json().catch(() => null)) as {
-    modo?: string; cuenta_id?: string; reels?: unknown; dias?: unknown; factor?: unknown; max?: unknown;
+    modo?: string; cuenta_id?: string; reels?: unknown; dias?: unknown; factor?: unknown; max?: unknown; fase?: string;
   } | null;
   if (!body?.cuenta_id || (body.modo !== "referencias" && body.modo !== "propias")) {
     return NextResponse.json({ error: "Faltan modo o cuenta_id" }, { status: 400 });
@@ -34,7 +34,16 @@ export async function POST(req: NextRequest) {
     for (const v of data ?? []) conocidos.add(v.codigo);
   }
 
-  const r = analizarCuenta(reels, { ...ajustesDe(body), categoria, conocidos });
+  // fase "candidatos": la extension solo tiene las metricas de la cuadricula (sin fecha, texto ni audio),
+  // asi que aqui solo se aplica el umbral de vistas; fecha y estilo se aplican en la pasada definitiva.
+  const candidatos = body.fase === "candidatos";
+  const ajustes = ajustesDe(body);
+  const r = analizarCuenta(reels, {
+    ...ajustes,
+    max: candidatos ? Math.max(ajustes.max, 20) : ajustes.max,
+    categoria: candidatos ? null : categoria,
+    conocidos,
+  });
   return NextResponse.json({
     analizados: r.analizados,
     mediana: r.mediana,

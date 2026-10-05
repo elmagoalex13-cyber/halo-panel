@@ -1,9 +1,13 @@
 {
   "manifest_version": 3,
   "name": "HALO Virales",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Abre las cuentas de Instagram de referencia y las de tus modelos, saca los reels más virales de las últimas semanas y los manda al panel HALO.",
-  "permissions": ["storage", "scripting", "tabs"],
+  "permissions": [
+    "storage",
+    "scripting",
+    "tabs"
+  ],
   "host_permissions": [
     "https://www.instagram.com/*",
     "https://*.cdninstagram.com/*",
@@ -12,13 +16,34 @@
     "https://halo-panel.vercel.app/*",
     "http://localhost:3000/*"
   ],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "HALO Virales" },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "HALO Virales"
+  },
   "content_scripts": [
     {
-      "matches": ["https://halo-panel.vercel.app/*", "http://localhost:3000/*"],
-      "js": ["content-panel.js"],
+      "matches": [
+        "https://halo-panel.vercel.app/*",
+        "http://localhost:3000/*"
+      ],
+      "js": [
+        "content-panel.js"
+      ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.instagram.com/*"
+      ],
+      "js": [
+        "ig-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ]
 }
