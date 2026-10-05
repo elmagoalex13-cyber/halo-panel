@@ -61,6 +61,46 @@ async function loadDashboardData() {
   }
 }
 
+type VenuzMes = {
+  neto: number;
+  bruto: number;
+  mensajes: number;
+  suscripciones: number;
+  otros: number;
+  top: Array<{ nombre: string; neto: number }>;
+  actualizado: string | null;
+};
+
+// Facturacion del mes en curso desde Venuz (la rellena el scraper del runner). null = aun sin datos.
+async function loadVenuzMes(): Promise<VenuzMes | null> {
+  if (!canUseSupabase()) return null;
+  try {
+    const supabase = createAdminClient();
+    const hoy = new Date();
+    const inicio = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    const [diarios, cuentas, sync] = await Promise.all([
+      supabase.from("venuz_ingresos_diarios").select("cuenta_id, total, total_bruto, mensajes, suscripciones").gte("fecha", inicio).limit(5000),
+      supabase.from("venuz_cuentas").select("id, nombre"),
+      supabase.from("log_agentes").select("created_at").eq("agente", "venuz-sync").eq("accion", "sync").in("resultado", ["ok", "parcial"]).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    const filas = (diarios.data ?? []) as Array<{ cuenta_id: string; total: number | string; total_bruto: number | string; mensajes: number | string; suscripciones: number | string }>;
+    if (!filas.length && !sync.data) return null;
+    const nombres = new Map(((cuentas.data ?? []) as Array<{ id: string; nombre: string }>).map((c) => [c.id, c.nombre]));
+    const porCuenta = new Map<string, number>();
+    let neto = 0, bruto = 0, mensajes = 0, suscripciones = 0;
+    for (const f of filas) {
+      neto += Number(f.total); bruto += Number(f.total_bruto); mensajes += Number(f.mensajes); suscripciones += Number(f.suscripciones);
+      porCuenta.set(f.cuenta_id, (porCuenta.get(f.cuenta_id) ?? 0) + Number(f.total));
+    }
+    const top = [...porCuenta.entries()].sort(([, a], [, b]) => b - a).slice(0, 3).map(([id, n]) => ({ nombre: nombres.get(id) ?? "—", neto: n }));
+    return { neto, bruto, mensajes, suscripciones, otros: Math.max(0, neto - mensajes - suscripciones), top, actualizado: sync.data?.created_at ?? null };
+  } catch {
+    return null;
+  }
+}
+
+const usd = (v: number) => new Intl.NumberFormat("es-ES", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }).format(v);
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("es-ES").format(value);
 }
@@ -74,7 +114,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales()]);
+  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales(), loadVenuzMes()]);
   const cuentasIG = loadCuentasIG(cuentasReales);
 
   const now = new Date();
@@ -466,16 +506,42 @@ export default async function DashboardPage({
               Ver detalle →
             </Link>
           </div>
-          <div className="mt-5 space-y-3">
-            <div className="rounded-2xl border border-[#8B5CF6]/25 bg-gradient-to-br from-[#8B5CF6]/15 via-[#8B5CF6]/[0.04] to-transparent p-4">
-              <p className="text-xs text-white/50">Neto modelos</p>
-              <p className="mt-1 font-display text-3xl font-semibold text-white">{formatCurrency(totalNeto)}</p>
+          {venuz ? (
+            <div className="mt-5 space-y-3">
+              <div className="rounded-2xl border border-[#8B5CF6]/25 bg-gradient-to-br from-[#8B5CF6]/15 via-[#8B5CF6]/[0.04] to-transparent p-4">
+                <p className="text-xs text-white/50">Neto este mes (Venuz)</p>
+                <p className="mt-1 font-display text-3xl font-semibold text-white">{usd(venuz.neto)}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <MiniBilling label="Bruto" value={usd(venuz.bruto)} />
+                <MiniBilling label="Mensajes" value={venuz.neto > 0 ? `${Math.round((venuz.mensajes / venuz.neto) * 100)}%` : "—"} />
+              </div>
+              {venuz.top.length ? (
+                <ul className="space-y-1.5 text-sm">
+                  {venuz.top.map((t) => (
+                    <li key={t.nombre} className="flex justify-between text-white/70">
+                      <span>{t.nombre}</span>
+                      <span className="text-white">{usd(t.neto)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {venuz.actualizado ? (
+                <p className="text-[11px] text-white/35">Actualizado {new Date(venuz.actualizado).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+              ) : null}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <MiniBilling label="Ingresos brutos" value={formatCurrency(totalBruto)} />
-              <MiniBilling label="Comision agencia" value={formatCurrency(totalComision)} />
+          ) : (
+            <div className="mt-5 space-y-3">
+              <div className="rounded-2xl border border-[#8B5CF6]/25 bg-gradient-to-br from-[#8B5CF6]/15 via-[#8B5CF6]/[0.04] to-transparent p-4">
+                <p className="text-xs text-white/50">Neto modelos</p>
+                <p className="mt-1 font-display text-3xl font-semibold text-white">{formatCurrency(totalNeto)}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <MiniBilling label="Ingresos brutos" value={formatCurrency(totalBruto)} />
+                <MiniBilling label="Comision agencia" value={formatCurrency(totalComision)} />
+              </div>
             </div>
-          </div>
+          )}
         </GlassCard>
       </div>
 
