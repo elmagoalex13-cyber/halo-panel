@@ -1,26 +1,23 @@
 import { NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 
+// El panel no habla con Venuz: solo deja una peticion en log_agentes. El runner del VPS la ve en
+// menos de 30 s, hace el scraping con su login y guarda el resultado en las tablas venuz_*.
 export async function POST() {
-  const inicio = Date.now();
-
   if (!canUseSupabase()) {
     return NextResponse.json({ ok: false, error: "Supabase no configurado" }, { status: 503 });
   }
 
   const supabase = createAdminClient();
-  try {
-    await supabase.from("log_agentes").insert({
-      agente: "venuz-sync",
-      accion: "manual_sync_triggered",
-      resultado: "ok",
-      detalle: { source: "manual", triggered_at: new Date().toISOString() },
-      duracion_ms: Date.now() - inicio,
-    });
-    return NextResponse.json({ ok: true, message: "Sync iniciado" });
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
-  }
+  const { error } = await supabase.from("log_agentes").insert({
+    agente: "venuz-sync-pedido",
+    accion: "solicitud",
+    resultado: "ok",
+    detalle: { source: "manual", triggered_at: new Date().toISOString() },
+    duracion_ms: 0,
+  });
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, message: "Sync pedido: el runner lo ejecuta en unos segundos" });
 }
 
 export async function GET() {
@@ -31,11 +28,12 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("log_agentes")
-    .select("created_at, resultado, duracion_ms")
+    .select("created_at, resultado, duracion_ms, detalle")
     .eq("agente", "venuz-sync")
+    .eq("accion", "sync")
     .order("created_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   return NextResponse.json({ lastSync: data ?? null });
 }

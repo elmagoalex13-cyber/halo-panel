@@ -12,6 +12,7 @@ import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
 import { cicloTrials } from "./trials.mjs";
 import { backupOnboarding } from "./backup_onboarding.mjs";
+import { cicloVenuz } from "./venuz.mjs";
 
 const falta = faltanVariables();
 if (falta.length) {
@@ -63,6 +64,10 @@ async function avisarPanel() {
   }
 }
 setInterval(avisarPanel, 10 * 60000);
+
+// Facturacion de Venuz.ai: refresca cada VENUZ_HORAS y cuando el panel pulsa "Sync Venuz" (se mira cada 30 s)
+setTimeout(() => cicloVenuz(supabase), 15000);
+setInterval(() => cicloVenuz(supabase), 30000);
 
 // Copia de seguridad del onboarding de creadoras (disco del VPS + bucket privado de Supabase).
 // Solo escribe si hubo cambios y nunca borra copias antiguas.
