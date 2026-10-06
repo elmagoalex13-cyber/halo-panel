@@ -158,30 +158,46 @@ export function OriginalesClient({
   const resueltosVisibles = visibles.filter((o) => RESUELTOS.includes(estadoOriginal(o)));
 
   async function borrar() {
+    // Desaparecen al instante; si algo falla se devuelven a la lista. El servidor los borra en bloque y en paralelo.
+    const aBorrar = lista.filter((o) => elegidosVivos.includes(o.id));
+    const ids = aBorrar.map((o) => o.id);
     setBorrando(true);
     setMensaje(null);
+    setConfirmando(false);
+    setLista((prev) => prev.filter((o) => !ids.includes(o.id)));
+    setElegidos([]);
     try {
-      const res = await fetch("/api/originales", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: elegidosVivos }),
-      });
-      const j = (await res.json().catch(() => ({}))) as { error?: string; borrados?: number; resultados?: Array<{ id: string; ok: boolean; motivo?: string }> };
-      if (!res.ok && !j.resultados) throw new Error(j.error ?? "No se pudo borrar");
-      const hechos = new Set((j.resultados ?? []).filter((r) => r.ok).map((r) => r.id));
-      const fallos = (j.resultados ?? []).filter((r) => !r.ok);
-      setLista((prev) => prev.filter((o) => !hechos.has(o.id)));
-      setElegidos((prev) => prev.filter((id) => !hechos.has(id)));
+      const lotes: string[][] = [];
+      for (let i = 0; i < ids.length; i += 30) lotes.push(ids.slice(i, i + 30));
+      const respuestas = await Promise.all(
+        lotes.map(async (lote) => {
+          const res = await fetch("/api/originales", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: lote }),
+          });
+          const j = (await res.json().catch(() => ({}))) as { error?: string; resultados?: Array<{ id: string; ok: boolean; motivo?: string }> };
+          if (!j.resultados) return lote.map((id) => ({ id, ok: false, motivo: j.error ?? "No se pudo borrar" }));
+          return j.resultados;
+        }),
+      );
+      const resultados = respuestas.flat();
+      const hechos = new Set(resultados.filter((r) => r.ok).map((r) => r.id));
+      const fallos = resultados.filter((r) => !r.ok);
+      if (fallos.length) {
+        const fallidos = new Set(fallos.map((r) => r.id));
+        setLista((prev) => [...prev, ...aBorrar.filter((o) => fallidos.has(o.id))].sort((x, y) => y.recibido_at.localeCompare(x.recibido_at)));
+      }
       setMensaje({
         ok: fallos.length === 0,
         texto: `${hechos.size} original${hechos.size === 1 ? "" : "es"} borrado${hechos.size === 1 ? "" : "s"}${fallos.length ? ` · ${fallos.length} no se pudo${fallos.length === 1 ? "" : "ieron"} borrar: ${fallos[0].motivo}` : "."}`,
       });
       router.refresh();
     } catch (e) {
+      setLista((prev) => [...prev, ...aBorrar].sort((x, y) => y.recibido_at.localeCompare(x.recibido_at)));
       setMensaje({ ok: false, texto: e instanceof Error ? e.message : "No se pudo borrar" });
     } finally {
       setBorrando(false);
-      setConfirmando(false);
     }
   }
 
