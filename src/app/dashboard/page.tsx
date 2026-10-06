@@ -10,6 +10,7 @@ import { StatTile } from "@/components/StatTile";
 import { PeriodoSelect } from "./PeriodoSelect";
 import { CreadorasFilter } from "./CreadorasFilter";
 import { AvisosDashboard } from "./AvisosDashboard";
+import { contarOFNuevo } from "@/lib/ofResumen";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -115,7 +116,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales(), loadVenuzMes()]);
+  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales(), loadVenuzMes(), contarOFNuevo()]);
   const cuentasIG = loadCuentasIG(cuentasReales);
 
   const now = new Date();
@@ -251,6 +252,9 @@ export default async function DashboardPage({
       : []),
     ...(enAprobacion > 0 && aprobacionUrgente.length === 0
       ? [{ nivel: "verde" as NotifNivel, texto: `${enAprobacion} vídeo${enAprobacion > 1 ? "s" : ""} listo${enAprobacion > 1 ? "s" : ""} para revisar`, href: "/aprobacion" }]
+      : []),
+    ...(ofNuevo.count > 0
+      ? [{ nivel: "verde" as NotifNivel, texto: `Contenido de OnlyFans nuevo${ofNuevo.modelos.length ? ` de ${ofNuevo.modelos.join(", ")}` : ""} (${ofNuevo.count} ${ofNuevo.count === 1 ? "entrega" : "entregas"})`, href: "/onlyfans" }]
       : []),
   ];
 

@@ -6,13 +6,11 @@ import {
   ETIQUETA_TIPO,
   FASES,
   archivosDeSlot,
-  formatoDuracion,
   formatoTamano,
   progresoScript,
-  slotDe,
+  resumenPortal,
   type ArchivoOF,
   type ColeccionOF,
-  type SlotFase,
   type TipoColeccion,
 } from "@/lib/onlyfans";
 import { subirArchivoOF } from "./subidaOF";
@@ -50,9 +48,8 @@ function Miniatura({ a, onQuitar, bloqueado }: { a: ArchivoVista; onQuitar: (a: 
   );
 }
 
-function FilaVideo({ a, slot, onQuitar, bloqueado }: { a: ArchivoVista; slot?: SlotFase | null; onQuitar: (a: ArchivoVista) => void; bloqueado: boolean }) {
-  const corto = slot?.minSeg && a.duracion_seg && a.duracion_seg < slot.minSeg;
-  const largo = slot?.maxSeg && a.duracion_seg && a.duracion_seg > slot.maxSeg * 1.25;
+// La modelo NO ve nada sobre la duracion; se guarda al subir y solo la ve la agencia.
+function FilaVideo({ a, onQuitar, bloqueado }: { a: ArchivoVista; onQuitar: (a: ArchivoVista) => void; bloqueado: boolean }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-300">
@@ -60,11 +57,7 @@ function FilaVideo({ a, slot, onQuitar, bloqueado }: { a: ArchivoVista; slot?: S
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-white/85">{a.nombre_original ?? "Vídeo"}</p>
-        <p className="text-xs text-white/40">
-          {[formatoDuracion(a.duracion_seg), formatoTamano(a.size_bytes)].filter(Boolean).join(" · ")}
-        </p>
-        {corto ? <p className="mt-0.5 text-xs text-amber-300">Dura menos de lo pedido ({slot?.ayuda}). Si es correcto, ignóralo.</p> : null}
-        {largo ? <p className="mt-0.5 text-xs text-amber-300">Dura más de lo pedido ({slot?.ayuda}).</p> : null}
+        <p className="text-xs text-white/40">{formatoTamano(a.size_bytes)}</p>
       </div>
       {!bloqueado ? (
         <button type="button" onClick={() => onQuitar(a)} aria-label="Quitar" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/40 hover:bg-red-500/20 hover:text-red-300">
@@ -79,8 +72,6 @@ function FilaVideo({ a, slot, onQuitar, bloqueado }: { a: ArchivoVista; slot?: S
 function BotonSubida({
   etiqueta,
   accept,
-  multiple,
-  maximo,
   coleccionId,
   fase,
   slot,
@@ -89,8 +80,6 @@ function BotonSubida({
 }: {
   etiqueta: string;
   accept: string;
-  multiple: boolean;
-  maximo?: number;
   coleccionId: string;
   fase?: number;
   slot?: string;
@@ -104,8 +93,7 @@ function BotonSubida({
 
   async function subir(files: File[]) {
     setError(null);
-    const lista = maximo ? files.slice(0, maximo) : files;
-    const ignorados = files.length - lista.length;
+    const lista = files;
     const total = lista.reduce((s, f) => s + f.size, 0) || 1;
     const cargado = new Array(lista.length).fill(0) as number[];
     let hechos = 0;
@@ -127,7 +115,6 @@ function BotonSubida({
           }
         }),
       );
-      if (ignorados > 0) setError(`Solo caben ${lista.length}: ${ignorados} no se ${ignorados === 1 ? "subió" : "subieron"}.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al subir");
     } finally {
@@ -145,7 +132,7 @@ function BotonSubida({
         ref={input}
         type="file"
         accept={accept}
-        multiple={multiple}
+        multiple
         className="hidden"
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
@@ -289,7 +276,7 @@ export function OnlyFansPortal({
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-white">Fase {f.fase} · {f.nombre}</p>
-                      <p className="text-xs text-white/40">{f.resumen}</p>
+                      <p className="text-xs text-white/40">{resumenPortal(f)}</p>
                     </div>
                     <span className="shrink-0 text-xs text-white/50">{subidos}/{pedidos}</span>
                     <ChevronDown className={`h-4 w-4 shrink-0 text-white/40 transition ${abiertaF ? "rotate-180" : ""}`} />
@@ -298,29 +285,27 @@ export function OnlyFansPortal({
                     <div className="space-y-4 border-t border-white/[0.08] p-3">
                       {f.slots.map((s) => {
                         const subidosSlot = archivosDeSlot(mios, f.fase, s.slot);
-                        const faltan = s.n - subidosSlot.length;
                         return (
                           <div key={s.slot} className="space-y-2">
                             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/45">
                               {s.tipo === "video" ? <Film className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
-                              {s.etiqueta} · {subidosSlot.length}/{s.n}
-                              {s.ayuda ? <span className="font-normal normal-case tracking-normal text-white/30">— {s.ayuda}</span> : null}
+                              {s.etiqueta} · {subidosSlot.length}
+                              {subidosSlot.length >= s.n ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <span className="font-normal normal-case tracking-normal text-white/30">(mín. {s.n})</span>}
+                              {s.tipo === "foto" && s.ayuda ? <span className="font-normal normal-case tracking-normal text-white/30">— {s.ayuda}</span> : null}
                             </p>
                             {s.tipo === "video" ? (
                               <div className="space-y-2">
-                                {subidosSlot.map((a) => <FilaVideo key={a.id} a={a} slot={slotDe(f.fase, s.slot)} onQuitar={quitar} bloqueado={bloqueado} />)}
+                                {subidosSlot.map((a) => <FilaVideo key={a.id} a={a} onQuitar={quitar} bloqueado={bloqueado} />)}
                               </div>
                             ) : subidosSlot.length ? (
                               <div className="grid grid-cols-4 gap-2">
                                 {subidosSlot.map((a) => <Miniatura key={a.id} a={a} onQuitar={quitar} bloqueado={bloqueado} />)}
                               </div>
                             ) : null}
-                            {!bloqueado && faltan > 0 ? (
+                            {!bloqueado ? (
                               <BotonSubida
-                                etiqueta={s.tipo === "video" ? "Subir vídeo" : faltan === s.n ? `Subir ${s.n === 1 ? "foto" : `${s.n} fotos`}` : `Subir ${faltan === 1 ? "la foto que falta" : `${faltan} fotos más`}`}
+                                etiqueta={s.tipo === "video" ? (subidosSlot.length ? "Subir más vídeos" : "Subir vídeo") : subidosSlot.length ? "Subir más fotos" : "Subir fotos"}
                                 accept={s.tipo === "video" ? "video/*,.mov,.mp4,.m4v" : "image/*,.heic,.heif"}
-                                multiple={s.tipo === "foto" && faltan > 1}
-                                maximo={faltan}
                                 coleccionId={col.id}
                                 fase={f.fase}
                                 slot={s.slot}
@@ -353,7 +338,6 @@ export function OnlyFansPortal({
               <BotonSubida
                 etiqueta="Subir fotos y vídeos"
                 accept="image/*,video/*,.heic,.heif,.mov"
-                multiple
                 coleccionId={col.id}
                 onSubido={alSubir}
                 onOcupado={alOcupar}

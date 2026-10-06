@@ -32,8 +32,6 @@ export async function POST(req: NextRequest) {
     const slot = slotDe(Number(body.fase), String(body.slot));
     if (!slot) return NextResponse.json({ error: "Hueco no válido" }, { status: 400 });
     if (slot.tipo !== tipo) return NextResponse.json({ error: slot.tipo === "video" ? "Aquí va un vídeo" : "Aquí van fotos" }, { status: 415 });
-    const { count } = await supabase.from("of_archivos").select("id", { count: "exact", head: true }).eq("coleccion_id", col.id).eq("fase", body.fase!).eq("slot", slot.slot);
-    if ((count ?? 0) >= slot.n) return NextResponse.json({ error: "Este hueco ya está lleno. Quita uno para cambiarlo." }, { status: 409 });
   }
 
   const contentType = body.contentType || (tipo === "video" ? "video/mp4" : "image/jpeg");

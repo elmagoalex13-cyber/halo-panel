@@ -9,7 +9,7 @@ const NAV = [
   { href: "/facturacion", label: "Facturación", icon: "$" },
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
   { href: "/originales", label: "Originales", icon: "▤" },
-  { href: "/onlyfans", label: "OnlyFans", icon: "♡" },
+  { href: "/onlyfans", label: "OnlyFans", icon: "♡", ofBadge: true },
   { href: "/leads", label: "Leads", icon: "◇", leadsBadge: true },
   { href: "/asignar", label: "Asignar vídeos", icon: "⇪" },
   { href: "/instagram", label: "Instagram", icon: "◎" },
@@ -41,7 +41,7 @@ function AvatarMini({ modelo }: { modelo: ModeloMenu }) {
 // Cada pagina monta su propia barra lateral, asi que al navegar se desmonta y se vuelve a montar:
 // sin esto la lista de modelos y los contadores se vaciaban unos instantes (parpadeo). El modulo
 // sobrevive a la navegacion en el navegador; en el servidor nunca se rellena (solo lo hacen efectos).
-const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number } | null } = {
+const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number } | null } = {
   modelos: [],
   modelosAbierto: null,
   counts: null,
@@ -58,7 +58,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads });
+  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0 });
   const [modelos, setModelos] = useState<ModeloMenu[]>(cache.modelos);
   const [modelosAbierto, setModelosAbierto] = useState(cache.modelosAbierto ?? true);
 
@@ -112,10 +112,11 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
       try {
         const res = await fetch("/api/panel/counts", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { approval?: number; leads?: number };
+        const data = (await res.json()) as { approval?: number; leads?: number; onlyfans?: number };
         cache.counts = {
           approval: Number(data.approval ?? 0),
           leads: Number(data.leads ?? 0),
+          onlyfans: Number(data.onlyfans ?? 0),
         };
         if (!disposed) setCounts(cache.counts);
       } catch {
@@ -147,6 +148,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   function badgeFor(item: (typeof NAV)[number]) {
     if (item.badge && counts.approval > 0) return counts.approval > 99 ? "99+" : String(counts.approval);
     if (item.leadsBadge && counts.leads > 0) return counts.leads > 99 ? "99+" : String(counts.leads);
+    if ("ofBadge" in item && item.ofBadge && counts.onlyfans > 0) return counts.onlyfans > 99 ? "99+" : String(counts.onlyfans);
     return null;
   }
 

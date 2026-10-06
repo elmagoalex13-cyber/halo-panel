@@ -4,38 +4,25 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { ETIQUETA_TIPO, formatoTamano, type TipoColeccion } from "@/lib/onlyfans";
-
-export type ResumenColeccion = {
-  id: string;
-  modelo_id: string;
-  modelo_nombre: string;
-  tipo: TipoColeccion;
-  nombre: string;
-  estado: "en_curso" | "entregado";
-  entregado_at: string | null;
-  created_at: string;
-  archivos: number;
-  videos: number;
-  fotos: number;
-  bytes: number;
-  sinDescargar: number;
-  subidosOF: number;
-  fasesCompletas: number | null;
-};
+import type { ResumenColeccion } from "@/lib/ofResumen";
 
 export function OnlyFansClient({
   modelos,
   colecciones,
+  modeloInicial,
+  sinFiltroModelo = false,
 }: {
   modelos: Array<{ id: string; nombre: string; foto: number | null }>;
   colecciones: ResumenColeccion[];
+  modeloInicial?: string;
+  sinFiltroModelo?: boolean; // dentro de la ficha de una modelo ya esta filtrado
 }) {
-  const [modelo, setModelo] = useState("todas");
+  const [modelo, setModelo] = useState(modeloInicial && modelos.some((m) => m.id === modeloInicial) ? modeloInicial : "todas");
   const [tipo, setTipo] = useState<TipoColeccion>("script");
   const [estado, setEstado] = useState<"todos" | "entregado" | "en_curso" | "por_subir">("todos");
 
-  const conContenido = modelos.filter((m) => colecciones.some((c) => c.modelo_id === m.id));
-  const modeloActivo = modelo !== "todas" && !conContenido.some((m) => m.id === modelo) ? "todas" : modelo;
+  // Todas las modelos, tengan o no contenido todavia (las que no, salen apagadas con un 0)
+  const modeloActivo = modelo !== "todas" && !modelos.some((m) => m.id === modelo) ? "todas" : modelo;
   const delModelo = colecciones.filter((c) => modeloActivo === "todas" || c.modelo_id === modeloActivo);
 
   const visibles = useMemo(
@@ -56,17 +43,25 @@ export function OnlyFansClient({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <button onClick={() => setModelo("todas")} className={chip(modeloActivo === "todas")}>
-          Todas las modelos ({colecciones.length})
-        </button>
-        {conContenido.map((m) => (
-          <button key={m.id} onClick={() => setModelo(m.id)} className={`${chip(modeloActivo === m.id)} flex items-center gap-1.5`}>
-            <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-4 w-4 text-[8px]" />
-            {m.nombre} ({colecciones.filter((c) => c.modelo_id === m.id).length})
+      {sinFiltroModelo ? null : (
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setModelo("todas")} className={chip(modeloActivo === "todas")}>
+            Todas las modelos ({colecciones.length})
+            {colecciones.some((c) => c.nuevo) ? <span className="ml-1.5 rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[10px] text-white">{colecciones.filter((c) => c.nuevo).length} nuevo{colecciones.filter((c) => c.nuevo).length === 1 ? "" : "s"}</span> : null}
           </button>
-        ))}
-      </div>
+          {modelos.map((m) => {
+            const n = colecciones.filter((c) => c.modelo_id === m.id);
+            const nuevos = n.filter((c) => c.nuevo).length;
+            return (
+              <button key={m.id} onClick={() => setModelo(m.id)} className={`${chip(modeloActivo === m.id)} flex items-center gap-1.5 ${n.length ? "" : "opacity-50"}`}>
+                <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-4 w-4 text-[8px]" />
+                {m.nombre} ({n.length})
+                {nuevos ? <span className="rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[10px] text-white">{nuevos} nuevo{nuevos === 1 ? "" : "s"}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] p-4">
@@ -118,6 +113,7 @@ export function OnlyFansClient({
                     <p className="truncate font-semibold text-white">{c.nombre}</p>
                     <p className="text-xs text-white/40">{c.modelo_nombre} · {new Date(c.entregado_at ?? c.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</p>
                   </div>
+                  {c.nuevo ? <span className="shrink-0 rounded-full bg-[#8B5CF6] px-2 py-0.5 text-[11px] font-semibold text-white">Nuevo</span> : null}
                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${c.estado === "entregado" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-300"}`}>
                     {c.estado === "entregado" ? "Entregado" : "En curso"}
                   </span>

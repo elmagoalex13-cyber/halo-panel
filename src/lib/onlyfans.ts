@@ -96,6 +96,21 @@ export const FASES: FaseScript[] = [
   },
 ];
 
+/** Lo que se pide en una fase, SIN duraciones (la modelo no ve nada de minutos/segundos): "1 vídeo + 4 fotos". */
+export function resumenPortal(f: FaseScript) {
+  const videos = f.slots.filter((s) => s.tipo === "video").reduce((a, s) => a + s.n, 0);
+  const fotos = f.slots.filter((s) => s.tipo === "foto").reduce((a, s) => a + s.n, 0);
+  return [videos ? `${videos} vídeo${videos === 1 ? "" : "s"}` : null, fotos ? `${fotos} foto${fotos === 1 ? "" : "s"}` : null].filter(Boolean).join(" + ");
+}
+
+/** Duracion de un video frente a lo pedido (solo para el panel de la agencia): "corto" | "largo" | null. */
+export function duracionVsPedido(slot: SlotFase | null | undefined, seg: number | null | undefined): "corto" | "largo" | null {
+  if (!slot || !seg) return null;
+  if (slot.minSeg && seg < slot.minSeg) return "corto";
+  if (slot.maxSeg && seg > slot.maxSeg * 1.25) return "largo";
+  return null;
+}
+
 export const faseDe = (n: number) => FASES.find((f) => f.fase === n) ?? null;
 export const slotDe = (fase: number, slot: string) => faseDe(fase)?.slots.find((s) => s.slot === slot) ?? null;
 

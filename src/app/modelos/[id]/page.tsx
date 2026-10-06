@@ -7,6 +7,9 @@ import { FichaTabs, type Pestana } from "./FichaTabs";
 import { FotoModelo } from "../FotoModelo";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { OnboardingFicha } from "./OnboardingFicha";
+import { ContenidoModelo, type VideoInstagram } from "./ContenidoModelo";
+import { cargarResumenOF } from "@/lib/ofResumen";
+import { urlR2 } from "@/lib/media";
 import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
 import type { SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
@@ -305,6 +308,22 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
     <div className="card py-8 text-center text-sm text-halo-subtle">Esta modelo no tiene cuentas de redes todavía.</div>
   );
 
+  // Todo el contenido de la modelo: videos editados de Instagram + scripts/packs/posts de OnlyFans
+  const { data: filasIG } = await createAdminClient()
+    .from("library_content")
+    .select("id, titulo, estado, recibido_at, publicado_at, video_procesado_url, tipo")
+    .eq("modelo_id", modelo.id)
+    .in("estado", ["en_aprobacion", "aprobado", "publicado"])
+    .not("video_procesado_url", "is", null)
+    .or("tipo.is.null,tipo.neq.5")
+    .order("recibido_at", { ascending: false })
+    .limit(80);
+  const instagram: VideoInstagram[] = ((filasIG ?? []) as Array<{ id: string; titulo: string | null; estado: string; recibido_at: string; publicado_at: string | null; video_procesado_url: string | null }>)
+    .map((v) => ({ id: v.id, titulo: v.titulo, estado: v.estado, recibido_at: v.recibido_at, publicado_at: v.publicado_at, url: urlR2(v.video_procesado_url) ?? "" }))
+    .filter((v) => v.url);
+  const of = await cargarResumenOF(modelo.id);
+  const ofNuevos = of.resumen.filter((c) => c.nuevo).length;
+
   const pestanas: Pestana[] = [
     { id: "resumen", label: "Resumen", icono: "◈", contenido: resumen },
     {
@@ -316,6 +335,13 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
     },
     { id: "videos", label: "Vídeos", icono: "🎞", aviso: pendientes.length ? String(pendientes.length) : null, contenido: videos },
     { id: "redes", label: "Redes", icono: "◎", aviso: cuentas.length ? String(cuentas.length) : null, contenido: redes },
+    {
+      id: "contenido",
+      label: "Contenido",
+      icono: "🗂",
+      aviso: ofNuevos ? `${ofNuevos} nuevo${ofNuevos === 1 ? "" : "s"}` : null,
+      contenido: <ContenidoModelo modelo={{ id: modelo.id, nombre: modelo.nombre, foto: of.modelos[0]?.foto ?? null }} instagram={instagram} onlyfans={of.resumen} />,
+    },
   ];
 
   return (

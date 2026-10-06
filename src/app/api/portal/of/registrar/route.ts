@@ -35,19 +35,16 @@ export async function POST(req: NextRequest) {
   let fase: number | null = null;
   let slotId: string | null = null;
   let consultaOrden = supabase.from("of_archivos").select("orden").eq("coleccion_id", col.id);
-  let capacidad = Infinity;
   if (col.tipo === "script") {
     const slot = slotDe(Number(body.fase), String(body.slot));
     if (!slot || slot.tipo !== tipo) return NextResponse.json({ error: "Hueco no válido" }, { status: 400 });
     fase = Number(body.fase);
     slotId = slot.slot;
-    capacidad = slot.n;
     consultaOrden = consultaOrden.eq("fase", fase).eq("slot", slot.slot);
   } else {
     consultaOrden = consultaOrden.eq("tipo_archivo", tipo);
   }
   const { data: previos } = await consultaOrden;
-  if ((previos?.length ?? 0) >= capacidad) return NextResponse.json({ error: "Este hueco ya está lleno" }, { status: 409 });
   const orden = Math.max(0, ...((previos ?? []) as Array<{ orden: number }>).map((r) => r.orden)) + 1;
 
   const { data, error } = await supabase

@@ -4,16 +4,19 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Download, Film, Image as ImageIcon, Play, Trash2 } from "lucide-react";
+import { Visor, type ItemVisor } from "../Visor";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { GlassCard } from "@/components/GlassCard";
 import {
   FASES,
   archivosDeSlot,
+  duracionVsPedido,
   formatoDuracion,
   formatoTamano,
   progresoScript,
   type ArchivoOF,
   type ColeccionOF,
+  type SlotFase,
 } from "@/lib/onlyfans";
 
 export type ArchivoConVista = ArchivoOF & { vista: string | null };
@@ -33,10 +36,10 @@ async function descargarVarios(ids: string[]) {
   }
 }
 
-function Foto({ a, descargado }: { a: ArchivoConVista; descargado: boolean }) {
+function Foto({ a, descargado, onAbrir }: { a: ArchivoConVista; descargado: boolean; onAbrir: (a: ArchivoConVista) => void }) {
   const [fallo, setFallo] = useState(false);
   return (
-    <a href={`/api/onlyfans/descargar?id=${a.id}`} title={`Descargar ${a.nombre_original ?? "foto"}`} className="group relative block">
+    <div onClick={() => onAbrir(a)} title={a.nombre_original ?? "Ver foto"} className="group relative block cursor-zoom-in">
       <div className="aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/40">
         {a.vista && !fallo ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -50,21 +53,26 @@ function Foto({ a, descargado }: { a: ArchivoConVista; descargado: boolean }) {
           </div>
         )}
       </div>
-      <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 rounded-b-xl bg-black/70 py-1 text-[10px] text-white opacity-0 transition group-hover:opacity-100">
+      <a
+        href={`/api/onlyfans/descargar?id=${a.id}`}
+        onClick={(e) => e.stopPropagation()}
+        title="Descargar"
+        className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 rounded-b-xl bg-black/75 py-1.5 text-[11px] font-semibold text-white opacity-0 transition hover:bg-[#8B5CF6]/80 group-hover:opacity-100"
+      >
         <Download className="h-3 w-3" /> Descargar
-      </span>
+      </a>
       {!descargado ? <span className="absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-[#8B5CF6] ring-2 ring-black/60" title="Sin descargar" /> : null}
       {a.subido_of_at ? <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-emerald-500 text-black" title="Subido a OnlyFans"><Check className="h-3 w-3" /></span> : null}
-    </a>
+    </div>
   );
 }
 
-function Video({ a }: { a: ArchivoConVista }) {
-  const [viendo, setViendo] = useState(false);
+function Video({ a, slot, onAbrir }: { a: ArchivoConVista; slot?: SlotFase | null; onAbrir: (a: ArchivoConVista) => void }) {
+  const dur = duracionVsPedido(slot, a.duracion_seg);
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
       <div className="flex items-center gap-3">
-        <button onClick={() => setViendo((v) => !v)} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/10 text-white hover:bg-white/20" title="Ver">
+        <button onClick={() => onAbrir(a)} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/10 text-white hover:bg-white/20" title="Ver">
           <Play className="h-4 w-4" />
         </button>
         <div className="min-w-0 flex-1">
@@ -73,18 +81,19 @@ function Video({ a }: { a: ArchivoConVista }) {
             <span className="truncate">{a.nombre_original ?? "Vídeo"}</span>
             {a.subido_of_at ? <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" /> : null}
           </p>
-          <p className="text-xs text-white/40">{[formatoDuracion(a.duracion_seg), formatoTamano(a.size_bytes)].filter(Boolean).join(" · ")}</p>
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-white/40">
+            {[formatoDuracion(a.duracion_seg), formatoTamano(a.size_bytes)].filter(Boolean).join(" · ")}
+            {dur ? (
+              <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                {dur === "corto" ? "Más corto de lo pedido" : "Más largo de lo pedido"}
+              </span>
+            ) : null}
+          </p>
         </div>
         <a href={`/api/onlyfans/descargar?id=${a.id}`} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-700/40 bg-amber-950/30 px-2.5 py-1.5 text-xs font-semibold text-amber-400 hover:bg-amber-950/50">
           <Download className="h-3.5 w-3.5" /> Descargar
         </a>
       </div>
-      {viendo ? (
-        <div className="mt-2">
-          <video src={`/api/onlyfans/vista?id=${a.id}`} controls autoPlay playsInline className="max-h-[60vh] w-full rounded-lg bg-black" />
-          <p className="mt-1 text-[11px] text-white/30">Si es un .MOV de iPhone puede no verse en algunos navegadores: descárgalo.</p>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -104,6 +113,23 @@ export function ColeccionDetalle({
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
   const [borrando, setBorrando] = useState(false);
+  const [visor, setVisor] = useState<number | null>(null);
+
+  // Orden del visor: el mismo que ves en pantalla (fase a fase, fotos y videos)
+  const ordenados = [...archivos].sort((x, y) => (x.fase ?? 0) - (y.fase ?? 0) || (x.tipo_archivo === y.tipo_archivo ? 0 : x.tipo_archivo === "video" ? -1 : 1) || x.orden - y.orden);
+  const itemsVisor: ItemVisor[] = ordenados.map((a) => ({
+    id: a.id,
+    tipo_archivo: a.tipo_archivo,
+    nombre_original: a.nombre_original,
+    size_bytes: a.size_bytes,
+    duracion_seg: a.duracion_seg,
+    vista: a.vista,
+    etiqueta: a.fase ? `Fase ${a.fase} · ${a.tipo_archivo === "video" ? "vídeo" : `foto ${a.orden}`}` : undefined,
+  }));
+  const abrir = (a: ArchivoConVista) => {
+    const i = ordenados.findIndex((x) => x.id === a.id);
+    if (i >= 0) setVisor(i);
+  };
 
   const esScript = coleccion.tipo === "script";
   const pr = esScript ? progresoScript(archivos) : null;
@@ -229,9 +255,9 @@ export function ColeccionDetalle({
                         {s.tipo === "video" ? <Film className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />} {s.etiqueta} · {xs.length}/{s.n}
                       </p>
                       {s.tipo === "video" ? (
-                        <div className="space-y-2">{xs.map((a) => <Video key={a.id} a={a} />)}</div>
+                        <div className="space-y-2">{xs.map((a) => <Video key={a.id} a={a} slot={s} onAbrir={abrir} />)}</div>
                       ) : (
-                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">{xs.map((a) => <Foto key={a.id} a={a} descargado={Boolean(a.descargado_at)} />)}</div>
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">{xs.map((a) => <Foto key={a.id} a={a} descargado={Boolean(a.descargado_at)} onAbrir={abrir} />)}</div>
                       )}
                     </div>
                   );
@@ -245,20 +271,21 @@ export function ColeccionDetalle({
           {archivos.some((a) => a.tipo_archivo === "video") ? (
             <GlassCard className="space-y-2 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Vídeos · {archivos.filter((a) => a.tipo_archivo === "video").length}</p>
-              {archivos.filter((a) => a.tipo_archivo === "video").map((a) => <Video key={a.id} a={a} />)}
+              {archivos.filter((a) => a.tipo_archivo === "video").map((a) => <Video key={a.id} a={a} onAbrir={abrir} />)}
             </GlassCard>
           ) : null}
           {archivos.some((a) => a.tipo_archivo === "foto") ? (
             <GlassCard className="space-y-2 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Fotos · {archivos.filter((a) => a.tipo_archivo === "foto").length}</p>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-                {archivos.filter((a) => a.tipo_archivo === "foto").map((a) => <Foto key={a.id} a={a} descargado={Boolean(a.descargado_at)} />)}
+                {archivos.filter((a) => a.tipo_archivo === "foto").map((a) => <Foto key={a.id} a={a} descargado={Boolean(a.descargado_at)} onAbrir={abrir} />)}
               </div>
             </GlassCard>
           ) : null}
           {!archivos.length ? <p className="text-sm text-white/35">La modelo todavía no ha subido nada.</p> : null}
         </div>
       )}
+      {visor !== null ? <Visor items={itemsVisor} indice={visor} onCambio={setVisor} onCerrar={() => setVisor(null)} /> : null}
     </div>
   );
 }

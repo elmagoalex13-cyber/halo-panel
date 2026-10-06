@@ -76,6 +76,7 @@ export function FrasesClient({ frases: init }: { frases: Frase[] }) {
       audio_id_ig: f.audio_id_ig ?? "",
       puntuacion: String(f.puntuacion),
     });
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }
 
   function guardar(event: React.FormEvent) {
@@ -141,7 +142,12 @@ export function FrasesClient({ frases: init }: { frases: Frase[] }) {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="md:col-span-2">
               <label className="mb-1 block text-xs text-halo-subtle">Frase / caption que se quema en el vídeo</label>
-              <input className="input-base" value={form.frase} onChange={(e) => campo("frase", e.target.value)} required />
+              <textarea
+                className="input-base min-h-24 resize-y leading-relaxed"
+                value={form.frase}
+                onChange={(e) => campo("frase", e.target.value)}
+                required
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs text-halo-subtle">Canción (opcional)</label>
@@ -218,8 +224,12 @@ export function FrasesClient({ frases: init }: { frases: Frase[] }) {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1.5">
-                    <button onClick={() => editar(f)} className="rounded-md border border-white/10 bg-white/5 p-1.5 text-white/40 transition-colors hover:border-[#8B5CF6]/40 hover:text-[#A78BFA]" title="Editar">
+                    <button
+                      onClick={() => editar(f)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[#8B5CF6]/25 bg-[#8B5CF6]/10 px-2.5 py-1.5 text-xs font-semibold text-[#C4B5FD] transition-colors hover:border-[#8B5CF6]/50 hover:bg-[#8B5CF6]/15 hover:text-white"
+                    >
                       <Pencil className="h-3.5 w-3.5" />
+                      Editar
                     </button>
                     <button onClick={() => eliminar(f)} disabled={loading === f.id} className="rounded-md border border-white/10 bg-white/5 p-1.5 text-white/30 transition-colors hover:border-red-500/30 hover:text-red-400" title="Eliminar">
                       <Trash2 className="h-3.5 w-3.5" />

@@ -25,6 +25,8 @@ export default async function ColeccionPage({ params }: { params: Promise<{ id: 
   ]);
   if (!col) notFound();
   const coleccion = col as ColeccionOF;
+  // Al abrirlo deja de contar como "nuevo" en el menu (si el SQL 20261009 aun no esta, simplemente no se guarda)
+  await supabase.from("of_colecciones").update({ visto_at: new Date().toISOString() }).eq("id", id).then(() => undefined, () => undefined);
 
   const [{ data: modelo }, fotos] = await Promise.all([supabase.from("modelos").select("id, nombre").eq("id", coleccion.modelo_id).maybeSingle(), versionesFotos()]);
 
