@@ -222,7 +222,13 @@ async function detallarReels(tabId, codigos) {
 const pausa = (min, max) => new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
 
 async function descargar(url) {
-  const res = await fetch(url);
+  // La CDN de Instagram limita (429) si se piden muchos videos seguidos: reintentar con esperas crecientes.
+  let res;
+  for (const espera of [0, 4000, 12000, 25000]) {
+    if (espera) await new Promise((r) => setTimeout(r, espera));
+    res = await fetch(url);
+    if (res.ok || (res.status !== 429 && res.status < 500)) break;
+  }
   if (!res.ok) throw new Error(`Descarga ${res.status}`);
   const blob = await res.blob();
   if (blob.size > MAX_VIDEO_BYTES) throw new Error("vídeo demasiado grande");
@@ -252,7 +258,7 @@ async function subirReel(modo, cuenta, reel, mediana) {
   });
 }
 
-async function ejecutar({ modo, categoria, dias }) {
+async function ejecutar({ modo, categoria, dias, ids }) {
   if (corriendo) throw new Error("Ya hay un análisis en marcha");
   corriendo = true;
   cancelar = false;
@@ -269,6 +275,7 @@ async function ejecutar({ modo, categoria, dias }) {
   try {
     const q = new URLSearchParams({ modo });
     if (categoria && categoria !== "todas") q.set("categoria", categoria);
+    if (Array.isArray(ids) && ids.length) q.set("ids", ids.join(","));
     const config = await panel(`/api/extension/cuentas?${q}`);
     const cuentas = config.cuentas ?? [];
     await guardarEstado({ cuentas: cuentas.map((c) => ({ username: c.username, etiqueta: c.etiqueta, estado: "pendiente" })) });
@@ -351,6 +358,7 @@ async function ejecutar({ modo, categoria, dias }) {
           try {
             await subirReel(modo, cuenta, reel, analisis.mediana);
             subidos++;
+            await pausa(700, 1500);
           } catch (e) {
             if (e instanceof ErrorPanel) throw e;
             await log(`@${cuenta.username}/${reel.codigo}: ${e.message}`, "error");
@@ -359,7 +367,7 @@ async function ejecutar({ modo, categoria, dias }) {
         }
         resumen.nuevos += subidos;
         resumen.cuentas++;
-        await log(`@${cuenta.username}: ${analisis.analizados} reels, mediana ${analisis.mediana}, ${subidos} viral(es) nuevo(s)`, subidos ? "ok" : "info");
+        await log(`@${cuenta.username}: ${analisis.analizados} reels leídos (el más visto: ${Math.max(0, ...lectura.reels.map((r) => r.vistas)).toLocaleString("es-ES")}), mediana ${analisis.mediana.toLocaleString("es-ES")}, ${subidos} viral(es) nuevo(s)`, subidos ? "ok" : "info");
         await marcar({ estado: "hecho", nuevos: subidos, analizados: analisis.analizados });
       } catch (e) {
         if (e instanceof ErrorPanel) {

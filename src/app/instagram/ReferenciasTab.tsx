@@ -25,6 +25,7 @@ export function ReferenciasTab({
   const [scrapingAll, setScrapingAll] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState("todas");
+  const [seleccion, setSeleccion] = useState<string[]>([]);
   const [editModal, setEditModal] = useState<ReferenciaCuenta | null>(null);
   const [editForm, setEditForm] = useState({ categoria: "", notas: "" });
 
@@ -33,6 +34,11 @@ export function ReferenciasTab({
   // Si la ultima cuenta de un tipo se borra o cambia de tipo, el filtro vuelve solo a "todas"
   const filtroActivo = filtroTipo !== "todas" && conteoTipo(filtroTipo) === 0 ? "todas" : filtroTipo;
   const visibles = filtroActivo === "todas" ? cuentas : cuentas.filter((c) => tipoDe(c) === filtroActivo);
+
+  const idsVisibles = visibles.map((c) => c.id);
+  // Solo cuentas que siguen existiendo (por si se borra alguna estando elegida)
+  const elegidas = seleccion.filter((id) => cuentas.some((c) => c.id === id));
+  const alternar = (id: string) => setSeleccion((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   async function addCuenta() {
     if (!form.username.trim()) return;
@@ -153,7 +159,24 @@ export function ReferenciasTab({
         <p className="mb-2 text-sm text-white/60">
           Abre estas cuentas con la extensión de Chrome y saca los reels más virales de las últimas dos semanas. Aparecen en «Ideas virales».
         </p>
-        <ExtensionBoton modo="referencias" />
+        <ExtensionBoton modo="referencias" ids={elegidas} />
+        {cuentas.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-white/50">
+            <span>
+              {elegidas.length
+                ? `${elegidas.length} cuenta${elegidas.length === 1 ? "" : "s"} elegida${elegidas.length === 1 ? "" : "s"}: se analizan solo esas.`
+                : "Marca cuentas con la casilla para analizar solo esas (si no marcas ninguna, se analiza el tipo elegido)."}
+            </span>
+            <button onClick={() => setSeleccion(Array.from(new Set([...elegidas, ...idsVisibles])))} className="text-[#A78BFA] hover:underline">
+              Elegir las {idsVisibles.length} visibles
+            </button>
+            {elegidas.length ? (
+              <button onClick={() => setSeleccion([])} className="text-white/50 hover:text-white hover:underline">
+                Quitar selección
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </GlassCard>
 
       {cuentas.length === 0 ? (
@@ -193,6 +216,13 @@ export function ReferenciasTab({
             <GlassCard key={cuenta.id} className="flex flex-col p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={elegidas.includes(cuenta.id)}
+                    onChange={() => alternar(cuenta.id)}
+                    title="Elegir esta cuenta para analizarla"
+                    className="h-4 w-4 shrink-0 cursor-pointer accent-[#8B5CF6]"
+                  />
                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-white/[0.05] text-sm font-semibold text-white/70">
                     {cuenta.username.slice(0, 1).toUpperCase()}
                   </div>

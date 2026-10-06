@@ -24,6 +24,9 @@ export async function GET(req: NextRequest) {
   if (modo === "referencias") {
     let q = supabase.from("referencias_cuentas").select("id, username, categoria").eq("activa", true).order("username");
     if (categoria && categoria !== "todas") q = q.eq("categoria", categoria);
+    // ids concretos (cuentas elegidas a mano en el panel)
+    const ids = (req.nextUrl.searchParams.get("ids") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    if (ids.length) q = q.in("id", ids);
     const { data, error } = await q;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({
