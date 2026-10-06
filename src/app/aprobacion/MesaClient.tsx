@@ -649,7 +649,7 @@ export function MesaClient({
           ))}
         </select>
 
-        {modelosChips.length > 1 ? (
+        {modelosChips.length > 0 ? (
           <div className="flex w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
             <button
               type="button"
