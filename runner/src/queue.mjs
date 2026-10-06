@@ -59,7 +59,7 @@ export async function procesarPieza(pieza) {
       pieza.frase_quemada = asignado?.frase ?? "";
       pieza.layout_json = asignado?.layout_json ?? null;
     }
-    const { outKey, rawKey, fraseQuemada, trimUsado } = await withTimeout(
+    const { outKey, rawKey, fraseQuemada, trimUsado, trimManual } = await withTimeout(
       procesarTipo(tipo, pieza),
       config.pieceTimeoutMs,
       `pieza ${pieza.id}`,
@@ -77,6 +77,10 @@ export async function procesarPieza(pieza) {
         // la mesa de aprobacion siempre muestre el corte actual y una nota de
         // "rehacer" con ajuste (ej. "inicio +1.5") tenga un valor del que partir.
         ...(trimUsado ? { recorte_inicio: trimUsado.start ?? null, recorte_fin: trimUsado.end ?? null } : {}),
+        // Si esta vez el recorte fue automatico, se quita la marca de recorte manual de la edicion anterior
+        ...(trimUsado && !trimManual && /\[recorte-manual\]/.test(pieza.notas_editor ?? "")
+          ? { notas_editor: (pieza.notas_editor ?? "").replace(/\[recorte-manual\]/g, "").trim() || null }
+          : {}),
         error_mensaje: null,
         procesado_en: ahora,
         edicion_at: ahora,
@@ -113,7 +117,7 @@ export async function cicloOnce({ logEmpty = false } = {}) {
   await liberarAtascadas();
   const { data: piezas, error } = await supabase
     .from("library_content")
-    .select("id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada, layout_json, recorte_inicio, recorte_fin")
+    .select("id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada, layout_json, recorte_inicio, recorte_fin, notas_editor")
     .eq("estado", "editando")
     .eq("estado_procesamiento", "pendiente")
     .order("recibido_at", { ascending: true })

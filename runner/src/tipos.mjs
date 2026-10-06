@@ -87,7 +87,7 @@ async function subtitulos(rawPath, workDir, textoCorregido = "", recorteManual =
       : chunkWordTimed(wordTimed, 4);
     const assPath = path.join(workDir, "subs.ass");
     await writeFile(assPath, generateASS(compact, { offset: trim?.start ?? 0 }), "utf-8");
-    return { assPath, trim, texto: textoFinal };
+    return { assPath, trim, texto: textoFinal, manual: inicioManual !== null || finManual !== null };
   } catch (err) {
     console.warn("[runner] fallo whisper, se renderiza sin subtitulos:", err.message);
     return null;
@@ -106,7 +106,11 @@ export async function procesarTipo(tipo, pieza) {
     const outPath = path.join(workDir, "output.mp4");
     let fraseQuemada = pieza.frase_quemada ?? "";
     let trimUsado = null;
-    const recorteManual = { inicio: pieza.recorte_inicio, fin: pieza.recorte_fin };
+    // recorte_inicio/fin guarda el recorte usado la ultima vez; solo es "manual" si lo marco una persona en la mesa
+    // (marca [recorte-manual] en notas_editor). Si no, se recalcula por la voz en cada edicion.
+    const esManual = /\[recorte-manual\]/.test(pieza.notas_editor ?? "");
+    const recorteManual = esManual ? { inicio: pieza.recorte_inicio, fin: pieza.recorte_fin } : {};
+    let trimManual = false;
     await downloadInput(rawKey, rawPath);
 
     if (tipo === 1) {
@@ -114,6 +118,7 @@ export async function procesarTipo(tipo, pieza) {
       await renderTipo1(rawPath, subs?.assPath, outPath, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
       trimUsado = subs?.trim ?? null;
+      trimManual = Boolean(subs?.manual);
     } else if (tipo === 2) {
       let audioRef;
       const refKey = keyDesdeUrl(pieza.audio_referencia_url);
@@ -141,6 +146,7 @@ export async function procesarTipo(tipo, pieza) {
       await renderTipo3(rawPath, subs?.assPath, outPath, 2, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
       trimUsado = subs?.trim ?? null;
+      trimManual = Boolean(subs?.manual);
     } else {
       const refKey = keyDesdeUrl(pieza.r2_key_referencia);
       if (!refKey) throw new Error("Tipo 4 sin video de referencia (r2_key_referencia)");
@@ -150,10 +156,11 @@ export async function procesarTipo(tipo, pieza) {
       await renderTipo4(rawPath, refPath, outPath, subs?.assPath, { trim: subs?.trim });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
       trimUsado = subs?.trim ?? null;
+      trimManual = Boolean(subs?.manual);
     }
 
     await uploadToR2(outPath, outKey);
-    return { outKey, rawKey, fraseQuemada, trimUsado };
+    return { outKey, rawKey, fraseQuemada, trimUsado, trimManual };
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }

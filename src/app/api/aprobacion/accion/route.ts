@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest) {
     const supabase = createAdminClient();
     const { data: actual, error: actualError } = await supabase
       .from("library_content")
-      .select("id, estado, recorte_inicio, recorte_fin")
+      .select("id, estado, recorte_inicio, recorte_fin, notas_editor")
       .eq("id", id)
       .maybeSingle();
     if (actualError) throw actualError;
@@ -45,6 +45,12 @@ export async function PATCH(req: NextRequest) {
     if (actual.estado !== "en_aprobacion") {
       return NextResponse.json({ ok: true, estado: actual.estado, skipped: true });
     }
+
+    // recorte_inicio/fin guarda siempre el recorte USADO (para enseñarlo en la mesa), sea automatico o manual.
+    // Esta marca en notas_editor dice que lo puso una persona: solo entonces el runner lo reutiliza al rehacer
+    // (si no, se volveria a aplicar para siempre el recorte automatico de la primera vez, aunque fuera malo).
+    const MARCA_MANUAL = "[recorte-manual]";
+    const conMarcaManual = (notas: string | null) => (notas?.includes(MARCA_MANUAL) ? notas : [notas, MARCA_MANUAL].filter(Boolean).join("\n"));
 
     const update: Record<string, unknown> = {
       estado: nuevoEstado,
@@ -84,6 +90,7 @@ export async function PATCH(req: NextRequest) {
         });
         update.recorte_inicio = inicio;
         update.recorte_fin = fin;
+        update.notas_editor = conMarcaManual(actual.notas_editor);
       }
     }
     if (accion === "nueva_frase") {
@@ -110,6 +117,7 @@ export async function PATCH(req: NextRequest) {
       update.publicado_at = null;
       update.recorte_inicio = typeof recorte_inicio === "number" ? recorte_inicio : null;
       update.recorte_fin = typeof recorte_fin === "number" ? recorte_fin : null;
+      update.notas_editor = conMarcaManual(actual.notas_editor);
     }
 
     const { data: updated, error } = await supabase
