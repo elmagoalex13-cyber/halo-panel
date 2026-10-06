@@ -272,7 +272,15 @@ export function OriginalesClient({
             const errorMsg = o.piezas.find((p) => p.error)?.error;
             const marcado = elegidosVivos.includes(o.id);
             return (
-              <article key={o.id} className={`flex flex-col gap-2 rounded-2xl border p-2.5 transition ${marcado ? "border-red-500/50 bg-red-500/[0.06]" : "border-white/[0.08] bg-white/[0.03]"}`}>
+              <article
+                key={o.id}
+                // Clic en cualquier parte de la tarjeta la elige; el video, los enlaces y los botones siguen haciendo lo suyo.
+                onClick={(ev) => {
+                  if ((ev.target as HTMLElement).closest("a, button, video, input, label")) return;
+                  alternar(o.id);
+                }}
+                className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-2.5 transition ${marcado ? "border-red-500/50 bg-red-500/[0.06]" : "border-white/[0.08] bg-white/[0.03] hover:border-white/20"}`}
+              >
                 <div className="relative">
                   <VistaPrevia id={o.id} />
                   <label className="absolute left-2 top-2 grid h-6 w-6 cursor-pointer place-items-center rounded-md bg-black/70 backdrop-blur" title="Elegir para borrar">

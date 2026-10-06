@@ -9,6 +9,7 @@ import { RefreshButton } from "@/components/RefreshButton";
 import { StatTile } from "@/components/StatTile";
 import { PeriodoSelect } from "./PeriodoSelect";
 import { CreadorasFilter } from "./CreadorasFilter";
+import { AvisosDashboard } from "./AvisosDashboard";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -276,26 +277,7 @@ export default async function DashboardPage({
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Panel de Administracion</h1>
       </div>
 
-      {notificaciones.length > 0 ? (
-        <div className="mb-6 flex flex-col gap-2">
-          {notificaciones.map((n, i) => {
-            const colors = {
-              rojo: "border-red-500/40 bg-red-950/30 text-red-300",
-              amarillo: "border-amber-500/40 bg-amber-950/30 text-amber-300",
-              verde: "border-emerald-500/40 bg-emerald-950/30 text-emerald-300",
-            } as const;
-            const dots = { rojo: "bg-red-400", amarillo: "bg-amber-400", verde: "bg-emerald-400" } as const;
-            const inner = (
-              <div key={i} className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm ${colors[n.nivel]}`}>
-                <span className={`h-2 w-2 shrink-0 rounded-full ${dots[n.nivel]}`} />
-                <span className="flex-1">{n.texto}</span>
-                {n.href ? <span className="text-xs opacity-60">Ver &rarr;</span> : null}
-              </div>
-            );
-            return n.href ? <a key={i} href={n.href}>{inner}</a> : inner;
-          })}
-        </div>
-      ) : null}
+      <AvisosDashboard avisos={notificaciones} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile label="Modelos activas" value={modelosActivas} icon={Users} subtitle={`de ${modelos.length} registradas`} />
