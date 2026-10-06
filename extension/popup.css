@@ -23,3 +23,13 @@ summary { cursor: pointer; color: #8b8b9a; }
 details label { margin-top: 8px; }
 details a { margin-left: 10px; color: #a78bfa; }
 .ancho { width: 100%; margin-bottom: 8px; }
+#selector { margin-bottom: 9px; font-size: 12px; }
+#selector summary { padding: 7px 8px; border: 1px solid #2a2a36; border-radius: 8px; background: #17171f; color: #e8e8f0; }
+#selector input[type="search"] { margin: 6px 0; }
+.acciones { display: flex; gap: 12px; margin-bottom: 4px; }
+.enlace { padding: 0; background: none; color: #a78bfa; font-size: 11px; font-weight: 400; }
+#listaCuentas { max-height: 150px; overflow: auto; }
+#listaCuentas label { display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 2px; color: #e8e8f0; font-size: 12px; }
+#listaCuentas label span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#listaCuentas label small { color: #6b6b7a; font-size: 10px; }
+#listaCuentas input { display: inline-block; width: auto; margin: 0; }

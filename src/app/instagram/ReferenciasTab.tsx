@@ -159,7 +159,7 @@ export function ReferenciasTab({
         <p className="mb-2 text-sm text-white/60">
           Abre estas cuentas con la extensión de Chrome y saca los reels más virales de las últimas dos semanas. Aparecen en «Ideas virales».
         </p>
-        <ExtensionBoton modo="referencias" ids={elegidas} />
+        <ExtensionBoton modo="referencias" ids={elegidas} onIdsChange={setSeleccion} />
         {cuentas.length > 0 ? (
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-white/50">
             <span>

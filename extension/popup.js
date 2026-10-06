@@ -33,8 +33,61 @@ function pintar(estado) {
   log.scrollTop = log.scrollHeight;
 }
 
+// ---- selector de cuentas (analizar todas, una, tres, diez...) ----
+let cuentasPanel = [];
+const elegidas = new Set();
+
+function pintarSelector() {
+  const q = $("buscaCuenta").value.trim().toLowerCase();
+  const visibles = cuentasPanel.filter((c) => !q || c.username.toLowerCase().includes(q) || (c.etiqueta || "").toLowerCase().includes(q));
+  $("listaCuentas").replaceChildren(
+    ...visibles.map((c) => {
+      const label = document.createElement("label");
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.checked = elegidas.has(c.id);
+      check.addEventListener("change", () => {
+        if (check.checked) elegidas.add(c.id);
+        else elegidas.delete(c.id);
+        resumenSelector();
+      });
+      const nombre = document.createElement("span");
+      nombre.textContent = `@${c.username}`;
+      const et = document.createElement("small");
+      et.textContent = c.etiqueta || "";
+      label.append(check, nombre, et);
+      return label;
+    }),
+  );
+  resumenSelector();
+}
+
+function resumenSelector() {
+  $("resumenCuentas").textContent = elegidas.size ? `${elegidas.size} de ${cuentasPanel.length} cuentas elegidas` : `Todas las cuentas (${cuentasPanel.length})`;
+}
+
+async function cargarCuentas() {
+  elegidas.clear();
+  $("resumenCuentas").textContent = "Cargando cuentas…";
+  try {
+    const { ajustes } = await chrome.storage.local.get("ajustes");
+    const base = ajustes?.panelUrl ?? POR_DEFECTO;
+    const q = new URLSearchParams({ modo: $("modo").value });
+    if ($("modo").value === "referencias" && $("categoria").value !== "todas") q.set("categoria", $("categoria").value);
+    const res = await fetch(`${base}/api/extension/cuentas?${q}`, { credentials: "include" });
+    if (!res.ok) throw new Error(res.status === 401 ? "Inicia sesión en el panel" : `Error ${res.status}`);
+    cuentasPanel = (await res.json()).cuentas ?? [];
+    pintarSelector();
+  } catch (e) {
+    cuentasPanel = [];
+    $("listaCuentas").replaceChildren();
+    $("resumenCuentas").textContent = `Todas las cuentas (${e.message})`;
+  }
+}
+
 function actualizarFilas() {
   $("fila-categoria").hidden = $("modo").value !== "referencias";
+  cargarCuentas();
 }
 
 async function init() {
@@ -52,10 +105,22 @@ async function init() {
 }
 
 $("modo").addEventListener("change", actualizarFilas);
+$("categoria").addEventListener("change", cargarCuentas);
+$("buscaCuenta").addEventListener("input", pintarSelector);
+$("selVisibles").addEventListener("click", () => {
+  const q = $("buscaCuenta").value.trim().toLowerCase();
+  cuentasPanel.filter((c) => !q || c.username.toLowerCase().includes(q) || (c.etiqueta || "").toLowerCase().includes(q)).forEach((c) => elegidas.add(c.id));
+  pintarSelector();
+});
+$("selNinguna").addEventListener("click", () => {
+  elegidas.clear();
+  pintarSelector();
+});
 $("analizar").addEventListener("click", async () => {
   const datos = { modo: $("modo").value, categoria: $("categoria").value, dias: Number($("dias").value) };
   await chrome.storage.local.set({ ultimo: datos });
-  chrome.runtime.sendMessage({ type: "scan", ...datos });
+  const ids = [...elegidas].filter((id) => cuentasPanel.some((c) => c.id === id));
+  chrome.runtime.sendMessage({ type: "scan", ...datos, ids: ids.length ? ids : undefined });
 });
 $("metricas").addEventListener("click", () => chrome.runtime.sendMessage({ type: "refresh", modo: $("modo").value }));
 $("cancelar").addEventListener("click", () => chrome.runtime.sendMessage({ type: "cancel" }));

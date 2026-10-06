@@ -24,6 +24,15 @@
         <option value="general">General</option>
       </select>
     </label>
+    <details id="selector">
+      <summary id="resumenCuentas">Todas las cuentas</summary>
+      <input id="buscaCuenta" type="search" placeholder="Buscar cuenta…" />
+      <div class="acciones">
+        <button id="selVisibles" class="enlace">Elegir las que se ven</button>
+        <button id="selNinguna" class="enlace">Ninguna (= todas)</button>
+      </div>
+      <div id="listaCuentas"></div>
+    </details>
     <label>Reels de los últimos
       <select id="dias">
         <option value="0" selected>Automático (14 días referencias · 6 meses mis modelos)</option>

@@ -48,9 +48,11 @@ export async function GET(req: NextRequest) {
       .eq("activa", true)
       .order("username");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const idsPropias = (req.nextUrl.searchParams.get("ids") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
     type Fila = { id: string; username: string; url?: string | null; red_social?: string | null; modelos?: { nombre?: string | null; activa?: boolean | null } | null };
     const cuentas = ((data ?? []) as unknown as Fila[])
       .filter((c) => (c.red_social ? c.red_social === "instagram" : !c.url || /instagram\.com/i.test(c.url)) && c.modelos?.activa !== false)
+      .filter((c) => !idsPropias.length || idsPropias.includes(c.id))
       .map((c) => ({ id: c.id, username: usuarioDe(c.username), categoria: null, etiqueta: c.modelos?.nombre ?? "" }));
     return NextResponse.json({ modo, ajustes: AJUSTES_POR_DEFECTO, cuentas });
   }
