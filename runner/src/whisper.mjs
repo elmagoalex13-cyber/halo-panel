@@ -476,5 +476,42 @@ export function limitesDeVoz(frames, { primeraPalabra, ultimaPalabraFin }, { pad
   const start = Math.max(0, inicio.ini - padInicio);
   const end = Math.min(duracionTotal, Math.min(final.fin, ultimaPalabraFin + 0.5) + padFin);
   if (end - start < 0.8) return null;
-  return { start, end, umbral, suelo, pico };
+  return { start, end, umbral, suelo, pico, tramos: utiles };
+}
+
+/**
+ * Coloca las palabras sobre la voz REAL. Whisper falla en los tiempos cuando el clip empieza con silencio: puede
+ * creer que se habla desde el segundo 0 y repartir las palabras desde ahi (p. ej. voz real en el 3,7 s: los primeros
+ * subtitulos acababan en tiempos negativos tras recortar y "desaparecian"). Aqui cada palabra recibe un tramo
+ * proporcional a su longitud, repartido SOLO por los tramos con voz (las pausas no se rellenan).
+ * @param {string[]} textos palabras en orden
+ * @param {Array<{ini:number, fin:number}>} tramos tramos con voz, en tiempo del video original
+ * @returns {Array<{start:number, end:number, text:string}>}
+ */
+export function repartirPalabrasEnVoz(textos, tramos) {
+  const runs = tramos.filter((r) => r.fin - r.ini > 0.05);
+  if (!textos.length || !runs.length) return [];
+  const pesos = textos.map((t) => Math.max(2, t.replace(/[^\p{L}\p{N}]/gu, "").length));
+  const W = pesos.reduce((a, b) => a + b, 0);
+  const V = runs.reduce((a, r) => a + (r.fin - r.ini), 0);
+
+  // tiempo "solo de voz" (0..V) -> tiempo real del video
+  const aReal = (v, esFin) => {
+    let acum = 0;
+    for (const r of runs) {
+      const largo = r.fin - r.ini;
+      if (esFin ? v <= acum + largo + 1e-9 : v < acum + largo - 1e-9) return r.ini + Math.max(0, v - acum);
+      acum += largo;
+    }
+    return runs[runs.length - 1].fin;
+  };
+
+  let cum = 0;
+  return textos.map((text, i) => {
+    const v0 = (cum / W) * V;
+    cum += pesos[i];
+    const v1 = (cum / W) * V;
+    const start = aReal(v0, false);
+    return { start, end: Math.max(start + 0.05, aReal(v1, true)), text };
+  });
 }
