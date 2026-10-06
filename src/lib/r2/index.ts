@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 function createR2Client() {
@@ -34,16 +34,27 @@ export async function uploadToR2(key: string, body: Buffer | Uint8Array, content
   return { bucket, key };
 }
 
-export async function getSignedDownloadUrl(key: string, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos") {
+export async function getSignedDownloadUrl(key: string, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos", filename?: string) {
   const client = createR2Client();
   return getSignedUrl(
     client,
     new GetObjectCommand({
       Bucket: bucket,
       Key: key,
+      // Con nombre, el navegador lo descarga en vez de reproducirlo.
+      ...(filename ? { ResponseContentDisposition: `attachment; filename="${filename.replace(/"/g, "")}"` } : {}),
     }),
     { expiresIn: 3600 },
   );
+}
+
+export async function existeEnR2(key: string, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos") {
+  try {
+    await createR2Client().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function getR2Object(key: string, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos") {

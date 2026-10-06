@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { keyBrutoAlternativas, keyEditado } from "@/lib/media";
-import { getR2Object } from "@/lib/r2";
+import { existeEnR2, getSignedDownloadUrl } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
 
 // GET /api/descargar?id=<library_content.id>&tipo=editado|original
-// Descarga el mp4 real desde R2 (solo keys que pertenecen a una pieza del panel).
+// Descarga el video de una pieza del panel. Redirige a una URL firmada (caduca en 1 h) para que el
+// archivo baje directo del almacen, sin pasar por el servidor (los originales pesan hasta cientos de MB).
+// Los originales de las modelos pueden estar en R2 ("bruto/...") o en el bucket privado de Supabase
+// ("supabase://portal-uploads/...", los de menos de 50 MB): se aceptan los dos.
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   const tipo = req.nextUrl.searchParams.get("tipo") === "original" ? "original" : "editado";
@@ -17,7 +19,7 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient();
   const { data: pieza, error } = await supabase
     .from("library_content")
-    .select("id, titulo, r2_key, r2_key_original, video_procesado_url, modelos(nombre)")
+    .select("id, titulo, filename_original, r2_key, r2_key_original, video_procesado_url, modelos(nombre)")
     .eq("id", id)
     .single();
   if (error || !pieza) return NextResponse.json({ error: "Pieza no encontrada" }, { status: 404 });
@@ -25,26 +27,33 @@ export async function GET(req: NextRequest) {
   const keys = tipo === "original" ? keyBrutoAlternativas(pieza) : [keyEditado(pieza)].filter(Boolean) as string[];
   if (!keys.length) return NextResponse.json({ error: "La pieza no tiene video" }, { status: 404 });
 
-  let lastError: unknown = null;
+  const modelo = (pieza.modelos as { nombre?: string } | { nombre?: string }[] | null);
+  const nombreModelo = (Array.isArray(modelo) ? modelo[0]?.nombre : modelo?.nombre) ?? "";
+  const limpiar = (t: string) => t.replace(/[^\w.\- ]+/g, "_").slice(0, 80);
+
   for (const key of keys) {
-  try {
-    const obj = await getR2Object(key);
-    if (!obj.Body) return NextResponse.json({ error: "Objeto vacio" }, { status: 404 });
-    const ext = key.split(".").pop()?.toLowerCase() ?? "mp4";
-    const base = (pieza.titulo || pieza.id).toString().replace(/[^\w.\- ]+/g, "_").slice(0, 80);
-    const nombre = `${base}-${tipo}.${ext}`;
-    const headers = new Headers({
-      "Content-Type": obj.ContentType ?? "video/mp4",
-      "Content-Disposition": `attachment; filename="${nombre}"`,
-      "Cache-Control": "private, no-store",
-    });
-    if (obj.ContentLength) headers.set("Content-Length", String(obj.ContentLength));
-    return new Response(obj.Body.transformToWebStream(), { headers });
-  } catch (e) {
-    lastError = e;
-    if (tipo !== "original") break;
-  }
+    const ext = key.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+    // Los originales conservan el nombre con el que los grabo la modelo (IMG_8027.MOV).
+    const base = tipo === "original" && pieza.filename_original
+      ? limpiar(pieza.filename_original).replace(/\.[^.]+$/, "")
+      : limpiar((pieza.titulo || pieza.id).toString());
+    const nombre = `${nombreModelo ? `${limpiar(nombreModelo)}-` : ""}${base}-${tipo}.${ext}`;
+
+    if (key.startsWith("supabase://")) {
+      const sinEsquema = key.slice("supabase://".length);
+      const barra = sinEsquema.indexOf("/");
+      if (barra === -1) continue;
+      const { data: firmada } = await supabase.storage
+        .from(sinEsquema.slice(0, barra))
+        .createSignedUrl(sinEsquema.slice(barra + 1), 3600, { download: nombre });
+      if (firmada?.signedUrl) return NextResponse.redirect(firmada.signedUrl);
+      continue;
+    }
+
+    if (await existeEnR2(key)) {
+      return NextResponse.redirect(await getSignedDownloadUrl(key, undefined, nombre));
+    }
   }
 
-  return NextResponse.json({ error: lastError instanceof Error ? lastError.message : "No se pudo descargar" }, { status: 500 });
+  return NextResponse.json({ error: "No se encontró el archivo en el almacén" }, { status: 404 });
 }
