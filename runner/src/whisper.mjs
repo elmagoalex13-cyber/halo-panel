@@ -349,7 +349,30 @@ export function alignCorrectedText(text, wordTimed, bounds, maxWords = 4) {
     return chunkWordTimed(conTiempoReal, maxWords);
   }
 
+  // El texto corregido tiene otro numero de palabras que la transcripcion: cada palabra del texto toma el tiempo de la
+  // palabra equivalente de la transcripcion (por posicion relativa, interpolando). Asi se conservan las pausas reales en
+  // vez de repartir el texto a partes iguales.
+  if (wordTimed.length >= 2) return chunkWordTimed(alinearTextoAPalabras(words, wordTimed), maxWords);
+
   return subtitleSegmentsFromText(text, bounds, maxWords);
+}
+
+/** Tiempos para `textos` a partir de otra lista de palabras con tiempo (distinto numero de palabras). */
+export function alinearTextoAPalabras(textos, wordTimed) {
+  const n = wordTimed.length;
+  const m = textos.length;
+  const inicios = textos.map((_, i) => {
+    const p = Math.min(n - 1, Math.max(0, ((i + 0.5) * n) / m - 0.5));
+    const a = Math.floor(p);
+    const b = Math.min(n - 1, a + 1);
+    return wordTimed[a].start + (wordTimed[b].start - wordTimed[a].start) * (p - a);
+  });
+  const fin = wordTimed[n - 1].end;
+  return textos.map((text, i) => ({
+    text,
+    start: inicios[i],
+    end: Math.max(inicios[i] + 0.12, Math.min(i + 1 < m ? inicios[i + 1] : fin, inicios[i] + 1.2)),
+  }));
 }
 
 /**
@@ -514,4 +537,28 @@ export function repartirPalabrasEnVoz(textos, tramos) {
     const start = aReal(v0, false);
     return { start, end: Math.max(start + 0.05, aReal(v1, true)), text };
   });
+}
+
+/**
+ * Transcribe SOLO la parte del audio donde hay voz (con 0,1-0,3 s de margen) y devuelve los segmentos con tiempos del
+ * audio original. Si Whisper ve el clip entero y empieza con silencio, coloca las primeras palabras en el segundo 0 y el
+ * resto se va descuadrando; viendo solo la voz, los tiempos de cada palabra coinciden con lo que se oye.
+ * @returns {Promise<Array<{start:number,end:number,text:string}>>} [] si falla (se usan los tiempos del audio completo)
+ */
+export async function transcribirZonaDeVoz(wavPath, outputDir, voz) {
+  try {
+    await mkdir(outputDir, { recursive: true });
+    const ini = Math.max(0, voz.start - 0.1);
+    const fin = voz.end + 0.3;
+    const recortado = path.join(outputDir, "voz.wav");
+    await execFileAsync(config.ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(ini), "-to", String(fin), "-i", wavPath, "-ar", "16000", "-ac", "1", recortado], {
+      timeout: config.commandTimeoutMs,
+    });
+    const segs = await transcribeWithWhisper(recortado, outputDir);
+    return segs
+      .filter((s) => s.text.trim() && s.end > s.start)
+      .map((s) => ({ start: s.start + ini, end: s.end + ini, text: s.text }));
+  } catch {
+    return [];
+  }
 }

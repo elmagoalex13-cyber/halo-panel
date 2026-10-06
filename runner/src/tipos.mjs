@@ -20,6 +20,7 @@ import {
   limitesDeVoz,
   perfilDeNivel,
   repartirPalabrasEnVoz,
+  transcribirZonaDeVoz,
   generateASS,
   primerTramoSospechoso,
   speechBounds,
@@ -80,21 +81,27 @@ async function subtitulos(rawPath, workDir, textoCorregido = "", recorteManual =
     const trim = (inicioManual !== null || finManual !== null)
       ? { start: inicioManual ?? auto?.start ?? 0, end: finManual ?? auto?.end }
       : auto;
-    const textoWhisper = transcriptText(segments);
+    // Tiempos de cada palabra: Whisper sobre SOLO la zona con voz (si lo ve todo, un clip que empieza con silencio le descuadra
+    // las palabras desde el principio y se va acumulando). Si eso falla, los del audio completo; y si ademas no cuadran con
+    // la voz medida, las palabras se reparten por los tramos con voz (estimacion por longitud).
+    const zona = voz ? await transcribirZonaDeVoz(wavPath, path.join(workDir, "audio_voz"), voz) : [];
+    const textoWhisper = zona.length ? transcriptText(zona) : transcriptText(segments);
     const textoFinal = textoCorregido.trim() || textoWhisper;
-    let wordTimed = wordTimedFromSegments(segments);
-    // Si los tiempos de Whisper no cuadran con la voz medida en el audio (clip que empieza con silencio: cree que se
-    // habla desde el segundo 0), las palabras se recolocan sobre los tramos con voz en vez de fiarse de ellos.
-    const whisperCuadra = guia && voz && Math.abs(guia.start - voz.start) <= 0.4 && Math.abs(guia.end - voz.end) <= 0.6;
-    if (voz && !whisperCuadra) {
-      const dentro = voz.tramos
-        .map((t) => ({ ini: Math.max(t.ini, trim?.start ?? 0), fin: Math.min(t.fin, trim?.end ?? Infinity) }))
-        .filter((t) => t.fin > t.ini);
-      const textos = (textoCorregido.trim() || transcriptText(segments)).trim().split(/\s+/).filter(Boolean);
-      const reparto = repartirPalabrasEnVoz(textos, dentro);
-      if (reparto.length === textos.length) {
-        wordTimed = reparto;
-        console.log(`[runner] subtitulos recolocados sobre la voz (whisper no cuadraba: ${guia.start.toFixed(2)}-${guia.end.toFixed(2)} vs voz ${voz.start.toFixed(2)}-${voz.end.toFixed(2)})`);
+    let wordTimed = wordTimedFromSegments(zona.length ? zona : segments);
+    if (zona.length) {
+      console.log(`[runner] subtitulos con Whisper sobre la zona con voz (${zona.length} palabras, ${zona[0].start.toFixed(2)}-${zona.at(-1).end.toFixed(2)})`);
+    } else {
+      const whisperCuadra = guia && voz && Math.abs(guia.start - voz.start) <= 0.4 && Math.abs(guia.end - voz.end) <= 0.6;
+      if (voz && !whisperCuadra) {
+        const dentro = voz.tramos
+          .map((t) => ({ ini: Math.max(t.ini, trim?.start ?? 0), fin: Math.min(t.fin, trim?.end ?? Infinity) }))
+          .filter((t) => t.fin > t.ini);
+        const textos = textoFinal.trim().split(/\s+/).filter(Boolean);
+        const reparto = repartirPalabrasEnVoz(textos, dentro);
+        if (reparto.length === textos.length) {
+          wordTimed = reparto;
+          console.log(`[runner] subtitulos repartidos sobre la voz (whisper no cuadraba: ${guia.start.toFixed(2)}-${guia.end.toFixed(2)} vs voz ${voz.start.toFixed(2)}-${voz.end.toFixed(2)})`);
+        }
       }
     }
     const compact = textoCorregido.trim()
