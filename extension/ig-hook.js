@@ -127,7 +127,7 @@
     if (!c) return { ok: false, motivo: "sin_consulta", paginas: 0 };
     let paginas = 0;
     let ultimoCursor = null;
-    while (store.items.size < maximo && store.hayMas && store.cursor && store.cursor !== ultimoCursor && paginas < 30) {
+    while (!store.cancelar && store.items.size < maximo && store.hayMas && store.cursor && store.cursor !== ultimoCursor && paginas < 30) {
       ultimoCursor = store.cursor;
       const p = new URLSearchParams(c.cuerpo);
       const variables = JSON.parse(p.get("variables") || "{}");

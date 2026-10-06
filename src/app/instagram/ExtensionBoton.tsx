@@ -20,7 +20,7 @@ const CATEGORIAS = [
 ];
 
 // Version minima de la extension que entiende el panel (lee todos los reels paginando, cuentas elegidas...).
-const VERSION_MINIMA = "1.4.0";
+const VERSION_MINIMA = "1.4.1";
 const comparar = (a: string, b: string) => {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);

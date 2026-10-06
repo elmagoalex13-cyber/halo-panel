@@ -165,6 +165,7 @@ async function detallarReelsEnPagina(codigos) {
 
   const detalles = [];
   for (const codigo of codigos) {
+    if (window.__halo?.cancelar) break; // el usuario pulso Cancelar
     const res = await fetch(`/api/v1/media/${pk(codigo)}/info/`, { credentials: "include", headers: cab });
     if (res.status === 429) return { ok: false, motivo: "limite", detalles };
     if (res.status === 401 || res.status === 403) return { ok: false, motivo: "login", detalles };
@@ -220,6 +221,11 @@ async function detallarReels(tabId, codigos) {
 /* ------------------------------------ run ----------------------------------- */
 
 const pausa = (min, max) => new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
+// Pausa que se corta en cuanto se pulsa Cancelar
+async function pausaCancelable(min, max) {
+  const fin = Date.now() + min + Math.random() * (max - min);
+  while (Date.now() < fin && !cancelar) await new Promise((r) => setTimeout(r, 250));
+}
 
 async function descargar(url) {
   // La CDN de Instagram limita (429) si se piden muchos videos seguidos: reintentar con esperas crecientes.
@@ -301,6 +307,11 @@ async function ejecutar({ modo, categoria, dias, ids }) {
       await marcar({ estado: "leyendo" });
       try {
         const lectura = await leerCuenta(tabInfo.tab.id, cuenta.username, maximoReels);
+        if (cancelar) {
+          await marcar({ estado: "cancelado" });
+          await log("Cancelado.", "aviso");
+          break;
+        }
         const fallo = async (detalle, motivo) => {
           const fatal = motivo === "login" || motivo === "limite";
           await log(`@${cuenta.username}: ${detalle}`, "error");
@@ -331,6 +342,11 @@ async function ejecutar({ modo, categoria, dias, ids }) {
           method: "POST",
           body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: lectura.reels.map(sinMedios), dias: diasUsados, max: maxPorCuenta, fase: "candidatos" }),
         });
+        if (cancelar) {
+          await marcar({ estado: "cancelado" });
+          await log("Cancelado.", "aviso");
+          break;
+        }
         // 2) Solo de esos se pide el detalle (fecha, texto, audio, video).
         const reelsPorCodigo = new Map(lectura.reels.map((r) => [r.codigo, r]));
         if (previo.subir.length) {
@@ -342,6 +358,11 @@ async function ejecutar({ modo, categoria, dias, ids }) {
             else reelsPorCodigo.set(d.codigo, { ...reelsPorCodigo.get(d.codigo), ...d });
           }
           if (!det.ok && (await fallo(det.motivo === "limite" ? "Instagram limita las peticiones (429)" : "Instagram pide iniciar sesión", det.motivo))) break;
+        }
+        if (cancelar) {
+          await marcar({ estado: "cancelado" });
+          await log("Cancelado.", "aviso");
+          break;
         }
         // 3) El panel decide los definitivos (fecha, estilo...) y se suben.
         const analisis = await panel("/api/extension/analizar", {
@@ -379,7 +400,7 @@ async function ejecutar({ modo, categoria, dias, ids }) {
         await marcar({ estado: "error", detalle: e.message });
         resumen.errores++;
       }
-      if (i < cuentas.length - 1) await pausa(...PAUSA_ENTRE_CUENTAS_MS);
+      if (i < cuentas.length - 1) await pausaCancelable(...PAUSA_ENTRE_CUENTAS_MS);
     }
   } catch (e) {
     await log(e.message, "error");
@@ -453,6 +474,31 @@ async function refrescarMetricas({ modo }) {
   }
 }
 
+/* --------------------------------- cancelar --------------------------------- */
+
+// Para el analisis en curso YA: avisa a la pestana de Instagram (que es donde se pasa la mayor parte del
+// tiempo) y a los bucles de la extension. Si no hay nada en marcha pero el estado se quedo colgado como
+// "analizando" (p. ej. el navegador durmio la extension a medias), lo deja limpio.
+async function detener() {
+  if (!corriendo) {
+    await guardarEstado({ corriendo: false, fin: Date.now() });
+    await log("No había ningún análisis en marcha: estado reiniciado.", "aviso");
+    return;
+  }
+  cancelar = true;
+  await log("Cancelando… se detiene en unos segundos.", "aviso");
+  try {
+    const tabs = await chrome.tabs.query({ url: "https://www.instagram.com/*" });
+    for (const tab of tabs) {
+      chrome.scripting
+        .executeScript({ target: { tabId: tab.id }, world: "MAIN", func: () => { if (window.__halo) window.__halo.cancelar = true; } })
+        .catch(() => {});
+    }
+  } catch {
+    /* sin pestanas de Instagram */
+  }
+}
+
 /* --------------------------------- mensajes --------------------------------- */
 
 chrome.runtime.onMessage.addListener((msg, _sender, responder) => {
@@ -463,8 +509,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, responder) => {
     refrescarMetricas(msg).catch((e) => log(e.message, "error"));
     responder({ ok: true });
   } else if (msg?.type === "cancel") {
-    cancelar = true;
-    responder({ ok: true });
+    detener().then(() => responder({ ok: true }));
+    return true;
   } else if (msg?.type === "status") {
     estado().then((e) => responder({ ok: true, estado: e, version: chrome.runtime.getManifest().version }));
     return true;
