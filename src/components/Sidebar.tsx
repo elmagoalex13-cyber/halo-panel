@@ -9,6 +9,7 @@ const NAV = [
   { href: "/facturacion", label: "Facturación", icon: "$" },
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
   { href: "/originales", label: "Originales", icon: "▤" },
+  { href: "/onlyfans", label: "OnlyFans", icon: "♡" },
   { href: "/leads", label: "Leads", icon: "◇", leadsBadge: true },
   { href: "/asignar", label: "Asignar vídeos", icon: "⇪" },
   { href: "/instagram", label: "Instagram", icon: "◎" },

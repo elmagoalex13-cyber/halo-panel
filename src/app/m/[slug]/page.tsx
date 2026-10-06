@@ -5,6 +5,9 @@ import { urlR2 } from "@/lib/media";
 import { LoginForm } from "./LoginForm";
 import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
 import { sanearDatos } from "@/lib/onboarding";
+import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
+import { urlVista } from "@/lib/r2/onlyfans";
+import type { ArchivoVista } from "./OnlyFansPortal";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mi portal" };
@@ -44,6 +47,28 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
 
   const sesion = await sesionActual(slug);
   if (!sesion || sesion.modeloId !== modelo.id) return <LoginForm slug={slug} nombre={modelo.nombre} />;
+
+  // Contenido de OnlyFans de esta modelo (si las tablas aun no existen, la pestaña no aparece)
+  const [ofColRes, ofArcRes] = await Promise.all([
+    supabase.from("of_colecciones").select("*").eq("modelo_id", modelo.id).order("created_at", { ascending: false }),
+    supabase
+      .from("of_archivos")
+      .select("id, coleccion_id, fase, slot, tipo_archivo, orden, nombre_original, mime, size_bytes, duracion_seg, descargado_at, subido_of_at, created_at, storage_key, bucket")
+      .eq("modelo_id", modelo.id)
+      .order("created_at", { ascending: true })
+      .limit(3000),
+  ]);
+  let contenidoOF: { colecciones: ColeccionOF[]; archivos: ArchivoVista[] } | null = null;
+  if (!ofColRes.error && !ofArcRes.error) {
+    const filas = (ofArcRes.data ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>;
+    const archivos: ArchivoVista[] = await Promise.all(
+      filas.map(async ({ storage_key, bucket, ...a }) => ({
+        ...a,
+        vista: a.tipo_archivo === "foto" ? await urlVista(storage_key, bucket).catch(() => null) : null,
+      })),
+    );
+    contenidoOF = { colecciones: (ofColRes.data ?? []) as ColeccionOF[], archivos };
+  }
 
   const [encargosRes, entregasRes, onboardingRes] = await Promise.all([
     supabase
@@ -86,5 +111,5 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
     estado: (onboardingRes.data?.estado === "enviado" ? "enviado" : "borrador") as "borrador" | "enviado",
   };
 
-  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} />;
+  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} />;
 }

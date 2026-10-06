@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SubirBoton } from "./SubirBoton";
 import { OnboardingForm } from "./OnboardingForm";
+import { OnlyFansPortal, type ArchivoVista } from "./OnlyFansPortal";
+import type { ColeccionOF } from "@/lib/onlyfans";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 
 export type Referencia = {
@@ -42,7 +44,7 @@ const TEXTO_ENCARGO: Record<number, string> = {
 };
 const POR_PAGINA = 5;
 
-type Pestana = "grabar" | "subir" | "subidos";
+type Pestana = "grabar" | "subir" | "subidos" | "contenido";
 
 function VideoReferencia({ r }: { r: Referencia }) {
   return (
@@ -245,12 +247,15 @@ export function PortalClient({
   pendientes,
   entregas,
   onboarding,
+  contenidoOF,
 }: {
   nombre: string;
   slug: string;
   pendientes: Pendiente[];
   entregas: Entrega[];
   onboarding: { datos: DatosOnboarding; estado: "borrador" | "enviado" };
+  // Contenido de OnlyFans (scripts por fases, packs, posts). null = todavia no activado (faltan las tablas).
+  contenidoOF: { colecciones: ColeccionOF[]; archivos: ArchivoVista[] } | null;
 }) {
   const router = useRouter();
   const [onboardingAbierto, setOnboardingAbierto] = useState(false);
@@ -282,6 +287,7 @@ export function PortalClient({
     { id: "grabar", label: "Por grabar", n: pendientes.length },
     { id: "subir", label: "Subir vídeos", n: null },
     { id: "subidos", label: "Subidos", n: entregas.length },
+    ...(contenidoOF ? [{ id: "contenido" as Pestana, label: "Contenido", n: contenidoOF.colecciones.filter((c) => c.estado === "en_curso").length || null }] : []),
   ];
 
   return (
@@ -325,7 +331,7 @@ export function PortalClient({
         </button>
       </div>
 
-      <div role="tablist" className="grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+      <div role="tablist" className={`grid gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 ${pestanas.length > 3 ? "grid-cols-4" : "grid-cols-3"}`}>
         {pestanas.map((t) => (
           <button
             key={t.id}
@@ -441,6 +447,8 @@ export function PortalClient({
           )}
         </section>
       ) : null}
+
+      {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} /> : null}
 
       <ModalVideo pendiente={videoAbierto} onClose={() => setVideoAbierto(null)} />
     </main>
