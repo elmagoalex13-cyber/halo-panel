@@ -382,6 +382,7 @@ export function MesaClient({
   const [publicando, setPublicando] = useState(false);
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [changeLoading, setChangeLoading] = useState(false);
+  const [changeProgress, setChangeProgress] = useState(0);
   const [changeVideoError, setChangeVideoError] = useState<string | null>(null);
   const [captionLoading, setCaptionLoading] = useState(false);
   const [captionError, setCaptionError] = useState<string | null>(null);
@@ -1004,22 +1005,35 @@ export function MesaClient({
                     setChangeLoading(true);
                     setChangeVideoError(null);
                     try {
-                      const fd = new FormData();
-                      fd.append("file", f);
-                      fd.append("content_id", selected.id);
+                      // Subida directa a R2 con URL firmada: el archivo llega byte a byte, sin pasar por el servidor
+                      // (que limita a ~4,5 MB) y sin recomprimirse. Despues se registra como el video editado.
+                      const ext = (f.name.split(".").pop() ?? "mp4").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "mp4";
+                      const key = `editados/${selected.id}/${crypto.randomUUID()}.${ext}`;
+                      const contentType = f.type || "video/mp4";
+                      const firma = await fetch("/api/r2/presign", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ key, contentType }),
+                      });
+                      const firmado = (await firma.json().catch(() => ({}))) as { url?: string; error?: string };
+                      if (!firma.ok || !firmado.url) throw new Error(firmado.error ?? "No se pudo preparar la subida");
                       await new Promise<void>((resolve, reject) => {
                         const xhr = new XMLHttpRequest();
-                        xhr.addEventListener("load", () => {
-                          if (xhr.status >= 200 && xhr.status < 300) resolve();
-                          else {
-                            try { reject(new Error((JSON.parse(xhr.responseText) as { error?: string }).error ?? `Error ${xhr.status}`)); }
-                            catch { reject(new Error(`Error ${xhr.status}`)); }
-                          }
+                        xhr.upload.addEventListener("progress", (ev) => {
+                          if (ev.lengthComputable) setChangeProgress(Math.round((ev.loaded / ev.total) * 100));
                         });
-                        xhr.addEventListener("error", () => reject(new Error("Error de red")));
-                        xhr.open("POST", "/api/upload");
-                        xhr.send(fd);
+                        xhr.addEventListener("load", () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`La subida falló (${xhr.status})`))));
+                        xhr.addEventListener("error", () => reject(new Error("Error de red al subir el video")));
+                        xhr.open("PUT", firmado.url as string);
+                        xhr.setRequestHeader("Content-Type", contentType);
+                        xhr.send(f);
                       });
+                      const registro = await fetch("/api/aprobacion/cambiar-video", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ id: selected.id, key }),
+                      });
+                      if (!registro.ok) throw new Error(((await registro.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo registrar el video");
                       if (changeFileRef.current) changeFileRef.current.value = "";
                       router.refresh();
                       closePopup();
@@ -1027,6 +1041,7 @@ export function MesaClient({
                       setChangeVideoError(err instanceof Error ? err.message : "Error al cambiar el video");
                     } finally {
                       setChangeLoading(false);
+                      setChangeProgress(0);
                     }
                   }}
                 />
@@ -1036,7 +1051,7 @@ export function MesaClient({
                   onClick={() => changeFileRef.current?.click()}
                   className="btn-secondary flex w-fit items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"
                 >
-                  {changeLoading ? "Subiendo..." : "↺ Cambiar video"}
+                  {changeLoading ? `Subiendo${changeProgress ? ` ${changeProgress}%` : "..."}` : "↺ Cambiar video"}
                 </button>
                 {changeVideoError && (
                   <p className="mt-1 text-[10px] text-red-400">{changeVideoError}</p>

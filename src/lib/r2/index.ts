@@ -1,4 +1,4 @@
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 function createR2Client() {
@@ -60,4 +60,8 @@ export async function existeEnR2(key: string, bucket = process.env.R2_BUCKET_NAM
 export async function getR2Object(key: string, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos") {
   const client = createR2Client();
   return client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+export async function borrarDeR2(key: string, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos") {
+  await createR2Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
