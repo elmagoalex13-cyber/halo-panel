@@ -1,4 +1,6 @@
+import { createHash } from "crypto";
 import { PanelLayout } from "@/components/PanelLayout";
+import { listarClavesR2 } from "@/lib/r2";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
@@ -26,6 +28,21 @@ type Fila = {
   modelo?: { nombre?: string | null } | null;
 };
 
+const baseR2 = (process.env.R2_PUBLIC_URL ?? process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+
+// Mismo calculo que el runner (runner/src/previews.mjs): previews/<hash>.jpg|mp4
+const hashOriginal = (clave: string) => createHash("sha1").update(clave).digest("hex").slice(0, 20);
+
+// Hashes de los originales que ya tienen vista previa (el runner las genera: miniatura + copia ligera H.264).
+async function vistasPreviasListas(): Promise<Set<string>> {
+  try {
+    const claves = await listarClavesR2("previews/");
+    return new Set(claves.filter((k) => k.endsWith(".mp4")).map((k) => k.slice("previews/".length, -4)));
+  } catch {
+    return new Set();
+  }
+}
+
 // Cada video que sube una modelo se guarda tal cual lo grabo (almacen privado) y NUNCA se borra: aqui estan
 // todos, con su estado, para poder verlos y descargarlos y editarlos a mano si la edicion automatica falla.
 async function cargar(): Promise<Original[]> {
@@ -42,7 +59,7 @@ async function cargar(): Promise<Original[]> {
         .order("recibido_at", { ascending: false })
         .limit(1500);
     // original_borrado_at la crea el SQL 20261007; mientras no exista se lista sin ella.
-    const [primera, fotos] = await Promise.all([consulta(", original_borrado_at"), versionesFotos()]);
+    const [primera, fotos, previews] = await Promise.all([consulta(", original_borrado_at"), versionesFotos(), vistasPreviasListas()]);
     const { data, error } = primera.error ? await consulta("") : primera;
     if (error) return [];
 
@@ -59,6 +76,8 @@ async function cargar(): Promise<Original[]> {
     return [...grupos.values()].slice(0, 300).map((piezas) => {
       const primera = piezas[0];
       const ultima = piezas[piezas.length - 1]; // la mas antigua = la subida original
+      const claveOriginal = (primera.r2_key_original ?? primera.r2_key) as string;
+      const h = hashOriginal(claveOriginal);
       return {
         id: primera.id,
         modelo_id: primera.modelo_id,
@@ -67,6 +86,7 @@ async function cargar(): Promise<Original[]> {
         archivo: ultima.filename_original ?? primera.titulo ?? "video",
         tamano: ultima.size_bytes ?? null,
         recibido_at: ultima.recibido_at,
+        preview: previews.has(h) && baseR2 ? { poster: `${baseR2}/previews/${h}.jpg`, video: `${baseR2}/previews/${h}.mp4` } : null,
         piezas: piezas.map<PiezaDeOriginal>((p) => ({
           id: p.id,
           estado: p.estado,

@@ -17,6 +17,8 @@ import {
   chunkWordTimed,
   detectVoiceOnset,
   extractAudio,
+  limitesDeVoz,
+  perfilDeNivel,
   generateASS,
   primerTramoSospechoso,
   speechBounds,
@@ -60,12 +62,20 @@ async function subtitulos(rawPath, workDir, textoCorregido = "", recorteManual =
     const inicioManual = Number.isFinite(recorteManual.inicio) ? Math.max(0, recorteManual.inicio) : null;
     const finManual = Number.isFinite(recorteManual.fin) ? recorteManual.fin : null;
 
-    // Solo se corrige el timestamp de Whisper si hay una señal concreta de que
-    // no es fiable (ver primerTramoSospechoso): en audio limpio, Whisper ya
-    // acierta el inicio; corregir siempre a ciegas por volumen puede cortar
-    // habla real en videos con viento/ruido de fondo alto.
-    const voiceOnset = inicioManual === null && primerTramoSospechoso(segments) ? await detectVoiceOnset(wavPath) : null;
-    const auto = speechBounds(segments, { voiceOnset });
+    // 1) Limites de la VOZ medidos en el audio (nivel cada 20 ms). Whisper alarga el primer y el ultimo tramo
+    //    (primera palabra en el 0 cuando la voz entra en el 0,8; ultima palabra con 2 s de silencio detras),
+    //    asi que el video no empezaba/acababa justo donde se habla. Whisper solo sirve de guia de donde buscar.
+    const guia = speechBounds(segments);
+    const frames = guia ? await perfilDeNivel(wavPath) : null;
+    const voz = guia && frames ? limitesDeVoz(frames, { primeraPalabra: guia.start, ultimaPalabraFin: guia.end }) : null;
+
+    // 2) Sin contraste suficiente (ruido constante...) se vuelve al metodo anterior: timestamp de Whisper, y solo si el
+    //    primer tramo es sospechoso se corrige el inicio por volumen.
+    const voiceOnset = !voz && inicioManual === null && primerTramoSospechoso(segments) ? await detectVoiceOnset(wavPath) : null;
+    const auto = voz ? { start: voz.start, end: voz.end } : speechBounds(segments, { voiceOnset });
+    console.log(`[runner] recorte voz: whisper ${guia?.start.toFixed(2)}-${guia?.end.toFixed(2)} -> ${voz ? "audio" : "whisper"} ${auto?.start.toFixed(2)}-${auto?.end.toFixed(2)}`);
+
+    // El recorte manual de la mesa de aprobacion tiene prioridad (si solo se dio un limite, el otro es automatico)
     const trim = (inicioManual !== null || finManual !== null)
       ? { start: inicioManual ?? auto?.start ?? 0, end: finManual ?? auto?.end }
       : auto;

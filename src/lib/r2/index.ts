@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 function createR2Client() {
@@ -64,4 +64,17 @@ export async function getR2Object(key: string, bucket = process.env.R2_BUCKET_NA
 
 export async function borrarDeR2(key: string, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos") {
   await createR2Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+/** Claves que empiezan por un prefijo (hasta `max`). */
+export async function listarClavesR2(prefijo: string, max = 5000, bucket = process.env.R2_BUCKET_NAME ?? "halo-videos") {
+  const client = createR2Client();
+  const claves: string[] = [];
+  let token: string | undefined;
+  do {
+    const r = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefijo, ContinuationToken: token }));
+    for (const o of r.Contents ?? []) if (o.Key) claves.push(o.Key);
+    token = r.IsTruncated && claves.length < max ? r.NextContinuationToken : undefined;
+  } while (token);
+  return claves;
 }

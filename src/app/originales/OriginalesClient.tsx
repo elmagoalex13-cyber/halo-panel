@@ -27,6 +27,7 @@ export type Original = {
   archivo: string;
   tamano: number | null;
   recibido_at: string;
+  preview: { poster: string; video: string } | null; // miniatura y copia ligera generadas por el servidor
   piezas: PiezaDeOriginal[];
 };
 
@@ -69,12 +70,15 @@ function antiguedad(fecha: string) {
   return dias <= 0 ? "hoy" : dias === 1 ? "ayer" : `hace ${dias} días`;
 }
 
-// Primer fotograma del video original para reconocerlo de un vistazo. Solo se pide cuando la tarjeta entra en
-// pantalla (son muchos videos y pesan). El archivo se sirve tal cual, sin recomprimir.
-function VistaPrevia({ id }: { id: string }) {
+// Vista previa para reconocer el video de un vistazo. Lo normal: miniatura + copia ligera H.264 que genera el
+// servidor (se ven en cualquier navegador; los .MOV de iPhone en HEVC muchos navegadores no los reproducen).
+// Mientras esa copia no esta lista se intenta el original (solo si no es .MOV). Solo se carga cuando la tarjeta
+// entra en pantalla. El archivo original no se toca.
+function VistaPrevia({ id, archivo, preview }: { id: string; archivo: string; preview: { poster: string; video: string } | null }) {
   const caja = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [fallo, setFallo] = useState(false);
+  const probarOriginal = !preview && !/\.mov$/i.test(archivo);
 
   useEffect(() => {
     const el = caja.current;
@@ -94,7 +98,11 @@ function VistaPrevia({ id }: { id: string }) {
 
   return (
     <div ref={caja} className="aspect-[9/16] w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
-      {visible && !fallo ? (
+      {preview ? (
+        visible ? (
+          <video src={preview.video} poster={preview.poster} controls muted playsInline preload="none" className="h-full w-full object-contain" />
+        ) : null
+      ) : visible && probarOriginal && !fallo ? (
         <video
           src={`/api/aprobacion/original?id=${id}#t=0.5`}
           controls
@@ -105,8 +113,8 @@ function VistaPrevia({ id }: { id: string }) {
           className="h-full w-full object-contain"
         />
       ) : (
-        <div className="grid h-full place-items-center px-3 text-center text-[11px] text-white/30">
-          {fallo ? "Tu navegador no puede mostrar este formato (suele pasar con .MOV de iPhone). Descárgalo con «Original»." : "Cargando…"}
+        <div className="grid h-full place-items-center px-3 text-center text-[11px] text-white/35">
+          {visible ? "Preparando la vista previa… el servidor la genera en unos minutos (recarga la página)." : ""}
         </div>
       )}
     </div>
@@ -298,7 +306,7 @@ export function OriginalesClient({
                 className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-2.5 transition ${marcado ? "border-red-500/50 bg-red-500/[0.06]" : "border-white/[0.08] bg-white/[0.03] hover:border-white/20"}`}
               >
                 <div className="relative">
-                  <VistaPrevia id={o.id} />
+                  <VistaPrevia id={o.id} archivo={o.archivo} preview={o.preview} />
                   <label className="absolute left-2 top-2 grid h-6 w-6 cursor-pointer place-items-center rounded-md bg-black/70 backdrop-blur" title="Elegir para borrar">
                     <input type="checkbox" checked={marcado} onChange={() => alternar(o.id)} className="h-4 w-4 cursor-pointer accent-red-500" />
                   </label>

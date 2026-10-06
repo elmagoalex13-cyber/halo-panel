@@ -393,3 +393,88 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
   return header + events + "\n";
 }
+
+/* ------------------------------------------------------------------------------------------------
+ * Limites reales de la voz medidos en el audio (no en los timestamps de Whisper).
+ * Whisper suele extender el primer y el ultimo tramo (p. ej. "No se." de 1,8 s con una sola palabra, o una
+ * primera palabra en el segundo 0 cuando la voz entra en el 0,7), asi que el video no se recortaba justo
+ * donde empieza y acaba de hablar. Aqui se mide el nivel (RMS) cada 20 ms y se buscan los tramos con voz;
+ * Whisper solo sirve de guia de DONDE buscar.
+ * ---------------------------------------------------------------------------------------------- */
+
+const FRAME_SEC = 0.02;
+
+/** Nivel RMS (dB) del audio cada 20 ms: [{ t, db }]. null si no se puede medir. */
+export async function perfilDeNivel(audioPath) {
+  try {
+    const muestras = Math.round(16000 * FRAME_SEC); // el wav de extractAudio va a 16 kHz
+    const { stdout } = await execFileAsync(config.ffmpeg, [
+      "-hide_banner", "-nostats", "-loglevel", "error",
+      "-i", audioPath,
+      "-af", `asetnsamples=n=${muestras}:p=0,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-`,
+      "-f", "null", "-",
+    ], { maxBuffer: 1024 * 1024 * 48, timeout: config.commandTimeoutMs });
+    const frames = [];
+    let t = null;
+    for (const linea of stdout.split("\n")) {
+      const m = linea.match(/pts_time:([0-9.]+)/);
+      if (m) {
+        t = Number(m[1]);
+        continue;
+      }
+      const v = linea.match(/RMS_level=(-?[0-9.]+|-inf|inf)/);
+      if (v && t !== null) {
+        frames.push({ t, db: v[1] === "-inf" ? -100 : Math.max(-100, Number(v[1])) });
+        t = null;
+      }
+    }
+    return frames.length > 20 ? frames : null;
+  } catch {
+    return null;
+  }
+}
+
+const percentil = (valores, p) => {
+  const orden = [...valores].sort((a, b) => a - b);
+  return orden[Math.min(orden.length - 1, Math.max(0, Math.floor((p / 100) * orden.length)))];
+};
+
+/**
+ * Donde empieza y donde acaba de verdad la voz.
+ * @param {Array<{t:number, db:number}>} frames  perfil de nivel (perfilDeNivel)
+ * @param {{ primeraPalabra:number, ultimaPalabraFin:number }} guia  tiempos de Whisper (solo como guia)
+ * @returns {{ start:number, end:number } | null}  null si el audio no tiene contraste (ruido constante...)
+ */
+export function limitesDeVoz(frames, { primeraPalabra, ultimaPalabraFin }, { padInicio = 0.05, padFin = 0.12 } = {}) {
+  if (!frames?.length) return null;
+  const dbs = frames.map((f) => f.db);
+  const suelo = percentil(dbs, 10);
+  const pico = percentil(dbs, 95);
+  if (pico - suelo < 10) return null; // sin contraste: no hay forma fiable de separar voz y ruido
+
+  // Umbral = suelo de ruido + ~30 % del rango dinamico (y al menos 6 dB)
+  const umbral = suelo + Math.max(6, 0.3 * (pico - suelo));
+
+  // Tramos con voz; los huecos de menos de 0,25 s (pausas entre palabras) se unen y los tramos de menos de 0,15 s se ignoran
+  const tramos = [];
+  for (const f of frames) {
+    if (f.db <= umbral) continue;
+    const ultimo = tramos[tramos.length - 1];
+    if (ultimo && f.t - ultimo.fin <= 0.25) ultimo.fin = f.t + FRAME_SEC;
+    else tramos.push({ ini: f.t, fin: f.t + FRAME_SEC });
+  }
+  const utiles = tramos.filter((t) => t.fin - t.ini >= 0.15);
+  if (!utiles.length) return null;
+
+  // Inicio: el primer tramo con voz que no termina antes de la primera palabra de Whisper
+  const inicio = utiles.find((t) => t.fin > primeraPalabra) ?? utiles[0];
+  // Fin: el ultimo tramo que empieza antes del final de Whisper (+0,2 s); no pasa mas de 0,5 s del final de Whisper
+  const candidatos = utiles.filter((t) => t.ini < ultimaPalabraFin + 0.2 && t.fin > inicio.ini);
+  const final = candidatos[candidatos.length - 1] ?? inicio;
+
+  const duracionTotal = frames[frames.length - 1].t + FRAME_SEC;
+  const start = Math.max(0, inicio.ini - padInicio);
+  const end = Math.min(duracionTotal, Math.min(final.fin, ultimaPalabraFin + 0.5) + padFin);
+  if (end - start < 0.8) return null;
+  return { start, end, umbral, suelo, pico };
+}

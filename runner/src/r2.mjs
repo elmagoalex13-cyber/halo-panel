@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { createWriteStream, createReadStream } from "fs";
 import { pipeline } from "stream/promises";
 import { mkdir } from "fs/promises";
@@ -43,6 +43,18 @@ export async function uploadToR2(localPath, key, contentType = "video/mp4") {
   await s3.send(
     new PutObjectCommand({ Bucket: config.r2Bucket, Key: key, Body: createReadStream(localPath), ContentType: contentType }),
   );
+}
+
+/** Todas las claves que empiezan por un prefijo. */
+export async function listarClaves(prefijo) {
+  const claves = [];
+  let token;
+  do {
+    const r = await s3.send(new ListObjectsV2Command({ Bucket: config.r2Bucket, Prefix: prefijo, ContinuationToken: token }));
+    for (const o of r.Contents ?? []) if (o.Key) claves.push(o.Key);
+    token = r.IsTruncated ? r.NextContinuationToken : undefined;
+  } while (token);
+  return claves;
 }
 
 export function publicUrl(key) {
