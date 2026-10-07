@@ -190,8 +190,11 @@ export function ModelosClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmar: borrarDef.nombre }),
       });
-      if (res.ok) window.location.reload();
-      else setErrorDef(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo borrar");
+      const j = (await res.json().catch(() => ({}))) as { error?: string; archivos?: number };
+      if (res.ok) {
+        window.alert(`Modelo eliminada para siempre. Se han borrado ${j.archivos ?? 0} archivos del almacén.`);
+        window.location.reload();
+      } else setErrorDef(j.error ?? "No se pudo borrar");
     } catch {
       setErrorDef("No se pudo conectar con el servidor.");
     } finally {
@@ -591,7 +594,7 @@ export function ModelosClient({
       <ConfirmacionDoble
         abierto={Boolean(borrarDef)}
         titulo={`Eliminar a ${borrarDef?.nombre ?? ""} para siempre`}
-        detalle="Se borrará la modelo y TODO lo que cuelga de ella en el panel: sus cuentas, vídeos, contenido de OnlyFans, facturación y perfil, y también las copias de seguridad de la papelera. Los archivos de vídeo guardados en el almacenamiento no se tocan."
+        detalle="Se borrará la modelo y TODO lo suyo: sus archivos del almacenamiento (vídeos originales y editados, contenido de OnlyFans, virales y foto, para liberar espacio), sus cuentas, facturación y perfil, y también las copias de seguridad de la papelera. No habrá forma de recuperar nada."
         nombre={borrarDef?.nombre ?? ""}
         ocupado={borrandoDef}
         error={errorDef}
