@@ -352,7 +352,15 @@ export function VaultClient({
             {papelera.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-3 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-white">{e.nombre}</p>
+                  <p className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-white/80">
+                      {categories.find((c) => c.id === e.categoria)?.icon} {categories.find((c) => c.id === e.categoria)?.label ?? e.categoria}
+                    </span>
+                    <span className="truncate font-semibold text-white">{e.nombre}</span>
+                  </p>
+                  {[nombreModelo(e.modelo_id), e.descripcion].filter(Boolean).length ? (
+                    <p className="truncate text-xs text-[color:var(--text-secondary)]">{[nombreModelo(e.modelo_id), e.descripcion].filter(Boolean).join(" · ")}</p>
+                  ) : null}
                   <p className="text-xs text-white/40">
                     {(e.ambito ?? "privado") === "compartido" ? "Baúl compartido" : "Tu baúl"} · eliminada{" "}
                     {e.eliminada_at ? new Date(e.eliminada_at).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}

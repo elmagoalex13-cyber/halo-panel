@@ -21,6 +21,12 @@ export async function POST(req: NextRequest) {
   try {
     const { key, contentType } = await req.json() as { key: string; contentType: string };
     if (!key || !contentType) return NextResponse.json({ error: "key y contentType requeridos" }, { status: 400 });
+    // Solo rutas nuevas de las carpetas que usa el panel y la extension: nunca se puede firmar una subida sobre un archivo existente
+    // de otra zona (originales de las modelos, previews...).
+    const RUTAS_VALIDAS = /^(editados|referencias|propios)\/[\w\-./]+$/;
+    if (typeof key !== "string" || key.includes("..") || key.includes("//") || !RUTAS_VALIDAS.test(key) || !/^(video|image)\//.test(contentType)) {
+      return NextResponse.json({ error: "Ruta o tipo de archivo no permitidos" }, { status: 400 });
+    }
 
     const bucket = process.env.R2_BUCKET_NAME ?? "halo-videos";
     const url = await getSignedUrl(

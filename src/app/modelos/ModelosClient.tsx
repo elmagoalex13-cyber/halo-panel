@@ -160,10 +160,7 @@ export function ModelosClient({
   }
 
   async function eliminarModelo(modelo: Modelo) {
-    const aviso = esDueno
-      ? `¿Mandar a ${modelo.nombre} a la papelera? Desaparece del panel y su portal deja de funcionar, pero NO se borra nada: la tienes en «Papelera» (abajo) y la puedes restaurar con todo su contenido.`
-      : `¿Eliminar a ${modelo.nombre}? Desaparece del panel y su portal deja de funcionar. El dueño del panel conserva una copia y puede recuperarla.`;
-    if (!window.confirm(aviso)) return;
+    // Sin ventana de confirmacion: va a la papelera y se puede restaurar
     const res = await fetch(`/api/modelos/${modelo.id}`, { method: "DELETE" });
     if (res.ok) setModelos((prev) => prev.filter((m) => m.id !== modelo.id));
     else window.alert(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo eliminar");
