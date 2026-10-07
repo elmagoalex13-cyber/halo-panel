@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SelectorAmbito, type FiltroAmbito } from "@/components/SelectorAmbito";
 
@@ -16,12 +17,13 @@ export function SelectorGrupo({
   creadoras?: string;
 }) {
   const router = useRouter();
+  const [pendiente, empezar] = useTransition();
   function cambiar(f: FiltroAmbito) {
     const q = new URLSearchParams();
     if (f !== "todas") q.set("grupo", f);
     if (periodo) q.set("periodo", periodo);
     if (creadoras) q.set("creadoras", creadoras);
-    router.push(`/dashboard${q.size ? `?${q}` : ""}`);
+    empezar(() => router.push(`/dashboard${q.size ? `?${q}` : ""}`));
   }
-  return <SelectorAmbito esDueno valor={actual} onChange={cambiar} cuenta={(f) => totales[f]} />;
+  return <SelectorAmbito esDueno valor={actual} onChange={cambiar} cuenta={(f) => totales[f]} ocupado={pendiente} />;
 }

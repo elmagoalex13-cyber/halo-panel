@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { GlassCard } from "@/components/GlassCard";
 import { TIPOS_EDICION } from "@/lib/tiposEdicion";
+import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 export type EncargoRow = {
   id: string;
+  modelo_id: string | null;
   tipo: number;
   estado: string;
   instrucciones: string | null;
@@ -32,8 +34,21 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
-export function AsignarClient({ modelos, encargos }: { modelos: { id: string; nombre: string }[]; encargos: EncargoRow[] }) {
+export function AsignarClient({
+  modelos: modelosTodas,
+  encargos: encargosTodos,
+  esDueno = false,
+  ambitos = {},
+}: {
+  modelos: { id: string; nombre: string }[];
+  encargos: EncargoRow[];
+  esDueno?: boolean;
+  ambitos?: Record<string, string>;
+}) {
   const router = useRouter();
+  const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
+  const modelos = modelosTodas.filter((m) => ambitoCoincide(filtroAmbito, ambitos[m.id]));
+  const encargos = encargosTodos.filter((e) => ambitoCoincide(filtroAmbito, e.modelo_id ? ambitos[e.modelo_id] : null));
   const [urls, setUrls] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [tipo, setTipo] = useState(4);
@@ -133,6 +148,15 @@ export function AsignarClient({ modelos, encargos }: { modelos: { id: string; no
 
   return (
     <div className="space-y-6">
+      <SelectorAmbito
+        esDueno={esDueno}
+        valor={filtroAmbito}
+        onChange={(f) => {
+          setFiltroAmbito(f);
+          setElegidas([]); // las modelos elegidas ya no tienen por que estar en el grupo
+        }}
+        cuenta={(f) => modelosTodas.filter((m) => ambitoCoincide(f, ambitos[m.id])).length}
+      />
       <GlassCard className="space-y-5 p-5">
         <div>
           <label className="mb-1.5 block text-sm font-semibold text-white">

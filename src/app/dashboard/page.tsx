@@ -37,7 +37,7 @@ async function loadDashboardData(grupo?: GrupoAmbito) {
     const now = new Date();
     const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
     const [videosResult, modelosResult, facturacionResult, onboardingResult] = await Promise.all([
-      soloVisibles(supabase.from("library_content").select("*, modelos(nombre)").order("recibido_at", { ascending: false }).limit(5000), alcance),
+      soloVisibles(supabase.from("library_content").select("id, modelo_id, estado, tipo, recibido_at, aprobado_at, publicado_at, estado_procesamiento, modelos(nombre)").order("recibido_at", { ascending: false }).limit(5000), alcance),
       soloVisibles(supabase.from("modelos").select("*"), alcance, "id"),
       soloVisibles(supabase.from("facturacion_modelos").select("*, modelos(nombre)").gte("periodo_inicio", mesInicio), alcance),
       soloVisibles(supabase.from("modelo_onboarding").select("modelo_id, estado, enviado_at, updated_at, datos"), alcance),
@@ -50,7 +50,7 @@ async function loadDashboardData(grupo?: GrupoAmbito) {
       progreso: progresoOnboarding(sanearDatos(row.datos)),
     }));
 
-    const todas = (videosResult.data ?? []) as Array<WithModelName<LibraryContent> & { tipo?: number | null }>;
+    const todas = (videosResult.data ?? []) as unknown as Array<WithModelName<LibraryContent> & { tipo?: number | null }>;
     trials = todas.filter((v) => v.tipo === 5).map((v) => ({ estado: v.estado, publicado_at: (v as { publicado_at?: string | null }).publicado_at ?? null }));
     const videos = todas.filter((v) => v.tipo !== 5).map((video) => ({
       ...video,
@@ -123,8 +123,8 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual()]);
-  const { porModelo: ambitos } = sesionPanel?.dueno ? await ambitosModelos() : { porModelo: {} as Record<string, string> };
+  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos()]);
+  const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
   const veOnlyFans = !sesionPanel?.denegadas.includes("onlyfans");

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { ADMIN_COOKIE, esDueno, leerAdminSesion } from "@/lib/adminAuth";
 import { areasValidas, type AreaId } from "@/lib/areas";
@@ -77,7 +78,7 @@ export async function listarUsuariosPanel(): Promise<UsuarioPanel[]> {
 export type SesionPanel = { usuario: string; dueno: boolean; denegadas: AreaId[]; nombre: string | null };
 
 /** Quien esta usando el panel ahora (para rutas de API y paginas del servidor). null = sin sesion valida. */
-export async function sesionPanelActual(): Promise<SesionPanel | null> {
+export const sesionPanelActual = cache(async (): Promise<SesionPanel | null> => {
   const jar = await cookies();
   const s = await leerAdminSesion(jar.get(ADMIN_COOKIE)?.value);
   if (!s) return null;
@@ -86,4 +87,4 @@ export async function sesionPanelActual(): Promise<SesionPanel | null> {
   const { data } = await createAdminClient().from("panel_usuarios").select("nombre, activo, areas_denegadas").eq("username", s.u).maybeSingle();
   if (!data || !data.activo) return null;
   return { usuario: s.u, dueno: false, denegadas: areasValidas(data.areas_denegadas), nombre: data.nombre ?? null };
-}
+});

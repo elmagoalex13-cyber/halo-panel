@@ -2,6 +2,7 @@
 //  - El dueño ve todas (modelos === null).
 //  - Cualquier otro usuario ve SOLO las modelos marcadas como "compartidas" y lo que cuelga de ellas.
 //  - Si no hay sesion, o la columna `ambito` aun no existe (falta el SQL 20261013), no ve ninguna: se falla cerrado.
+import { cache } from "react";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
@@ -13,7 +14,8 @@ export type Alcance = { dueno: boolean; modelos: string[] | null };
 export type GrupoAmbito = "mias" | "compartidas";
 
 /** `grupo` solo lo respeta el dueño (para ver "mis modelos" o "con mi socio" por separado); el resto siempre ve solo lo compartido. */
-export async function alcanceActual(grupo?: GrupoAmbito): Promise<Alcance> {
+// `cache` de React: dentro de una misma peticion (una pagina llama a esto varias veces) se resuelve una sola vez
+export const alcanceActual = cache(async (grupo?: GrupoAmbito): Promise<Alcance> => {
   const sesion = await sesionPanelActual();
   if (!sesion) return { dueno: false, modelos: [] };
   if (sesion.dueno) {
@@ -24,7 +26,7 @@ export async function alcanceActual(grupo?: GrupoAmbito): Promise<Alcance> {
   }
   const { data, error } = await createAdminClient().from("modelos").select("id").eq("ambito", "compartido");
   return { dueno: false, modelos: error ? [] : (data ?? []).map((m) => m.id as string) };
-}
+});
 
 /** ¿Puede ver esta modelo? */
 export const veModelo = (a: Alcance, modeloId: string | null | undefined) => a.modelos === null || (Boolean(modeloId) && a.modelos.includes(modeloId as string));

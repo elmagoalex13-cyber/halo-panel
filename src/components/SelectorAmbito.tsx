@@ -20,7 +20,9 @@ export function SelectorAmbito({
   valor,
   onChange,
   cuenta,
+  ocupado = false,
 }: {
+  ocupado?: boolean;
   esDueno: boolean;
   valor: FiltroAmbito;
   onChange: (f: FiltroAmbito) => void;
@@ -30,7 +32,7 @@ export function SelectorAmbito({
   const actual = OPCIONES.find((o) => o.id === valor) ?? OPCIONES[0];
   return (
     <div className="mb-4">
-      <div className="inline-flex max-w-full flex-wrap gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+      <div className={`inline-flex transition-opacity ${ocupado ? "opacity-60" : ""} max-w-full flex-wrap gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1`}>
         {OPCIONES.map(({ id, etiqueta, Icono, activo, icono }) => {
           const on = valor === id;
           return (
@@ -48,7 +50,7 @@ export function SelectorAmbito({
           );
         })}
       </div>
-      <p className="mt-1.5 text-xs text-white/40">{actual.ayuda}</p>
+      <p className="mt-1.5 text-xs text-white/40">{ocupado ? "Cargando…" : actual.ayuda}</p>
     </div>
   );
 }

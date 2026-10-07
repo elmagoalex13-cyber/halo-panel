@@ -1,13 +1,14 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { AsignarClient, type EncargoRow } from "./AsignarClient";
-import { alcanceActual, soloVisibles } from "@/lib/alcance";
+import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Asignar vídeos" };
 
 type Fila = {
   id: string;
+  modelo_id: string | null;
   tipo_video: string;
   estado: string;
   instrucciones: string | null;
@@ -25,7 +26,7 @@ async function cargar() {
     soloVisibles(
       supabase
         .from("encargos")
-        .select("id, tipo_video, estado, instrucciones, created_at, modelo:modelos(nombre), referencia:referencias(url_original, url_r2)")
+        .select("id, modelo_id, tipo_video, estado, instrucciones, created_at, modelo:modelos(nombre), referencia:referencias(url_original, url_r2)")
         .order("created_at", { ascending: false })
         .limit(60),
       alcance,
@@ -33,6 +34,7 @@ async function cargar() {
   ]);
   const encargos = ((e.data ?? []) as unknown as Fila[]).map((f) => ({
     id: f.id,
+    modelo_id: f.modelo_id,
     tipo: Number(f.tipo_video.replace(/\D/g, "")) || 4,
     estado: f.estado,
     instrucciones: f.instrucciones,
@@ -46,14 +48,14 @@ async function cargar() {
 }
 
 export default async function AsignarPage() {
-  const { modelos, encargos } = await cargar();
+  const [{ modelos, encargos }, { esDueno, porModelo }] = await Promise.all([cargar(), ambitosModelos()]);
   return (
     <PanelLayout>
       <div className="mb-6">
         <p className="text-sm text-[color:var(--text-secondary)]">Lo que asignas aparece en el portal privado de cada modelo</p>
         <h1 className="mt-1 font-display text-3xl font-semibold text-white">Asignar vídeos</h1>
       </div>
-      <AsignarClient modelos={modelos} encargos={encargos} />
+      <AsignarClient modelos={modelos} encargos={encargos} esDueno={esDueno} ambitos={porModelo} />
     </PanelLayout>
   );
 }
