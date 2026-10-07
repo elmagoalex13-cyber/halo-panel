@@ -99,9 +99,9 @@ export function UsuariosPanel() {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+    <section className="glass-card space-y-4 p-6">
       <div>
-        <h2 className="font-display text-sm font-semibold uppercase tracking-wider text-halo-subtle">Usuarios del panel</h2>
+        <h2 className="font-display text-lg font-semibold text-white">Usuarios del panel</h2>
         <p className="mt-1 text-sm text-white/45">
           Da acceso a otra persona (un socio, un ayudante) con su propio usuario y contraseña. Tú eliges qué secciones no puede ver. Tu acceso no cambia.
         </p>
