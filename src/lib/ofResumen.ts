@@ -1,6 +1,6 @@
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
-import { alcanceActual, soloVisibles } from "@/lib/alcance";
+import { alcanceActual, soloVisibles, type GrupoAmbito } from "@/lib/alcance";
 import { progresoScript, type ArchivoOF, type ColeccionOF, type TipoColeccion } from "@/lib/onlyfans";
 
 export type ResumenColeccion = {
@@ -82,11 +82,11 @@ export async function cargarResumenOF(modeloId?: string) {
 }
 
 /** Cuantos scripts/packs/posts tienen archivos que la modelo subio despues de la ultima vez que los abriste. */
-export async function contarOFNuevo(): Promise<{ count: number; modelos: string[] }> {
+export async function contarOFNuevo(grupo?: GrupoAmbito): Promise<{ count: number; modelos: string[] }> {
   if (!canUseSupabase()) return { count: 0, modelos: [] };
   try {
     const supabase = createAdminClient();
-    const alcance = await alcanceActual();
+    const alcance = await alcanceActual(grupo);
     const desde = new Date(Date.now() - 120 * 86400000).toISOString();
     const [cols, arcs, mods] = await Promise.all([
       soloVisibles(supabase.from("of_colecciones").select("id, modelo_id, visto_at"), alcance),

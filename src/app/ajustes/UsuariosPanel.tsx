@@ -135,8 +135,17 @@ export function UsuariosPanel() {
                   {u.username} · {u.ultimo_acceso_at ? `último acceso ${new Date(u.ultimo_acceso_at).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "aún no ha entrado"}
                 </p>
               </div>
-              <button onClick={() => cambiar(u, { activo: !u.activo })} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${u.activo ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-white/15 text-white/50"}`}>
-                {u.activo ? "Activo" : "Desactivado"}
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${u.activo ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>
+                {u.activo ? "Tiene acceso" : "Sin acceso"}
+              </span>
+              <button
+                onClick={() => {
+                  if (u.activo && !window.confirm(`¿Quitar el acceso a ${u.nombre || u.username} ahora mismo? Se le cierra la sesión en segundos y no podrá volver a entrar hasta que se lo devuelvas. No pierde ni se borra nada.`)) return;
+                  void cambiar(u, { activo: !u.activo });
+                }}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${u.activo ? "border-red-500/50 bg-red-500/15 text-red-200 hover:bg-red-500/25" : "border-emerald-500/50 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"}`}
+              >
+                {u.activo ? "Quitar acceso" : "Devolver acceso"}
               </button>
               <button onClick={() => cambiar(u, { nueva_password: true })} title="Genera una contraseña nueva" className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs">
                 <KeyRound className="h-3.5 w-3.5" /> Nueva contraseña

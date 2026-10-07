@@ -10,10 +10,18 @@ export const NINGUNO = "00000000-0000-0000-0000-000000000000";
 
 export type Alcance = { dueno: boolean; modelos: string[] | null };
 
-export async function alcanceActual(): Promise<Alcance> {
+export type GrupoAmbito = "mias" | "compartidas";
+
+/** `grupo` solo lo respeta el dueño (para ver "mis modelos" o "con mi socio" por separado); el resto siempre ve solo lo compartido. */
+export async function alcanceActual(grupo?: GrupoAmbito): Promise<Alcance> {
   const sesion = await sesionPanelActual();
   if (!sesion) return { dueno: false, modelos: [] };
-  if (sesion.dueno) return { dueno: true, modelos: null };
+  if (sesion.dueno) {
+    if (!grupo) return { dueno: true, modelos: null };
+    const { data, error } = await createAdminClient().from("modelos").select("id, ambito");
+    const ids = (data ?? []).filter((m) => (grupo === "compartidas" ? m.ambito === "compartido" : m.ambito !== "compartido")).map((m) => m.id as string);
+    return { dueno: true, modelos: error ? [] : ids };
+  }
   const { data, error } = await createAdminClient().from("modelos").select("id").eq("ambito", "compartido");
   return { dueno: false, modelos: error ? [] : (data ?? []).map((m) => m.id as string) };
 }

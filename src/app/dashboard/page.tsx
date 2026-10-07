@@ -12,7 +12,8 @@ import { CreadorasFilter } from "./CreadorasFilter";
 import { AvisosDashboard } from "./AvisosDashboard";
 import { contarOFNuevo } from "@/lib/ofResumen";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
-import { alcanceActual, cuentasVenuzVisibles, soloEn, soloVisibles } from "@/lib/alcance";
+import { alcanceActual, ambitosModelos, cuentasVenuzVisibles, soloEn, soloVisibles, type GrupoAmbito } from "@/lib/alcance";
+import { SelectorGrupo } from "./SelectorGrupo";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -25,14 +26,14 @@ type OnboardingResumen = { modelo_id: string; estado: "borrador" | "enviado"; en
 
 type WithModelName<T> = T & { modelos?: { nombre?: string | null } | null };
 
-async function loadDashboardData() {
+async function loadDashboardData(grupo?: GrupoAmbito) {
   const vacio = { videos: [] as LibraryContent[], modelos: [] as Modelo[], facturacion: [] as FacturacionModelo[], trials: [] as Array<{ estado: string; publicado_at: string | null }>, onboarding: [] as OnboardingResumen[] };
   let trials: Array<{ estado: string; publicado_at: string | null }> = [];
   if (!canUseSupabase()) return vacio;
 
   try {
     const supabase = createAdminClient();
-    const alcance = await alcanceActual();
+    const alcance = await alcanceActual(grupo);
     const now = new Date();
     const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
     const [videosResult, modelosResult, facturacionResult, onboardingResult] = await Promise.all([
@@ -77,11 +78,11 @@ type VenuzMes = {
 };
 
 // Facturacion del mes en curso desde Venuz (la rellena el scraper del runner). null = aun sin datos.
-async function loadVenuzMes(): Promise<VenuzMes | null> {
+async function loadVenuzMes(grupo?: GrupoAmbito): Promise<VenuzMes | null> {
   if (!canUseSupabase()) return null;
   try {
     const supabase = createAdminClient();
-    const alcance = await alcanceActual();
+    const alcance = await alcanceActual(grupo);
     const cuentasOk = await cuentasVenuzVisibles(alcance); // el socio solo ve la facturacion de las modelos compartidas
     const hoy = new Date();
     const inicio = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1)).toISOString().slice(0, 10);
@@ -115,13 +116,16 @@ function formatNumber(value: number) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; creadoras?: string }>;
+  searchParams: Promise<{ periodo?: string; creadoras?: string; grupo?: string }>;
 }) {
-  const { periodo: periodoParam, creadoras: creadorasParam } = await searchParams;
+  const { periodo: periodoParam, creadoras: creadorasParam, grupo: grupoParam } = await searchParams;
+  const grupo: GrupoAmbito | undefined = grupoParam === "mias" || grupoParam === "compartidas" ? grupoParam : undefined;
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales(), loadVenuzMes(), contarOFNuevo(), sesionPanelActual()]);
+  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual()]);
+  const { porModelo: ambitos } = sesionPanel?.dueno ? await ambitosModelos() : { porModelo: {} as Record<string, string> };
+  const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
   const veOnlyFans = !sesionPanel?.denegadas.includes("onlyfans");
   const cuentasIG = loadCuentasIG(cuentasReales);
@@ -287,6 +291,10 @@ export default async function DashboardPage({
         <p className="text-sm text-[color:var(--text-secondary)]">{saludo} 👋</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Panel de Administracion</h1>
       </div>
+
+      {sesionPanel?.dueno ? (
+        <SelectorGrupo actual={grupo ?? "todas"} totales={{ todas: Object.keys(ambitos).length, mias: Object.keys(ambitos).length - nCompartidas, compartidas: nCompartidas }} periodo={periodoParam} creadoras={creadorasParam} />
+      ) : null}
 
       <AvisosDashboard avisos={notificaciones} />
 

@@ -31,7 +31,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    if (!veModelo(await alcanceActual(), id)) return modeloProhibido();
+    // Borrar una modelo arrastra todo su contenido: solo el dueño
+    const alcance = await alcanceActual();
+    if (!alcance.dueno) return NextResponse.json({ error: "Solo el dueño del panel puede eliminar modelos" }, { status: 403 });
+    if (!veModelo(alcance, id)) return modeloProhibido();
     if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     const supabase = createAdminClient();
     const { error } = await supabase.from("modelos").delete().eq("id", id);

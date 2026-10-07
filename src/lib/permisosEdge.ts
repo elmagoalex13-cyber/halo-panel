@@ -1,10 +1,10 @@
 // Permisos de un usuario no-dueño, leídos de Supabase desde el middleware (runtime edge: solo fetch).
-// Cache de 60 s por usuario: si lo desactivas o cambias sus secciones, surte efecto en menos de un minuto.
+// Cache de 5 s por usuario: si lo desactivas o cambias sus secciones, surte efecto casi al instante.
 
 export type PermisosUsuario = { activo: boolean; denegadas: string[] };
 
 const cache = new Map<string, { t: number; p: PermisosUsuario | null }>();
-const TTL_MS = 60_000;
+const TTL_MS = 5_000;
 
 /** null = el usuario no existe; "error" = no se pudo comprobar (el middleware lo trata como denegado). */
 export async function permisosDe(username: string): Promise<PermisosUsuario | null | "error"> {

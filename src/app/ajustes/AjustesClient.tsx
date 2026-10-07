@@ -12,7 +12,7 @@ type Estado = {
   slots: { hora: string; trial: boolean }[];
 };
 
-export function AjustesClient() {
+export function AjustesClient({ esDueno = false }: { esDueno?: boolean }) {
   const [estado, setEstado] = useState<Estado | null>(null);
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export function AjustesClient() {
           ))}
         </ul>
       </div>
-      <UsuariosPanel />
+      {esDueno ? <UsuariosPanel /> : null}
     </div>
   );
 }
