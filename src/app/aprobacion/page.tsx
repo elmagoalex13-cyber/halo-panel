@@ -3,7 +3,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { MesaClient, type VideoRow } from "./MesaClient";
-import { alcanceActual, soloVisibles } from "@/lib/alcance";
+import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -143,7 +143,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
 export default async function AprobacionPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const estado = resolveEstado(params.estado);
-  const [rows, editingStats] = await Promise.all([getRows(estado), getEditingStats()]);
+  const [rows, editingStats, { esDueno, porModelo }] = await Promise.all([getRows(estado), getEditingStats(), ambitosModelos()]);
 
   const mainTabs = [
     { href: "/aprobacion?estado=en_aprobacion", estado: "en_aprobacion", label: "En aprobación" },
@@ -183,7 +183,7 @@ export default async function AprobacionPage({ searchParams }: { searchParams: P
                 </a>
               ))}
             </div>
-            <MesaClient rows={rows} currentEstado={estado} />
+            <MesaClient rows={rows} currentEstado={estado} esDueno={esDueno} ambitos={porModelo} />
         </>
       </div>
     </PanelLayout>

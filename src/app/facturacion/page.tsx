@@ -1,11 +1,11 @@
 import { PanelLayout } from "@/components/PanelLayout";
-import { FacturacionClient } from "./FacturacionClient";
 import { VenuzSyncButton } from "./VenuzSyncButton";
-import { VenuzResumen, type ModeloLite, type VenuzCuenta, type VenuzDia, type VenuzMes } from "./VenuzResumen";
+import { type ModeloLite, type VenuzCuenta, type VenuzDia, type VenuzMes } from "./VenuzResumen";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { alcanceActual, cuentasVenuzVisibles, soloEn, soloVisibles } from "@/lib/alcance";
 import type { FacturacionModelo, Modelo } from "@/types";
+import { FacturacionPanel } from "./FacturacionPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -104,13 +104,7 @@ export default async function FacturacionPage() {
         <VenuzSyncButton />
       </div>
 
-      <VenuzResumen cuentas={cuentas} diarios={diarios} meses={meses} modelos={modelosLite} ultimaSync={lastSync} esDueno={esDueno} />
-
-      <div className="mb-4 mt-12">
-        <h2 className="font-display text-2xl font-semibold text-white">Cobros y comisiones</h2>
-        <p className="mt-1 text-sm text-[color:var(--text-secondary)]">Registro manual de lo que se paga a cada modelo.</p>
-      </div>
-      <FacturacionClient rows={rows} modelos={modelos} />
+      <FacturacionPanel esDueno={esDueno} rows={rows} modelos={modelos} resumen={{ cuentas, diarios, meses, modelos: modelosLite, ultimaSync: lastSync }} />
     </PanelLayout>
   );
 }

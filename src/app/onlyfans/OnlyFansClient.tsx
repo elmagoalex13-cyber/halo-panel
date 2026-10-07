@@ -5,19 +5,28 @@ import Link from "next/link";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { ETIQUETA_TIPO, formatoTamano, type TipoColeccion } from "@/lib/onlyfans";
 import type { ResumenColeccion } from "@/lib/ofResumen";
+import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 export function OnlyFansClient({
-  modelos,
-  colecciones,
+  modelos: modelosTodas,
+  colecciones: coleccionesTodas,
   modeloInicial,
   sinFiltroModelo = false,
+  esDueno = false,
+  ambitos = {},
 }: {
+  esDueno?: boolean;
+  ambitos?: Record<string, string>;
   modelos: Array<{ id: string; nombre: string; foto: number | null }>;
   colecciones: ResumenColeccion[];
   modeloInicial?: string;
   sinFiltroModelo?: boolean; // dentro de la ficha de una modelo ya esta filtrado
 }) {
-  const [modelo, setModelo] = useState(modeloInicial && modelos.some((m) => m.id === modeloInicial) ? modeloInicial : "todas");
+  const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
+  // Con el selector del dueño (mis modelos / con mi socio) solo quedan las modelos de ese grupo y su contenido
+  const modelos = modelosTodas.filter((m) => ambitoCoincide(filtroAmbito, ambitos[m.id]));
+  const colecciones = coleccionesTodas.filter((c) => ambitoCoincide(filtroAmbito, ambitos[c.modelo_id]));
+  const [modelo, setModelo] = useState(modeloInicial && modelosTodas.some((m) => m.id === modeloInicial) ? modeloInicial : "todas");
   const [tipo, setTipo] = useState<TipoColeccion>("script");
   const [estado, setEstado] = useState<"todos" | "entregado" | "en_curso" | "por_subir">("todos");
 
@@ -44,6 +53,9 @@ export function OnlyFansClient({
   return (
     <div className="space-y-4">
       {sinFiltroModelo ? null : (
+        <SelectorAmbito esDueno={esDueno} valor={filtroAmbito} onChange={setFiltroAmbito} cuenta={(f) => modelosTodas.filter((m) => ambitoCoincide(f, ambitos[m.id])).length} />
+      )}
+      {sinFiltroModelo ? null : (
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setModelo("todas")} className={chip(modeloActivo === "todas")}>
             Todas las modelos ({colecciones.length})
@@ -55,6 +67,7 @@ export function OnlyFansClient({
             return (
               <button key={m.id} onClick={() => setModelo(m.id)} className={`${chip(modeloActivo === m.id)} flex items-center gap-1.5 ${n.length ? "" : "opacity-50"}`}>
                 <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-4 w-4 text-[8px]" />
+                {esDueno ? <PuntoAmbito ambito={ambitos[m.id]} /> : null}
                 {m.nombre} ({n.length})
                 {nuevos ? <span className="rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[10px] text-white">{nuevos} nuevo{nuevos === 1 ? "" : "s"}</span> : null}
               </button>

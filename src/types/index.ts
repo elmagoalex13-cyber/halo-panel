@@ -68,6 +68,7 @@ export type Demografia = {
 
 export type CuentaIGDemo = {
   id: string;
+  modelo_id?: string | null;
   username: string;
   modelo_nombre: string;
   avatar_url?: string | null;

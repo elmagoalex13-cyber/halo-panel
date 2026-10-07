@@ -8,6 +8,7 @@ import { AvatarModelo } from "@/components/AvatarModelo";
 import { GlassCard } from "@/components/GlassCard";
 import { formatDate } from "@/lib/utils";
 import { nombreTipo } from "@/lib/tiposEdicion";
+import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 export type PiezaDeOriginal = {
   id: string;
@@ -123,14 +124,21 @@ function VistaPrevia({ id, archivo, preview }: { id: string; archivo: string; pr
 
 export function OriginalesClient({
   originales,
-  modelos,
+  modelos: modelosTodas,
+  esDueno = false,
+  ambitos = {},
 }: {
+  esDueno?: boolean;
+  ambitos?: Record<string, string>;
   originales: Original[];
   modelos: Array<{ id: string; nombre: string; foto: number | null }>;
 }) {
   const router = useRouter();
-  const [lista, setLista] = useState(originales);
+  const [listaTodos, setLista] = useState(originales);
   useEffect(() => setLista(originales), [originales]);
+  const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
+  const lista = useMemo(() => listaTodos.filter((o) => ambitoCoincide(filtroAmbito, o.modelo_id ? ambitos[o.modelo_id] : null)), [listaTodos, filtroAmbito, ambitos]);
+  const modelos = modelosTodas;
 
   const [modelo, setModelo] = useState("todas");
   const [estado, setEstado] = useState<"todos" | EstadoClave>("todos");
@@ -218,12 +226,14 @@ export function OriginalesClient({
         {lista.length} original{lista.length === 1 ? "" : "es"} guardado{lista.length === 1 ? "" : "s"} · {tamano(totalBytes(lista)) ?? "0 MB"} ocupados
       </p>
 
+      <SelectorAmbito esDueno={esDueno} valor={filtroAmbito} onChange={setFiltroAmbito} cuenta={(f) => listaTodos.filter((o) => ambitoCoincide(f, o.modelo_id ? ambitos[o.modelo_id] : null)).length} />
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setModelo("todas")} className={chip(modeloActivo === "todas")}>
           Todas las modelos ({lista.length})
         </button>
         {modelosConVideos.map((m) => (
           <button key={m.id} onClick={() => setModelo(m.id)} className={`${chip(modeloActivo === m.id)} flex items-center gap-1.5`}>
+            {esDueno ? <PuntoAmbito ambito={ambitos[m.id]} /> : null}
             <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-4 w-4 text-[8px]" />
             {m.nombre} ({lista.filter((o) => o.modelo_id === m.id).length})
           </button>

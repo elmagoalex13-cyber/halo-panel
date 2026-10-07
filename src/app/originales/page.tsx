@@ -5,7 +5,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { OriginalesClient, type Original, type PiezaDeOriginal } from "./OriginalesClient";
-import { alcanceActual, soloVisibles } from "@/lib/alcance";
+import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +109,7 @@ async function cargar(): Promise<Original[]> {
 }
 
 export default async function OriginalesPage() {
-  const originales = await cargar();
+  const [originales, { esDueno, porModelo }] = await Promise.all([cargar(), ambitosModelos()]);
   const modelos = Array.from(
     new Map(originales.filter((o) => o.modelo_id).map((o) => [o.modelo_id as string, { id: o.modelo_id as string, nombre: o.modelo_nombre, foto: o.foto }])).values(),
   ).sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -123,7 +123,7 @@ export default async function OriginalesPage() {
           Cada video que sube una modelo en su portal se guarda aquí sin tocar y no se borra nunca. Si la edición automática sale mal, descárgalo y edítalo a mano.
         </p>
       </div>
-      <OriginalesClient originales={originales} modelos={modelos} />
+      <OriginalesClient originales={originales} modelos={modelos} esDueno={esDueno} ambitos={porModelo} />
     </PanelLayout>
   );
 }

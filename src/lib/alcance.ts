@@ -73,3 +73,12 @@ export async function cuentasVenuzVisibles(a: Alcance): Promise<string[] | null>
   const { data } = await soloVisibles(createAdminClient().from("venuz_cuentas").select("id"), a);
   return (data ?? []).map((c) => c.id as string);
 }
+
+/** Ambito de cada modelo visible (para los selectores "Mis modelos / Con mi socio" del dueño). */
+export async function ambitosModelos(): Promise<{ esDueno: boolean; porModelo: Record<string, "privado" | "compartido"> }> {
+  const a = await alcanceActual();
+  const { data } = await soloVisibles(createAdminClient().from("modelos").select("id, ambito"), a, "id");
+  const porModelo: Record<string, "privado" | "compartido"> = {};
+  for (const m of data ?? []) porModelo[m.id as string] = m.ambito === "compartido" ? "compartido" : "privado";
+  return { esDueno: a.dueno, porModelo };
+}

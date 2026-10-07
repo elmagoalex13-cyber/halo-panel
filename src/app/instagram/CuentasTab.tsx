@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Link2, Plug, RefreshCw } from "lucide-react";
 import type { CuentaIGDemo, MetricoolEstado } from "@/types";
+import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 type Periodo = "7d" | "30d" | "90d";
 
@@ -54,7 +55,22 @@ function gananciaPorPeriodo(cuenta: CuentaIGDemo, periodo: Periodo) {
   return cuenta.ganancia_90d;
 }
 
-export function CuentasTab({ cuentas }: { cuentas: CuentaIGDemo[] }) {
+export function CuentasTab({ cuentas, esDueno = false, ambitos = {} }: { cuentas: CuentaIGDemo[]; esDueno?: boolean; ambitos?: Record<string, string> }) {
+  const [filtro, setFiltro] = useState<FiltroAmbito>("todas");
+  const delGrupo = cuentas.filter((c) => ambitoCoincide(filtro, c.modelo_id ? ambitos[c.modelo_id] : null));
+  return (
+    <>
+      <SelectorAmbito esDueno={esDueno} valor={filtro} onChange={setFiltro} cuenta={(f) => cuentas.filter((c) => ambitoCoincide(f, c.modelo_id ? ambitos[c.modelo_id] : null)).length} />
+      {delGrupo.length === 0 && cuentas.length > 0 ? (
+        <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/50">No hay cuentas de Instagram en este grupo.</p>
+      ) : (
+        <CuentasLista key={filtro} cuentas={delGrupo} />
+      )}
+    </>
+  );
+}
+
+function CuentasLista({ cuentas }: { cuentas: CuentaIGDemo[] }) {
   const [selectedId, setSelectedId] = useState(cuentas[0]?.id ?? null);
   const [periodo, setPeriodo] = useState<Periodo>("30d");
   const selected = cuentas.find((c) => c.id === selectedId) ?? cuentas[0] ?? null;

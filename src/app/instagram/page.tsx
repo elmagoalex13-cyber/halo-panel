@@ -8,7 +8,7 @@ import { versionesFotos } from "@/lib/fotosModelos";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { Modelo, ReferenciaCuenta, ReferenciaVideo } from "@/types";
-import { alcanceActual, soloVisibles } from "@/lib/alcance";
+import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +106,7 @@ export default async function InstagramPage({
     loadViralesPropios(),
   ]);
   const cuentas = loadCuentasIG(cuentasReales);
+  const { esDueno, porModelo } = await ambitosModelos();
 
   return (
     <PanelLayout>
@@ -150,11 +151,11 @@ export default async function InstagramPage({
       </div>
 
       {activeTab === "cuentas" ? (
-        <CuentasTab cuentas={cuentas} />
+        <CuentasTab cuentas={cuentas} esDueno={esDueno} ambitos={porModelo} />
       ) : activeTab === "referencias" ? (
         <ReferenciasTab cuentas={referenciasCuentas} />
       ) : activeTab === "propios" ? (
-        <ViralesPropiosTab virales={viralesPropios} />
+        <ViralesPropiosTab virales={viralesPropios} esDueno={esDueno} ambitos={porModelo} />
       ) : (
         <IdeasViralesTab videos={referenciasVideos} modelos={modelosActivos.map((m) => ({ id: m.id, nombre: m.nombre }))} />
       )}

@@ -6,6 +6,7 @@ import { AvatarModelo } from "@/components/AvatarModelo";
 import { formatDate } from "@/lib/utils";
 import { compacto, pct } from "@/lib/viral";
 import { ExtensionBoton } from "./ExtensionBoton";
+import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 export type ViralPropio = {
   id: string;
@@ -42,9 +43,11 @@ function urlVideo(key: string | null) {
   return key && base ? `${base.replace(/\/$/, "")}/${key.replace(/^\//, "")}` : null;
 }
 
-export function ViralesPropiosTab({ virales: iniciales }: { virales: ViralPropio[] }) {
-  const [virales, setVirales] = useState(iniciales);
+export function ViralesPropiosTab({ virales: iniciales, esDueno = false, ambitos = {} }: { virales: ViralPropio[]; esDueno?: boolean; ambitos?: Record<string, string> }) {
+  const [viralesTodos, setVirales] = useState(iniciales);
   useEffect(() => setVirales(iniciales), [iniciales]);
+  const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
+  const virales = useMemo(() => viralesTodos.filter((v) => ambitoCoincide(filtroAmbito, v.modelo_id ? ambitos[v.modelo_id] : null)), [viralesTodos, filtroAmbito, ambitos]);
   const [vista, setVista] = useState<Vista>("pendiente");
   const [cuenta, setCuenta] = useState("todas");
   const [dias, setDias] = useState(0);
@@ -85,6 +88,7 @@ export function ViralesPropiosTab({ virales: iniciales }: { virales: ViralPropio
 
   return (
     <div className="space-y-4">
+      <SelectorAmbito esDueno={esDueno} valor={filtroAmbito} onChange={setFiltroAmbito} cuenta={(f) => viralesTodos.filter((v) => ambitoCoincide(f, v.modelo_id ? ambitos[v.modelo_id] : null)).length} />
       <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
         <p className="mb-2 text-sm text-white/60">
           Los reels más virales de las cuentas de tus modelos (últimas semanas). Apruébalos, descárgalos y súbelos como trial reels.

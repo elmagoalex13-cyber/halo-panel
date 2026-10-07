@@ -28,6 +28,7 @@ export async function loadCuentasInstagramReales(): Promise<Array<CuentaInstagra
 export function loadCuentasIG(cuentas: Array<CuentaInstagram & { seguidores?: number | null }>): CuentaIGDemo[] {
   return cuentas.map((cuenta) => ({
     id: cuenta.id,
+    modelo_id: cuenta.modelo_id ?? null,
     username: cuenta.username,
     modelo_nombre: cuenta.modelo_nombre ?? "",
     avatar_url: null,

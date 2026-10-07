@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { estadoLabel, formatDate, tipoVideoLabel } from "@/lib/utils";
 import { urlR2, videoBrutoAlternativas, videoEditado } from "@/lib/media";
 import { AvatarModelo } from "@/components/AvatarModelo";
+import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 export interface VideoRow {
   id: string;
@@ -362,13 +363,19 @@ function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: (
 export function MesaClient({
   rows: initialRows,
   currentEstado,
+  esDueno = false,
+  ambitos = {},
 }: {
+  esDueno?: boolean;
+  ambitos?: Record<string, string>;
   rows: VideoRow[];
   currentEstado: string;
 }) {
   const router = useRouter();
   const changeFileRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState(initialRows);
+  const [rowsTodas, setRows] = useState(initialRows);
+  const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
+  const rows = useMemo(() => rowsTodas.filter((r) => ambitoCoincide(filtroAmbito, r.modelo_id ? ambitos[r.modelo_id] : null)), [rowsTodas, filtroAmbito, ambitos]);
   const [selected, setSelected] = useState<VideoRow | null>(null);
   const [caption, setCaption] = useState("");
   const [correcciones, setCorrecciones] = useState("");
@@ -637,6 +644,11 @@ export function MesaClient({
           </p>
           {actionMessage ? <p className="mt-1 text-xs text-[#22D3EE]">{actionMessage}</p> : null}
         </div>
+        {esDueno ? (
+          <div className="w-full">
+            <SelectorAmbito esDueno={esDueno} valor={filtroAmbito} onChange={setFiltroAmbito} cuenta={(f) => rowsTodas.filter((r) => ambitoCoincide(f, r.modelo_id ? ambitos[r.modelo_id] : null)).length} />
+          </div>
+        ) : null}
         <select
           value={tipoFiltro}
           onChange={(event) => setTipoFiltro(event.target.value)}
@@ -672,6 +684,7 @@ export function MesaClient({
                 }`}
               >
                 <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-6 w-6 text-[10px]" />
+                {esDueno && m.id ? <PuntoAmbito ambito={ambitos[m.id]} /> : null}
                 {m.nombre}
                 <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{m.total}</span>
               </button>

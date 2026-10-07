@@ -1,12 +1,13 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { cargarResumenOF } from "@/lib/ofResumen";
+import { ambitosModelos } from "@/lib/alcance";
 import { OnlyFansClient } from "./OnlyFansClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnlyFansPage({ searchParams }: { searchParams: Promise<{ modelo?: string }> }) {
   const { modelo } = await searchParams;
-  const { listo, modelos, resumen } = await cargarResumenOF();
+  const [{ listo, modelos, resumen }, { esDueno, porModelo }] = await Promise.all([cargarResumenOF(), ambitosModelos()]);
   return (
     <PanelLayout>
       <div className="mb-6">
@@ -17,7 +18,7 @@ export default async function OnlyFansPage({ searchParams }: { searchParams: Pro
         </p>
       </div>
       {listo ? (
-        <OnlyFansClient modelos={modelos} colecciones={resumen} modeloInicial={modelo} />
+        <OnlyFansClient modelos={modelos} colecciones={resumen} modeloInicial={modelo} esDueno={esDueno} ambitos={porModelo} />
       ) : (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-sm text-amber-200">
           Falta activar esta sección: ejecuta el SQL <code>20261008_onlyfans_contenido.sql</code> en el SQL Editor de Supabase y recarga.
