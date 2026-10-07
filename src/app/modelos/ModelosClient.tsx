@@ -60,7 +60,9 @@ export function ModelosClient({
   onboardingByModelo,
   fotoByModelo,
   esDueno,
+  papelera = [],
 }: {
+  papelera?: Modelo[];
   esDueno: boolean;
   modelos: Modelo[];
   cuentas: CuentaInstagram[];
@@ -155,6 +157,22 @@ export function ModelosClient({
     setModelos((prev) => prev.map((m) => (m.id === modelo.id ? { ...m, ambito: siguiente } : m)));
     const res = await fetch(`/api/modelos/${modelo.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ambito: siguiente }) });
     if (!res.ok) setModelos((prev) => prev.map((m) => (m.id === modelo.id ? { ...m, ambito: modelo.ambito } : m)));
+  }
+
+  async function eliminarModelo(modelo: Modelo) {
+    const aviso = esDueno
+      ? `¿Mandar a ${modelo.nombre} a la papelera? Desaparece del panel y su portal deja de funcionar, pero NO se borra nada: la tienes en «Papelera» (abajo) y la puedes restaurar con todo su contenido.`
+      : `¿Eliminar a ${modelo.nombre}? Desaparece del panel y su portal deja de funcionar. El dueño del panel conserva una copia y puede recuperarla.`;
+    if (!window.confirm(aviso)) return;
+    const res = await fetch(`/api/modelos/${modelo.id}`, { method: "DELETE" });
+    if (res.ok) setModelos((prev) => prev.filter((m) => m.id !== modelo.id));
+    else window.alert(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo eliminar");
+  }
+
+  async function restaurarModelo(modelo: Modelo) {
+    const res = await fetch(`/api/modelos/${modelo.id}/restaurar`, { method: "POST" });
+    if (res.ok) window.location.reload();
+    else window.alert(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo restaurar");
   }
 
   async function toggleActiva(modelo: Modelo) {
@@ -327,9 +345,19 @@ export function ModelosClient({
                     <Link href={`/modelos/${modelo.id}`} className="truncate font-display text-2xl font-semibold text-white hover:text-[#A78BFA]">
                       {modelo.nombre}
                     </Link>
-                    <button onClick={() => openEdit(modelo)} className="btn-secondary grid h-8 w-8 shrink-0 place-items-center p-0" aria-label="Editar">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex shrink-0 gap-1.5">
+                      <button onClick={() => openEdit(modelo)} className="btn-secondary grid h-8 w-8 place-items-center p-0" aria-label="Editar">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => eliminarModelo(modelo)}
+                        className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.04] p-0 text-white/45 transition hover:border-red-400/40 hover:text-red-300"
+                        aria-label="Eliminar modelo"
+                        title="Eliminar (va a la papelera)"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   {esDueno ? (
                     <button
@@ -496,6 +524,30 @@ export function ModelosClient({
           );
         })}
       </div>
+
+      {esDueno && papelera.length ? (
+        <details className="mt-8 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+          <summary className="cursor-pointer text-sm font-semibold text-white/80">
+            Papelera ({papelera.length}) <span className="font-normal text-white/40">· modelos eliminadas, con todo su contenido guardado</span>
+          </summary>
+          <ul className="mt-4 divide-y divide-white/[0.06]">
+            {papelera.map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-white">{m.nombre}</p>
+                  <p className="text-xs text-white/40">
+                    Eliminada {m.eliminada_at ? new Date(m.eliminada_at).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                    {m.eliminada_por ? ` por ${m.eliminada_por}` : ""}
+                  </p>
+                </div>
+                <button onClick={() => restaurarModelo(m)} className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20">
+                  Restaurar
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {modal ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true">

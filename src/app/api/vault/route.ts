@@ -15,10 +15,13 @@ const sinSesion = () => NextResponse.json({ error: "No autorizado" }, { status: 
 const sinSupabase = () => NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
 /** Ambito de una entrada (null si no existe o la columna falta). */
-async function ambitoDe(id: string): Promise<{ existe: boolean; ambito: Ambito | null; nombre?: string }> {
-  const { data, error } = await createAdminClient().from("vault_panel").select("nombre, ambito").eq("id", id).maybeSingle();
+async function ambitoDe(id: string): Promise<{ existe: boolean; ambito: Ambito | null; nombre?: string; eliminada?: boolean }> {
+  const db = createAdminClient();
+  let r = await db.from("vault_panel").select("nombre, ambito, eliminada_at").eq("id", id).maybeSingle();
+  if (r.error) r = (await db.from("vault_panel").select("nombre, ambito").eq("id", id).maybeSingle()) as typeof r;
+  const { data, error } = r;
   if (error || !data) return { existe: Boolean(data), ambito: null };
-  return { existe: true, ambito: ambitoValido(data.ambito), nombre: data.nombre };
+  return { existe: true, ambito: ambitoValido(data.ambito), nombre: data.nombre, eliminada: Boolean((data as { eliminada_at?: string | null }).eliminada_at) };
 }
 
 export async function GET(request: Request) {
@@ -29,8 +32,8 @@ export async function GET(request: Request) {
   if (!sesion) return sinSesion();
 
   const supabase = createAdminClient();
-  const { data, error } = await supabase.from("vault_panel").select("nombre,encrypted_blob,iv,ambito").eq("id", id).maybeSingle();
-  if (error && /ambito/i.test(error.message)) {
+  const { data, error } = await supabase.from("vault_panel").select("nombre,encrypted_blob,iv,ambito,eliminada_at").eq("id", id).maybeSingle();
+  if (error && /ambito|eliminada_at/i.test(error.message)) {
     // Sin la columna: el dueño lo ve todo como siempre; los demas, nada
     if (!sesion.dueno) return prohibido();
     const { data: antiguo } = await supabase.from("vault_panel").select("nombre,encrypted_blob,iv").eq("id", id).single();
@@ -39,7 +42,7 @@ export async function GET(request: Request) {
   }
   if (!data) return NextResponse.json({ error: error?.message ?? "No encontrada" }, { status: 404 });
   if (data.nombre?.startsWith("portal:")) return NextResponse.json({ error: "Entrada interna" }, { status: 403 });
-  if (!sesion.dueno && data.ambito !== "compartido") return prohibido();
+  if (!sesion.dueno && (data.ambito !== "compartido" || data.eliminada_at)) return prohibido();
 
   return NextResponse.json({ value: decryptVaultValue(data.encrypted_blob, data.iv) });
 }
@@ -82,9 +85,30 @@ export async function DELETE(request: Request) {
 
   if (!sesion.dueno) {
     const a = await ambitoDe(id);
-    if (!a.existe || a.ambito !== "compartido" || a.nombre?.startsWith("portal:")) return prohibido();
+    if (!a.existe || a.eliminada || a.ambito !== "compartido" || a.nombre?.startsWith("portal:")) return prohibido();
   }
-  const { error } = await createAdminClient().from("vault_panel").delete().eq("id", id).not("nombre", "like", "portal:%");
+  // Va a la PAPELERA (no se borra): el dueño la ve y la puede restaurar
+  const { error } = await createAdminClient()
+    .from("vault_panel")
+    .update({ eliminada_at: new Date().toISOString(), eliminada_por: sesion.usuario })
+    .eq("id", id)
+    .not("nombre", "like", "portal:%");
+  if (error) {
+    if (/eliminada/i.test(error.message)) return NextResponse.json({ error: "Falta ejecutar el SQL 20261016_papelera.sql en Supabase." }, { status: 409 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
+}
+
+// Restaurar una entrada de la papelera (solo el dueño): PATCH { id }
+export async function PATCH(request: Request) {
+  if (!canUseSupabase()) return sinSupabase();
+  const sesion = await sesionPanelActual();
+  if (!sesion) return sinSesion();
+  if (!sesion.dueno) return prohibido();
+  const body = (await request.json().catch(() => null)) as { id?: string } | null;
+  if (!body?.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+  const { error } = await createAdminClient().from("vault_panel").update({ eliminada_at: null, eliminada_por: null }).eq("id", body.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
@@ -101,7 +125,7 @@ export async function PUT(request: Request) {
 
   if (!sesion.dueno) {
     const a = await ambitoDe(id);
-    if (!a.existe || a.ambito !== "compartido" || a.nombre?.startsWith("portal:")) return prohibido();
+    if (!a.existe || a.eliminada || a.ambito !== "compartido" || a.nombre?.startsWith("portal:")) return prohibido();
   }
 
   const nombre = String(formData.get("nombre") ?? "").trim();

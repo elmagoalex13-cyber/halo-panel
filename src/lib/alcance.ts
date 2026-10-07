@@ -9,7 +9,8 @@ import { sesionPanelActual } from "@/lib/panelUsuarios";
 
 export const NINGUNO = "00000000-0000-0000-0000-000000000000";
 
-export type Alcance = { dueno: boolean; modelos: string[] | null };
+// excluir: modelos en la papelera (solo se rellena para el dueño, que por lo demas lo ve todo)
+export type Alcance = { dueno: boolean; modelos: string[] | null; excluir?: string[] };
 
 export type GrupoAmbito = "mias" | "compartidas";
 
@@ -18,14 +19,22 @@ export type GrupoAmbito = "mias" | "compartidas";
 export const alcanceActual = cache(async (grupo?: GrupoAmbito): Promise<Alcance> => {
   const sesion = await sesionPanelActual();
   if (!sesion) return { dueno: false, modelos: [] };
+
+  // Todas las modelos con su ambito y si estan en la papelera (si falta el SQL de la papelera, se pide sin esa columna)
+  type Fila = { id: string; ambito?: string | null; eliminada_at?: string | null };
+  const db = createAdminClient();
+  let r = await db.from("modelos").select("id, ambito, eliminada_at");
+  if (r.error) r = (await db.from("modelos").select("id, ambito")) as typeof r;
+  if (r.error) return sesion.dueno && !grupo ? { dueno: true, modelos: null } : { dueno: sesion.dueno, modelos: [] };
+  const filas = (r.data ?? []) as Fila[];
+  const eliminadas = filas.filter((m) => m.eliminada_at).map((m) => m.id);
+
   if (sesion.dueno) {
-    if (!grupo) return { dueno: true, modelos: null };
-    const { data, error } = await createAdminClient().from("modelos").select("id, ambito");
-    const ids = (data ?? []).filter((m) => (grupo === "compartidas" ? m.ambito === "compartido" : m.ambito !== "compartido")).map((m) => m.id as string);
-    return { dueno: true, modelos: error ? [] : ids };
+    if (!grupo) return { dueno: true, modelos: null, ...(eliminadas.length ? { excluir: eliminadas } : {}) };
+    const ids = filas.filter((m) => !m.eliminada_at && (grupo === "compartidas" ? m.ambito === "compartido" : m.ambito !== "compartido")).map((m) => m.id);
+    return { dueno: true, modelos: ids };
   }
-  const { data, error } = await createAdminClient().from("modelos").select("id").eq("ambito", "compartido");
-  return { dueno: false, modelos: error ? [] : (data ?? []).map((m) => m.id as string) };
+  return { dueno: false, modelos: filas.filter((m) => !m.eliminada_at && m.ambito === "compartido").map((m) => m.id) };
 });
 
 /** ¿Puede ver esta modelo? */
@@ -33,7 +42,11 @@ export const veModelo = (a: Alcance, modeloId: string | null | undefined) => a.m
 
 /** Limita una consulta de Supabase a las modelos visibles (no hace nada para el dueño). Llamar DESPUES del select/update/delete. */
 export function soloVisibles<Q>(consulta: Q, a: Alcance, columna = "modelo_id"): Q {
-  if (a.modelos === null) return consulta;
+  if (a.modelos === null) {
+    // El dueño lo ve todo salvo lo de las modelos en la papelera (lo que no tiene modelo se sigue viendo)
+    if (!a.excluir?.length) return consulta;
+    return (consulta as unknown as { or: (f: string) => Q }).or(`${columna}.is.null,${columna}.not.in.(${a.excluir.join(",")})`);
+  }
   return (consulta as unknown as { in: (c: string, v: string[]) => Q }).in(columna, a.modelos.length ? a.modelos : [NINGUNO]);
 }
 
@@ -79,7 +92,7 @@ export function soloEn<Q>(consulta: Q, ids: string[] | null, columna: string): Q
 
 /** Cuentas de Venuz que puede ver: las vinculadas a modelos visibles (las sin vincular solo las ve el dueño). null = todas. */
 export async function cuentasVenuzVisibles(a: Alcance): Promise<string[] | null> {
-  if (a.modelos === null) return null;
+  if (a.modelos === null && !a.excluir?.length) return null;
   const { data } = await soloVisibles(createAdminClient().from("venuz_cuentas").select("id"), a);
   return (data ?? []).map((c) => c.id as string);
 }

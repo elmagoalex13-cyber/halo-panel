@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { decryptVaultValue, encryptVaultValue } from "@/lib/vault/crypto";
+import { modeloEliminada } from "@/lib/papelera";
 
 // Credenciales del portal de modelos: fila en vault_panel (nombre "portal:<modelo_id>")
 // con {usuario, salt, hash} cifrado. Sesion: cookie httpOnly firmada con HMAC.
@@ -73,7 +74,7 @@ export async function verificarLogin(slug: string, usuario: string, password: st
     .select("id, nombre, activa, portal_token")
     .eq("portal_token", slug)
     .maybeSingle();
-  if (!modelo || !modelo.activa) return null;
+  if (!modelo || !modelo.activa || (await modeloEliminada(modelo.id as string))) return null;
   const cred = await leerCredencial(modelo.id);
   if (!cred || cred.usuario.toLowerCase() !== usuario.trim().toLowerCase()) return null;
   const candidato = Buffer.from(hashPassword(password, cred.salt), "hex");
@@ -117,5 +118,6 @@ export async function sesionActual(slug?: string): Promise<SesionPortal | null> 
   const s = leerSesion(jar.get(COOKIE_PORTAL)?.value);
   if (!s) return null;
   if (slug && s.slug !== slug) return null;
+  if (await modeloEliminada(s.modeloId)) return null; // modelo en la papelera: se le corta el acceso
   return s;
 }

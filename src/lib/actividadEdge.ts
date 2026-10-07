@@ -8,7 +8,7 @@ type Regla = { metodo: string; ruta: RegExp; accion: string; sensible?: boolean 
 // Orden importa: gana la primera que coincide. Lo que no está aquí (lecturas, firmas de subida...) no se registra.
 const REGLAS: Regla[] = [
   // Vault
-  { metodo: "DELETE", ruta: /^\/api\/vault$/, accion: "Borró una contraseña del Vault", sensible: true },
+  { metodo: "DELETE", ruta: /^\/api\/vault$/, accion: "Mandó una contraseña del Vault a la papelera", sensible: true },
   { metodo: "PUT", ruta: /^\/api\/vault$/, accion: "Editó una contraseña del Vault", sensible: true },
   { metodo: "POST", ruta: /^\/api\/vault$/, accion: "Añadió una contraseña al Vault" },
   // Modelos y su portal
@@ -16,7 +16,7 @@ const REGLAS: Regla[] = [
   { metodo: "POST", ruta: /^\/api\/modelos\/[^/]+\/cuentas$/, accion: "Añadió una cuenta de Instagram a una modelo" },
   { metodo: "DELETE", ruta: /^\/api\/modelos\/[^/]+\/foto$/, accion: "Quitó la foto de una modelo" },
   { metodo: "PUT", ruta: /^\/api\/modelos\/[^/]+\/foto$/, accion: "Cambió la foto de una modelo" },
-  { metodo: "DELETE", ruta: /^\/api\/modelos\/[^/]+$/, accion: "Borró una modelo", sensible: true },
+  { metodo: "DELETE", ruta: /^\/api\/modelos\/[^/]+$/, accion: "Mandó una modelo a la papelera", sensible: true },
   { metodo: "PATCH", ruta: /^\/api\/modelos\/[^/]+$/, accion: "Editó una modelo" },
   { metodo: "POST", ruta: /^\/api\/modelos$/, accion: "Creó una modelo" },
   // Cuentas de Instagram

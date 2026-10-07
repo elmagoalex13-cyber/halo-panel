@@ -119,7 +119,7 @@ async function getModeloDetail(id: string) {
     supabase.from("modelo_onboarding_historial").select("id, origen, created_at").eq("modelo_id", id).order("created_at", { ascending: false }).limit(50),
     versionesFotos(),
   ]);
-  if (!modelo) return null;
+  if (!modelo || (modelo as { eliminada_at?: string | null }).eliminada_at) return null;
 
   const { data: pubMesData } = await supabase.from("library_content").select("cuenta_id").eq("modelo_id", id).eq("estado", "publicado").gte("publicado_at", monthStart);
   const pubMesByCuenta: Record<string, number> = {};

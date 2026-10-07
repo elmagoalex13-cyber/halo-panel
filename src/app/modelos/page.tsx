@@ -15,6 +15,7 @@ async function loadModelos() {
     pipelineByModelo: {} as Record<string, number>,
     onboardingByModelo: {} as Record<string, "borrador" | "enviado">,
     esDueno: false,
+    papelera: [] as Modelo[],
   };
   if (!canUseSupabase()) return vacio;
 
@@ -28,6 +29,12 @@ async function loadModelos() {
       soloVisibles(supabase.from("modelo_onboarding").select("modelo_id, estado"), alcance),
       versionesFotos(),
     ]);
+    // Papelera: solo la ve el dueño
+    let papelera: Modelo[] = [];
+    if (alcance.dueno) {
+      const { data, error } = await supabase.from("modelos").select("*").not("eliminada_at", "is", null).order("eliminada_at", { ascending: false });
+      if (!error) papelera = (data ?? []) as Modelo[];
+    }
     const onboardingByModelo: Record<string, "borrador" | "enviado"> = {};
     ((onboardingResult.data ?? []) as Array<{ modelo_id: string; estado: string }>).forEach((row) => {
       onboardingByModelo[row.modelo_id] = row.estado === "enviado" ? "enviado" : "borrador";
@@ -45,6 +52,7 @@ async function loadModelos() {
       pipelineByModelo,
       onboardingByModelo,
       esDueno: alcance.dueno,
+      papelera,
     };
   } catch {
     return vacio;
@@ -52,7 +60,7 @@ async function loadModelos() {
 }
 
 export default async function ModelosPage() {
-  const { modelos, cuentas, pipelineByModelo, onboardingByModelo, fotoByModelo, esDueno } = await loadModelos();
+  const { modelos, cuentas, pipelineByModelo, onboardingByModelo, fotoByModelo, esDueno, papelera } = await loadModelos();
 
   return (
     <PanelLayout>
@@ -62,7 +70,7 @@ export default async function ModelosPage() {
           <h1 className="mt-2 font-display text-4xl font-semibold text-white">Modelos</h1>
         </div>
       </div>
-      <ModelosClient modelos={modelos} cuentas={cuentas} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} fotoByModelo={fotoByModelo} esDueno={esDueno} />
+      <ModelosClient modelos={modelos} cuentas={cuentas} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} fotoByModelo={fotoByModelo} esDueno={esDueno} papelera={papelera} />
     </PanelLayout>
   );
 }

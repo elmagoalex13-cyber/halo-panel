@@ -21,7 +21,9 @@ export function VaultClient({
   modelos,
   esDueno,
   ambitoListo,
+  papelera = [],
 }: {
+  papelera?: VaultEntry[];
   entries: VaultEntry[];
   modelos: { id: string; nombre: string }[];
   esDueno: boolean;
@@ -88,6 +90,12 @@ export function VaultClient({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function restaurar(entry: VaultEntry) {
+    const res = await fetch("/api/vault", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: entry.id }) });
+    if (!res.ok) setError("No se pudo restaurar");
+    router.refresh();
   }
 
   async function deleteEntry(entry: VaultEntry) {
@@ -333,6 +341,30 @@ export function VaultClient({
             </div>
           </form>
         </div>
+      ) : null}
+
+      {esDueno && papelera.length ? (
+        <details className="mt-6 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+          <summary className="cursor-pointer text-sm font-semibold text-white/80">
+            Papelera ({papelera.length}) <span className="font-normal text-white/40">· lo eliminado, guardado y cifrado</span>
+          </summary>
+          <ul className="mt-4 divide-y divide-white/[0.06]">
+            {papelera.map((e) => (
+              <li key={e.id} className="flex flex-wrap items-center gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-white">{e.nombre}</p>
+                  <p className="text-xs text-white/40">
+                    {(e.ambito ?? "privado") === "compartido" ? "Baúl compartido" : "Tu baúl"} · eliminada{" "}
+                    {e.eliminada_at ? new Date(e.eliminada_at).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                    {e.eliminada_por ? ` por ${e.eliminada_por}` : ""}
+                  </p>
+                </div>
+                <button onClick={() => reveal(e)} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 hover:text-white">Ver</button>
+                <button onClick={() => restaurar(e)} className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20">Restaurar</button>
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
     </div>
   );

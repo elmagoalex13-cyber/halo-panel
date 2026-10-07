@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, modeloProhibido, veModelo } from "@/lib/alcance";
+import { sesionPanelActual } from "@/lib/panelUsuarios";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -31,14 +32,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    // Borrar una modelo arrastra todo su contenido: solo el dueño
+    // "Eliminar" manda la modelo a la PAPELERA: desaparece del panel y de su portal, pero no se borra nada y el dueño la puede restaurar
     const alcance = await alcanceActual();
-    if (!alcance.dueno) return NextResponse.json({ error: "Solo el dueño del panel puede eliminar modelos" }, { status: 403 });
     if (!veModelo(alcance, id)) return modeloProhibido();
     if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
+    const sesion = await sesionPanelActual();
     const supabase = createAdminClient();
-    const { error } = await supabase.from("modelos").delete().eq("id", id);
-    if (error) throw error;
+    const { error } = await supabase.from("modelos").update({ eliminada_at: new Date().toISOString(), eliminada_por: sesion?.usuario ?? null }).eq("id", id);
+    if (error) {
+      if (/eliminada/i.test(error.message)) return NextResponse.json({ error: "Falta ejecutar el SQL 20261016_papelera.sql en Supabase." }, { status: 409 });
+      throw error;
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });

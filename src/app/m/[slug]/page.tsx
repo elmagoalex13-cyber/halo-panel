@@ -8,6 +8,7 @@ import { sanearDatos } from "@/lib/onboarding";
 import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
 import { urlVista } from "@/lib/r2/onlyfans";
 import type { ArchivoVista } from "./OnlyFansPortal";
+import { modeloEliminada } from "@/lib/papelera";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mi portal" };
@@ -43,7 +44,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
     .select("id, nombre, activa")
     .eq("portal_token", slug)
     .maybeSingle();
-  if (!modelo || !modelo.activa) notFound();
+  if (!modelo || !modelo.activa || (await modeloEliminada(modelo.id as string))) notFound();
 
   const sesion = await sesionActual(slug);
   if (!sesion || sesion.modeloId !== modelo.id) return <LoginForm slug={slug} nombre={modelo.nombre} />;

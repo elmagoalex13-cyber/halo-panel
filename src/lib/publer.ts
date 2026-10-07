@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { urlR2 } from "@/lib/media";
+import { idsModelosEliminadas } from "@/lib/papelera";
 
 // Programacion automatica en Publer de los videos aprobados.
 // Reglas (hora de Espana) por cada cuenta de Instagram y dia:
@@ -253,14 +254,16 @@ export async function programarPendientes(supabase: SupabaseClient, limite = 6) 
   try {
     const { data } = await supabase
       .from("library_content")
-      .select("id")
+      .select("id, modelo_id")
       .eq("estado", "aprobado")
       .is("publicado_at", null)
       .not("video_procesado_url", "is", null)
       .order("aprobado_at", { ascending: true })
       .limit(limite);
     let n = 0;
+    const enPapelera = new Set(await idsModelosEliminadas());
     for (const p of data ?? []) {
+      if (enPapelera.has(p.modelo_id as string)) continue;
       const r = await programarPieza(supabase, p.id as string);
       if (r.ok) n++;
       else if (r.motivo === "sin_cuentas" || r.motivo === "publer_inactivo") break;

@@ -28,6 +28,8 @@ export type Modelo = {
   portal_token?: string | null;
   telegram_id?: string | null;
   ambito?: "privado" | "compartido"; // privado = solo el dueño; compartido = tambien el socio
+  eliminada_at?: string | null; // en la papelera (solo la ve el dueño)
+  eliminada_por?: string | null;
 };
 
 export type MetricoolEstado = "conectada" | "no_conectada" | "error";
@@ -214,6 +216,8 @@ export type VaultEntry = {
   descripcion?: string | null;
   modelo_id?: string | null;
   ambito?: "privado" | "compartido";
+  eliminada_at?: string | null;
+  eliminada_por?: string | null;
   created_at: string;
 };
 
