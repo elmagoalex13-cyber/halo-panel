@@ -141,9 +141,9 @@ export function VaultClient({
           {entries.length}
           {entries.length !== delAmbito.length ? ` de ${delAmbito.length}` : ""} entradas
         </p>
-        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="input-base w-44 py-1.5 text-xs" />
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="input-base py-1.5 text-xs" style={{ width: "16rem", maxWidth: "100%" }} />
         {modelosUsados.length ? (
-          <select value={filtroModelo} onChange={(e) => setFiltroModelo(e.target.value)} className="input-base py-1.5 text-xs">
+          <select value={filtroModelo} onChange={(e) => setFiltroModelo(e.target.value)} className="input-base py-1.5 text-xs" style={{ width: "auto" }}>
             <option value="">Todas las modelos</option>
             <option value="_sin">Sin modelo asociada</option>
             {modelosUsados.map((m) => (
