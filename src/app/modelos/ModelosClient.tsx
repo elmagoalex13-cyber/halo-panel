@@ -76,6 +76,7 @@ export function ModelosClient({
   const [cuentas, setCuentas] = useState(initialCuentas);
   const [modal, setModal] = useState<ModalState>(null);
   const [form, setForm] = useState(emptyForm);
+  const [ambitoNueva, setAmbitoNueva] = useState<"compartido" | "privado">("compartido");
   const [saving, setSaving] = useState(false);
   const [cuentaDrafts, setCuentaDrafts] = useState<Record<string, CuentaDraft>>({});
   const [cuentaErrors, setCuentaErrors] = useState<Record<string, string>>({});
@@ -97,6 +98,7 @@ export function ModelosClient({
 
   function openCreate() {
     setForm(emptyForm);
+    setAmbitoNueva(filtroAmbito === "mias" ? "privado" : "compartido");
     setModal({ mode: "create" });
   }
 
@@ -120,7 +122,7 @@ export function ModelosClient({
         const res = await fetch("/api/modelos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify({ ...form, ambito: ambitoNueva }),
         });
         const payload = await res.json();
         if (res.ok && payload.data) {
@@ -517,6 +519,14 @@ export function ModelosClient({
               <Field label="Notas">
                 <textarea value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} rows={2} className="input-base resize-none" />
               </Field>
+              {esDueno && modal?.mode === "create" ? (
+                <Field label="¿De quién es?">
+                  <select value={ambitoNueva} onChange={(e) => setAmbitoNueva(e.target.value as "compartido" | "privado")} className="input-base">
+                    <option value="compartido">Compartida con mi socio</option>
+                    <option value="privado">Solo mía (mi socio no la ve)</option>
+                  </select>
+                </Field>
+              ) : null}
               <Field label={`Comision agencia: ${form.porcentaje_comision}%`}>
                 <input
                   type="range"
