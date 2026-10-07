@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { contarOFNuevo } from "@/lib/ofResumen";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,7 @@ export async function GET() {
     const puedeLeads = !sesion?.denegadas.includes("leads");
     const puedeOF = !sesion?.denegadas.includes("onlyfans");
     const [approvalResult, leadsResult, of] = await Promise.all([
-      supabase
-        .from("library_content")
-        .select("id", { count: "exact", head: true })
-        .eq("estado", "en_aprobacion"),
+      soloVisibles(supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "en_aprobacion"), await alcanceActual()),
       puedeLeads
         ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("estado", "nuevo")
         : Promise.resolve({ count: 0 }),

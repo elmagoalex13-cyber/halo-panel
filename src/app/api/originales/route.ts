@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { borrarDeR2 } from "@/lib/r2";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,7 +28,7 @@ export async function DELETE(req: NextRequest) {
   const resultados: Resultado[] = [];
 
   // 1) Las piezas pedidas y su clave de original
-  const { data: pedidas } = await supabase.from("library_content").select(COLUMNAS).in("id", ids);
+  const { data: pedidas } = await soloVisibles(supabase.from("library_content").select(COLUMNAS).in("id", ids), await alcanceActual());
   const porId = new Map(((pedidas ?? []) as Pieza[]).map((p) => [p.id, p]));
   const claveDe = (p: Pieza) => p.r2_key_original ?? p.r2_key;
   const clavesGrupo = new Set<string>();

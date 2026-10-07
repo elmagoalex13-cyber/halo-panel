@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { ajustesDe, analizarCuenta, sanearReels } from "@/lib/viralesExtension";
+import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Faltan modo o cuenta_id" }, { status: 400 });
   }
 
+  if (body.modo === "propias") { const g = await exigirFila("cuentas_instagram", body.cuenta_id); if (g) return g; }
   const supabase = createAdminClient();
   const reels = sanearReels(body.reels);
   const conocidos = new Set<string>();

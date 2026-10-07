@@ -14,6 +14,7 @@ export type VenuzCuenta = {
   activa: boolean;
   estado_conexion: string | null;
   suscriptores: number | null;
+  ambito?: "privado" | "compartido"; // heredado de su modelo
 };
 
 export type VenuzDia = {
@@ -83,12 +84,14 @@ function etiquetaMes(mes: string) {
 }
 
 export function VenuzResumen({
-  cuentas,
-  diarios,
-  meses,
+  cuentas: cuentasTodas,
+  diarios: diariosTodos,
+  meses: mesesTodos,
   modelos,
   ultimaSync,
+  esDueno = false,
 }: {
+  esDueno?: boolean;
   cuentas: VenuzCuenta[];
   diarios: VenuzDia[];
   meses: VenuzMes[];
@@ -97,6 +100,15 @@ export function VenuzResumen({
 }) {
   const router = useRouter();
   const [periodo, setPeriodo] = useState<Periodo>("mes");
+  // Mis modelos / compartidas con mi socio: separa la facturacion de cada grupo
+  const [grupo, setGrupo] = useState<"todas" | "mias" | "compartidas">("todas");
+  const cuentas = useMemo(
+    () => cuentasTodas.filter((c) => grupo === "todas" || (grupo === "compartidas" ? c.ambito === "compartido" : c.ambito !== "compartido")),
+    [cuentasTodas, grupo],
+  );
+  const idsGrupo = useMemo(() => new Set(cuentas.map((c) => c.id)), [cuentas]);
+  const diarios = useMemo(() => (grupo === "todas" ? diariosTodos : diariosTodos.filter((d) => idsGrupo.has(d.cuenta_id))), [diariosTodos, idsGrupo, grupo]);
+  const meses = useMemo(() => (grupo === "todas" ? mesesTodos : mesesTodos.filter((m) => idsGrupo.has(m.cuenta_id))), [mesesTodos, idsGrupo, grupo]);
   const [cuentaSel, setCuentaSel] = useState<string>("todas");
   const [bruto, setBruto] = useState(false);
   const [vinculando, setVinculando] = useState<string | null>(null);
@@ -207,6 +219,28 @@ export function VenuzResumen({
         </div>
       </div>
       <p className="-mt-2 text-[11px] text-[color:var(--text-secondary)]">Los días cuentan en UTC, igual que en Venuz.</p>
+      {esDueno ? (
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              ["todas", "Todas"],
+              ["mias", "Mis modelos"],
+              ["compartidas", "Compartidas con mi socio"],
+            ] as const
+          ).map(([id, etiqueta]) => (
+            <button
+              key={id}
+              onClick={() => {
+                setGrupo(id);
+                setCuentaSel("todas");
+              }}
+              className={chip(grupo === id)}
+            >
+              {etiqueta} ({id === "todas" ? cuentasTodas.length : cuentasTodas.filter((c) => (id === "compartidas" ? c.ambito === "compartido" : c.ambito !== "compartido")).length})
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-1.5">
         <button onClick={() => setCuentaSel("todas")} className={chip(cuentaSel === "todas")}>Todas las modelos</button>
         {cuentas.map((c) => {

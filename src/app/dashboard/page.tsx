@@ -12,6 +12,7 @@ import { CreadorasFilter } from "./CreadorasFilter";
 import { AvisosDashboard } from "./AvisosDashboard";
 import { contarOFNuevo } from "@/lib/ofResumen";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
+import { alcanceActual, cuentasVenuzVisibles, soloEn, soloVisibles } from "@/lib/alcance";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -31,13 +32,14 @@ async function loadDashboardData() {
 
   try {
     const supabase = createAdminClient();
+    const alcance = await alcanceActual();
     const now = new Date();
     const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
     const [videosResult, modelosResult, facturacionResult, onboardingResult] = await Promise.all([
-      supabase.from("library_content").select("*, modelos(nombre)").order("recibido_at", { ascending: false }).limit(5000),
-      supabase.from("modelos").select("*"),
-      supabase.from("facturacion_modelos").select("*, modelos(nombre)").gte("periodo_inicio", mesInicio),
-      supabase.from("modelo_onboarding").select("modelo_id, estado, enviado_at, updated_at, datos"),
+      soloVisibles(supabase.from("library_content").select("*, modelos(nombre)").order("recibido_at", { ascending: false }).limit(5000), alcance),
+      soloVisibles(supabase.from("modelos").select("*"), alcance, "id"),
+      soloVisibles(supabase.from("facturacion_modelos").select("*, modelos(nombre)").gte("periodo_inicio", mesInicio), alcance),
+      soloVisibles(supabase.from("modelo_onboarding").select("modelo_id, estado, enviado_at, updated_at, datos"), alcance),
     ]);
     const onboarding = ((onboardingResult.data ?? []) as Array<{ modelo_id: string; estado: string; enviado_at: string | null; updated_at: string; datos: unknown }>).map((row) => ({
       modelo_id: row.modelo_id,
@@ -79,11 +81,13 @@ async function loadVenuzMes(): Promise<VenuzMes | null> {
   if (!canUseSupabase()) return null;
   try {
     const supabase = createAdminClient();
+    const alcance = await alcanceActual();
+    const cuentasOk = await cuentasVenuzVisibles(alcance); // el socio solo ve la facturacion de las modelos compartidas
     const hoy = new Date();
     const inicio = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1)).toISOString().slice(0, 10);
     const [diarios, cuentas, sync] = await Promise.all([
-      supabase.from("venuz_ingresos_diarios").select("cuenta_id, total, total_bruto, mensajes, suscripciones").gte("fecha", inicio).limit(5000),
-      supabase.from("venuz_cuentas").select("id, nombre"),
+      soloEn(supabase.from("venuz_ingresos_diarios").select("cuenta_id, total, total_bruto, mensajes, suscripciones").gte("fecha", inicio).limit(5000), cuentasOk, "cuenta_id"),
+      soloEn(supabase.from("venuz_cuentas").select("id, nombre"), cuentasOk, "id"),
       supabase.from("log_agentes").select("created_at").eq("agente", "venuz_sync").eq("accion", "sync").eq("resultado", "ok").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     const filas = (diarios.data ?? []) as Array<{ cuenta_id: string; total: number | string; total_bruto: number | string; mensajes: number | string; suscripciones: number | string }>;

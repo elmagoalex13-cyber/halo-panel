@@ -8,6 +8,7 @@ import { versionesFotos } from "@/lib/fotosModelos";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { Modelo, ReferenciaCuenta, ReferenciaVideo } from "@/types";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ async function loadModelosActivos(): Promise<Modelo[]> {
   if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
-    const { data } = await supabase.from("modelos").select("*").eq("activa", true).order("nombre");
+    const { data } = await soloVisibles(supabase.from("modelos").select("*").eq("activa", true).order("nombre"), await alcanceActual(), "id");
     return (data ?? []) as Modelo[];
   } catch {
     return [];
@@ -58,10 +59,11 @@ async function loadViralesPropios(): Promise<ViralPropio[]> {
   if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
+    const alcance = await alcanceActual();
     const [virales, cuentas, modelos, fotos] = await Promise.all([
-      supabase.from("virales_propios").select("*").order("fecha_publicacion", { ascending: false }).limit(2000),
-      supabase.from("cuentas_instagram").select("id, username, modelo_id"),
-      supabase.from("modelos").select("id, nombre"),
+      soloVisibles(supabase.from("virales_propios").select("*").order("fecha_publicacion", { ascending: false }).limit(2000), alcance),
+      soloVisibles(supabase.from("cuentas_instagram").select("id, username, modelo_id"), alcance),
+      soloVisibles(supabase.from("modelos").select("id, nombre"), alcance, "id"),
       versionesFotos(),
     ]);
     if (virales.error) return [];

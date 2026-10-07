@@ -1,5 +1,6 @@
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import type { CuentaIGDemo, CuentaInstagram } from "@/types";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 type CuentaRow = CuentaInstagram & { seguidores?: number | null; modelos?: { nombre?: string | null } | null };
 
@@ -12,7 +13,7 @@ export async function loadCuentasInstagramReales(): Promise<Array<CuentaInstagra
   if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase.from("cuentas_instagram").select("*, modelos(nombre)").order("username");
+    const { data, error } = await soloVisibles(supabase.from("cuentas_instagram").select("*, modelos(nombre)").order("username"), await alcanceActual());
     if (error) return [];
     return ((data ?? []) as CuentaRow[])
       .filter(esInstagram)

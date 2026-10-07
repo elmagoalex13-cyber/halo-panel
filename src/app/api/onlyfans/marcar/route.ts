@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { UUID } from "@/lib/ofServer";
+import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as { coleccion_id?: string; fase?: number | null; subido?: boolean } | null;
   if (!body?.coleccion_id || !UUID.test(body.coleccion_id) || typeof body.subido !== "boolean") return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
 
+  { const g = await exigirFila("of_colecciones", body.coleccion_id); if (g) return g; }
   const supabase = createAdminClient();
   const ahora = body.subido ? new Date().toISOString() : null;
   let q = supabase.from("of_archivos").update({ subido_of_at: ahora }).eq("coleccion_id", body.coleccion_id);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { exigirModelo } from "@/lib/alcance";
 
 // POST: crear entrada manual en library_content
 export async function POST(req: NextRequest) {
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     }
 
+    { const g = await exigirModelo(modelo_id); if (g) return g; }
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("library_content")

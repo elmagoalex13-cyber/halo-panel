@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { onboardingATexto, sanearDatos } from "@/lib/onboarding";
+import { exigirModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 // (Protegido por el middleware del panel: solo admin.)
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+    { const g = await exigirModelo(id); if (g) return g; }
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const formato = req.nextUrl.searchParams.get("formato") === "json" ? "json" : "txt";
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { keyBrutoAlternativas, keyEditado } from "@/lib/media";
 import { existeEnR2, getSignedDownloadUrl } from "@/lib/r2";
+import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
+  { const g = await exigirFila("library_content", id); if (g) return g; }
   const supabase = createAdminClient();
   const { data: pieza, error } = await supabase
     .from("library_content")

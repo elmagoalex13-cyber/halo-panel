@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { BUCKET_FOTOS } from "@/lib/fotosModelos";
+import { exigirModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ async function asegurarBucket(supabase: ReturnType<typeof createAdminClient>) {
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+    { const g = await exigirModelo(id); if (g) return g; }
   if (!UUID.test(id) || !canUseSupabase()) return new NextResponse(null, { status: 404 });
   const { data, error } = await createAdminClient().storage.from(BUCKET_FOTOS).download(id);
   if (error || !data) return new NextResponse(null, { status: 404 });
@@ -31,6 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+    { const g = await exigirModelo(id); if (g) return g; }
   if (!UUID.test(id)) return NextResponse.json({ error: "Id invalido" }, { status: 400 });
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
@@ -59,6 +62,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+    { const g = await exigirModelo(id); if (g) return g; }
   if (!UUID.test(id) || !canUseSupabase()) return NextResponse.json({ error: "Id invalido" }, { status: 400 });
   const { error } = await createAdminClient().storage.from(BUCKET_FOTOS).remove([id]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

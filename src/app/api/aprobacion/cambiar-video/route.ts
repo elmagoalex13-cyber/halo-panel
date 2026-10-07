@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { existeEnR2 } from "@/lib/r2";
+import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
   if (!id || !key || !key.startsWith(`editados/${id}/`) || key.includes("..") || !/^[\w\-./]+$/.test(key)) {
     return NextResponse.json({ error: "Datos invalidos" }, { status: 400 });
   }
+  { const g = await exigirFila("library_content", id); if (g) return g; }
   if (!(await existeEnR2(key))) return NextResponse.json({ error: "El archivo no llego al almacen; vuelve a subirlo" }, { status: 404 });
 
   const supabase = createAdminClient();

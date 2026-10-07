@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { uploadToR2 } from "@/lib/r2";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { randomUUID } from "crypto";
+import { exigirFila, exigirModelo } from "@/lib/alcance";
 
 // POST /api/upload — multipart form data upload to R2 + create/update library_content record
 // If `content_id` is provided, updates the existing record's r2_key instead of inserting.
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
 
     if (!file) return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     if (!contentId && !modeloId) return NextResponse.json({ error: "modelo_id requerido" }, { status: 400 });
+    { const g = contentId ? await exigirFila("library_content", contentId) : await exigirModelo(modeloId); if (g) return g; }
 
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "mp4";
     const uuid = randomUUID().replace(/-/g, "").slice(0, 12);

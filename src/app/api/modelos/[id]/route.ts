@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { alcanceActual, modeloProhibido, veModelo } from "@/lib/alcance";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const alcance = await alcanceActual();
+    if (!veModelo(alcance, id)) return modeloProhibido();
     const body = await req.json();
     const allowed = ["nombre", "nombre_real", "email", "telefono", "notas", "porcentaje_comision", "activa"] as const;
     const payload: Record<string, unknown> = {};
     for (const key of allowed) {
       if (key in body) payload[key] = body[key];
     }
+
+    // Solo el dueño decide que modelos comparte con su socio
+    if (alcance.dueno && (body.ambito === "privado" || body.ambito === "compartido")) payload.ambito = body.ambito;
 
     if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
@@ -25,6 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    if (!veModelo(await alcanceActual(), id)) return modeloProhibido();
     if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     const supabase = createAdminClient();
     const { error } = await supabase.from("modelos").delete().eq("id", id);

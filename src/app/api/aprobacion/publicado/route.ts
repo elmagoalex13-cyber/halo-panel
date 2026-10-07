@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +22,17 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
   const ahora = new Date().toISOString();
   const marcar = body.publicado;
+  const alcance = await alcanceActual();
 
-  const { data, error } = await supabase
-    .from("library_content")
-    .update({ estado: marcar ? "publicado" : "aprobado", updated_at: ahora, ...(marcar ? {} : { publicado_at: null }) })
-    .in("id", ids)
-    .eq("estado", marcar ? "aprobado" : "publicado")
-    .select("id");
+  const { data, error } = await soloVisibles(
+    supabase
+      .from("library_content")
+      .update({ estado: marcar ? "publicado" : "aprobado", updated_at: ahora, ...(marcar ? {} : { publicado_at: null }) })
+      .in("id", ids)
+      .eq("estado", marcar ? "aprobado" : "publicado")
+      .select("id"),
+    alcance,
+  );
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const hechos = (data ?? []).map((r) => r.id as string);

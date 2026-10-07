@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { fraseDesdeDescripcion, sanearReels, scoreEstiloFraseMusica, scoreViralidad, tagsMetricas, type ReelViral } from "@/lib/viralesExtension";
+import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
 
   const mediana = Number(body.mediana) || 0;
   const reel: ReelViral = { ...reelBase, viralScore: scoreViralidad(reelBase, mediana), estiloScore: scoreEstiloFraseMusica(reelBase) };
+  if (body.modo === "propias") { const g = await exigirFila("cuentas_instagram", body.cuenta_id); if (g) return g; }
   const supabase = createAdminClient();
 
   if (body.modo === "referencias") {

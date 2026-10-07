@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { canUseMetricool, fetchMetricoolAccountStats } from "@/lib/metricool";
 import type { MetricoolEstado } from "@/types";
+import { exigirFila } from "@/lib/alcance";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    { const g = await exigirFila("cuentas_instagram", id); if (g) return g; }
     const body = await req.json();
     const metricool_blog_id = String(body.metricool_blog_id || "").trim();
     if (!metricool_blog_id) return NextResponse.json({ error: "Falta el Blog ID de Metricool" }, { status: 400 });

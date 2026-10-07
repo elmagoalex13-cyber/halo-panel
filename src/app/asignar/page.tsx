@@ -1,6 +1,7 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { AsignarClient, type EncargoRow } from "./AsignarClient";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Asignar vídeos" };
@@ -18,13 +19,17 @@ type Fila = {
 async function cargar() {
   if (!canUseSupabase()) return { modelos: [], encargos: [] as EncargoRow[] };
   const supabase = createAdminClient();
+  const alcance = await alcanceActual();
   const [m, e] = await Promise.all([
-    supabase.from("modelos").select("id, nombre").eq("activa", true).order("nombre"),
-    supabase
-      .from("encargos")
-      .select("id, tipo_video, estado, instrucciones, created_at, modelo:modelos(nombre), referencia:referencias(url_original, url_r2)")
-      .order("created_at", { ascending: false })
-      .limit(60),
+    soloVisibles(supabase.from("modelos").select("id, nombre").eq("activa", true).order("nombre"), alcance, "id"),
+    soloVisibles(
+      supabase
+        .from("encargos")
+        .select("id, tipo_video, estado, instrucciones, created_at, modelo:modelos(nombre), referencia:referencias(url_original, url_r2)")
+        .order("created_at", { ascending: false })
+        .limit(60),
+      alcance,
+    ),
   ]);
   const encargos = ((e.data ?? []) as unknown as Fila[]).map((f) => ({
     id: f.id,

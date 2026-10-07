@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { exigirModelo } from "@/lib/alcance";
 
 export async function POST(req: NextRequest) {
   try {
@@ -7,6 +8,7 @@ export async function POST(req: NextRequest) {
     if (!canUseSupabase()) {
       return NextResponse.json({ data: { id: crypto.randomUUID(), ...body } });
     }
+    { const g = await exigirModelo(body.modelo_id); if (g) return g; }
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("facturacion_modelos")

@@ -59,7 +59,9 @@ export function ModelosClient({
   pipelineByModelo,
   onboardingByModelo,
   fotoByModelo,
+  esDueno,
 }: {
+  esDueno: boolean;
   modelos: Modelo[];
   cuentas: CuentaInstagram[];
   pipelineByModelo: Record<string, number>;
@@ -67,6 +69,10 @@ export function ModelosClient({
   fotoByModelo: Record<string, number>;
 }) {
   const [modelos, setModelos] = useState(initialModelos);
+  // Mis modelos (solo del dueño) y compartidas (tambien las ve su socio)
+  const [filtroAmbito, setFiltroAmbito] = useState<"todas" | "mias" | "compartidas">("todas");
+  const esCompartida = (m: Modelo) => m.ambito === "compartido";
+  const visibles = modelos.filter((m) => filtroAmbito === "todas" || (filtroAmbito === "compartidas" ? esCompartida(m) : !esCompartida(m)));
   const [cuentas, setCuentas] = useState(initialCuentas);
   const [modal, setModal] = useState<ModalState>(null);
   const [form, setForm] = useState(emptyForm);
@@ -114,7 +120,7 @@ export function ModelosClient({
         const res = await fetch("/api/modelos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify({ ...form, ambito: filtroAmbito === "compartidas" ? "compartido" : "privado" }),
         });
         const payload = await res.json();
         if (res.ok && payload.data) {
@@ -135,6 +141,18 @@ export function ModelosClient({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function toggleAmbito(modelo: Modelo) {
+    const siguiente = esCompartida(modelo) ? "privado" : "compartido";
+    const aviso =
+      siguiente === "compartido"
+        ? `¿Compartir a ${modelo.nombre} con tu socio? Verá su ficha, vídeos, OnlyFans, cuentas y facturación.`
+        : `¿Dejar de compartir a ${modelo.nombre}? Tu socio dejará de verla.`;
+    if (!window.confirm(aviso)) return;
+    setModelos((prev) => prev.map((m) => (m.id === modelo.id ? { ...m, ambito: siguiente } : m)));
+    const res = await fetch(`/api/modelos/${modelo.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ambito: siguiente }) });
+    if (!res.ok) setModelos((prev) => prev.map((m) => (m.id === modelo.id ? { ...m, ambito: modelo.ambito } : m)));
   }
 
   async function toggleActiva(modelo: Modelo) {
@@ -265,14 +283,35 @@ export function ModelosClient({
 
   return (
     <>
-      <div className="mb-5 flex justify-end">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        {esDueno ? (
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["todas", `Todas (${modelos.length})`],
+                ["mias", `Mis modelos (${modelos.filter((m) => !esCompartida(m)).length})`],
+                ["compartidas", `Compartidas con mi socio (${modelos.filter(esCompartida).length})`],
+              ] as const
+            ).map(([id, etiqueta]) => (
+              <button
+                key={id}
+                onClick={() => setFiltroAmbito(id)}
+                className={`rounded-full border px-3.5 py-1.5 text-sm font-semibold transition ${filtroAmbito === id ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/20 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"}`}
+              >
+                {etiqueta}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span />
+        )}
         <button onClick={openCreate} className="btn-primary flex items-center gap-2 px-4 py-2 text-sm">
           <Plus className="h-4 w-4" /> Nueva modelo
         </button>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {modelos.map((modelo) => {
+        {visibles.map((modelo) => {
           const pipelineCount = pipelineByModelo[modelo.id] ?? 0;
           const cuentasModelo = cuentasPorModelo[modelo.id] ?? [];
           const draftCuenta = cuentaDrafts[modelo.id] ?? { red_social: "instagram" as SocialNetwork, username: "" };
@@ -290,6 +329,15 @@ export function ModelosClient({
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                  {esDueno ? (
+                    <button
+                      onClick={() => toggleAmbito(modelo)}
+                      title={esCompartida(modelo) ? "Compartida con tu socio: pulsa para dejar de compartirla" : "Solo tuya: pulsa para compartirla con tu socio"}
+                      className={`mr-2 mt-2 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition ${esCompartida(modelo) ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300" : "border-white/10 bg-white/[0.04] text-white/45 hover:text-white/75"}`}
+                    >
+                      {esCompartida(modelo) ? "👥 Compartida" : "🔒 Solo mía"}
+                    </button>
+                  ) : null}
                   <button
                     onClick={() => toggleActiva(modelo)}
                     className="mt-2"

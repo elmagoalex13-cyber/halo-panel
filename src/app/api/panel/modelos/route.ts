@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -8,8 +9,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   if (!canUseSupabase()) return NextResponse.json({ modelos: [] });
   try {
+    const alcance = await alcanceActual();
     const [{ data }, fotos] = await Promise.all([
-      createAdminClient().from("modelos").select("id, nombre, activa, portal_token").order("nombre"),
+      soloVisibles(createAdminClient().from("modelos").select("id, nombre, activa, portal_token").order("nombre"), alcance, "id"),
       versionesFotos(),
     ]);
     return NextResponse.json({

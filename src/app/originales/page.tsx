@@ -5,6 +5,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { OriginalesClient, type Original, type PiezaDeOriginal } from "./OriginalesClient";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -49,15 +50,19 @@ async function cargar(): Promise<Original[]> {
   if (!canUseSupabase()) return [];
   try {
     const supabase = createAdminClient();
+    const alcance = await alcanceActual();
     const columnas = "id, modelo_id, titulo, filename_original, size_bytes, recibido_at, estado, estado_procesamiento, error_mensaje, tipo_video, tipo, r2_key, r2_key_original, video_procesado_url, recorte_inicio, modelo:modelos(nombre)";
     const consulta = (extra: string) =>
-      supabase
-        .from("library_content")
-        .select(`${columnas}${extra}`)
-        .eq("origen", "upload_manual")
-        .or("tipo.is.null,tipo.neq.5")
-        .order("recibido_at", { ascending: false })
-        .limit(1500);
+      soloVisibles(
+        supabase
+          .from("library_content")
+          .select(`${columnas}${extra}`)
+          .eq("origen", "upload_manual")
+          .or("tipo.is.null,tipo.neq.5")
+          .order("recibido_at", { ascending: false })
+          .limit(1500),
+        alcance,
+      );
     // original_borrado_at la crea el SQL 20261007; mientras no exista se lista sin ella.
     const [primera, fotos, previews] = await Promise.all([consulta(", original_borrado_at"), versionesFotos(), vistasPreviasListas()]);
     const { data, error } = primera.error ? await consulta("") : primera;

@@ -6,6 +6,7 @@ import { UUID } from "@/lib/ofServer";
 import { urlVista } from "@/lib/r2/onlyfans";
 import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
 import { ColeccionDetalle, type ArchivoConVista } from "./ColeccionDetalle";
+import { alcanceActual, veModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function ColeccionPage({ params }: { params: Promise<{ id: 
       .order("fase", { ascending: true, nullsFirst: false })
       .order("orden", { ascending: true }),
   ]);
-  if (!col) notFound();
+  if (!col || !veModelo(await alcanceActual(), (col as ColeccionOF).modelo_id)) notFound();
   const coleccion = col as ColeccionOF;
   // Al abrirlo deja de contar como "nuevo" en el menu (si el SQL 20261009 aun no esta, simplemente no se guarda)
   await supabase.from("of_colecciones").update({ visto_at: new Date().toISOString() }).eq("id", id).then(() => undefined, () => undefined);

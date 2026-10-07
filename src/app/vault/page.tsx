@@ -2,6 +2,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 import type { VaultEntry } from "@/types";
 import { VaultClient } from "./VaultClient";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 async function loadModelos() {
   if (!canUseSupabase()) return [] as { id: string; nombre: string }[];
-  const { data } = await createAdminClient().from("modelos").select("id, nombre").order("nombre");
+  const { data } = await soloVisibles(createAdminClient().from("modelos").select("id, nombre").order("nombre"), await alcanceActual(), "id");
   return (data ?? []) as { id: string; nombre: string }[];
 }
 

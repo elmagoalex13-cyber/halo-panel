@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { UUID } from "@/lib/ofServer";
 import { borrarObjetoOF } from "@/lib/r2/onlyfans";
+import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,6 +12,7 @@ export async function PATCH(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const body = (await req.json().catch(() => null)) as { id?: string; accion?: string } | null;
   if (!body?.id || !UUID.test(body.id) || body.accion !== "reabrir") return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
+  { const g = await exigirFila("of_colecciones", body.id); if (g) return g; }
   const { error } = await createAdminClient().from("of_colecciones").update({ estado: "en_curso", entregado_at: null, updated_at: new Date().toISOString() }).eq("id", body.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
@@ -22,6 +24,7 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id || !UUID.test(id)) return NextResponse.json({ error: "Falta el id" }, { status: 400 });
 
+  { const g = await exigirFila("of_colecciones", id); if (g) return g; }
   const supabase = createAdminClient();
   const { data: archivos } = await supabase.from("of_archivos").select("id, storage_key, bucket").eq("coleccion_id", id);
   const fallos: string[] = [];

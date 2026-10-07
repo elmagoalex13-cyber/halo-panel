@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { exigirFila } from "@/lib/alcance";
 
 const REDES = ["instagram", "twitter", "tiktok"] as const;
 type RedSocial = (typeof REDES)[number];
@@ -25,6 +26,7 @@ function urlSocial(red: RedSocial, username: string) {
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    { const g = await exigirFila("cuentas_instagram", id); if (g) return g; }
     const body = await req.json();
     const allowed = ["username", "url", "activa", "metricool_blog_id", "metricool_estado", "red_social"] as const;
     const payload: Record<string, unknown> = {};
@@ -58,6 +60,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    { const g = await exigirFila("cuentas_instagram", id); if (g) return g; }
     if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
     const { error } = await createAdminClient().from("cuentas_instagram").delete().eq("id", id);

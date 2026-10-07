@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { exigirFila } from "@/lib/alcance";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    { const g = await exigirFila("facturacion_modelos", id); if (g) return g; }
     const body = await req.json();
     const allowed = ["estado_cobro", "fecha_cobro", "cobrado_en", "notas", "ingresos_brutos", "porcentaje_comision", "comision_agencia", "neto_modelo"] as const;
     const payload: Record<string, unknown> = {};
@@ -23,6 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    { const g = await exigirFila("facturacion_modelos", id); if (g) return g; }
     if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     const supabase = createAdminClient();
     const { error } = await supabase.from("facturacion_modelos").delete().eq("id", id);

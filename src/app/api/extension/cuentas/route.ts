@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { AJUSTES_POR_DEFECTO } from "@/lib/viralesExtension";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +43,14 @@ export async function GET(req: NextRequest) {
   }
 
   if (modo === "propias") {
-    const { data, error } = await supabase
-      .from("cuentas_instagram")
-      .select("*, modelos(nombre, activa)")
-      .eq("activa", true)
-      .order("username");
+    const { data, error } = await soloVisibles(
+      supabase
+        .from("cuentas_instagram")
+        .select("*, modelos(nombre, activa)")
+        .eq("activa", true)
+        .order("username"),
+      await alcanceActual(),
+    );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const idsPropias = (req.nextUrl.searchParams.get("ids") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
     type Fila = { id: string; username: string; url?: string | null; red_social?: string | null; modelos?: { nombre?: string | null; activa?: boolean | null } | null };

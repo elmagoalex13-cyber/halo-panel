@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { alcanceActual } from "@/lib/alcance";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,7 +21,15 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const { data, error } = await supabase.from("modelos").insert(payload).select().single();
+    // El dueño elige (por defecto, solo suya); una modelo que mete otro usuario nace COMPARTIDA para que pueda verla
+    const alcance = await alcanceActual();
+    const ambito = alcance.dueno ? (body.ambito === "compartido" ? "compartido" : "privado") : "compartido";
+    let { data, error } = await supabase.from("modelos").insert({ ...payload, ambito }).select().single();
+    if (error && /ambito/i.test(error.message)) {
+      // Falta el SQL 20261013: solo el dueño puede seguir creando modelos (como antes)
+      if (!alcance.dueno) return NextResponse.json({ error: "Falta ejecutar el SQL 20261013_modelos_ambito.sql en Supabase." }, { status: 409 });
+      ({ data, error } = await supabase.from("modelos").insert(payload).select().single());
+    }
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (error) {

@@ -27,6 +27,7 @@ export type Modelo = {
   porcentaje_comision?: number | null;
   portal_token?: string | null;
   telegram_id?: string | null;
+  ambito?: "privado" | "compartido"; // privado = solo el dueño; compartido = tambien el socio
 };
 
 export type MetricoolEstado = "conectada" | "no_conectada" | "error";

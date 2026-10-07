@@ -3,6 +3,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { programarPieza } from "@/lib/publer";
 import { aplicarAjusteRecorte, parseNotaRecorte } from "@/lib/notaRecorte";
 import type { VideoEstado } from "@/types";
+import { exigirFila } from "@/lib/alcance";
 
 const ESTADO_MAP: Record<string, string> = {
   aprobar: "aprobado",
@@ -34,6 +35,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
     }
 
+    { const g = await exigirFila("library_content", id); if (g) return g; }
     const supabase = createAdminClient();
     const { data: actual, error: actualError } = await supabase
       .from("library_content")

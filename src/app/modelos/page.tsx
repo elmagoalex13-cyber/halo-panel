@@ -2,6 +2,7 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { ModelosClient } from "./ModelosClient";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 import type { CuentaInstagram, Modelo } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -13,16 +14,18 @@ async function loadModelos() {
     fotoByModelo: {} as Record<string, number>,
     pipelineByModelo: {} as Record<string, number>,
     onboardingByModelo: {} as Record<string, "borrador" | "enviado">,
+    esDueno: false,
   };
   if (!canUseSupabase()) return vacio;
 
   try {
     const supabase = createAdminClient();
+    const alcance = await alcanceActual();
     const [modelosResult, cuentasResult, pipelineResult, onboardingResult, fotoByModelo] = await Promise.all([
-      supabase.from("modelos").select("*").order("nombre"),
-      supabase.from("cuentas_instagram").select("*").order("username"),
-      supabase.from("library_content").select("modelo_id, estado").limit(5000),
-      supabase.from("modelo_onboarding").select("modelo_id, estado"),
+      soloVisibles(supabase.from("modelos").select("*").order("nombre"), alcance, "id"),
+      soloVisibles(supabase.from("cuentas_instagram").select("*").order("username"), alcance),
+      soloVisibles(supabase.from("library_content").select("modelo_id, estado").limit(5000), alcance),
+      soloVisibles(supabase.from("modelo_onboarding").select("modelo_id, estado"), alcance),
       versionesFotos(),
     ]);
     const onboardingByModelo: Record<string, "borrador" | "enviado"> = {};
@@ -41,6 +44,7 @@ async function loadModelos() {
       fotoByModelo,
       pipelineByModelo,
       onboardingByModelo,
+      esDueno: alcance.dueno,
     };
   } catch {
     return vacio;
@@ -48,7 +52,7 @@ async function loadModelos() {
 }
 
 export default async function ModelosPage() {
-  const { modelos, cuentas, pipelineByModelo, onboardingByModelo, fotoByModelo } = await loadModelos();
+  const { modelos, cuentas, pipelineByModelo, onboardingByModelo, fotoByModelo, esDueno } = await loadModelos();
 
   return (
     <PanelLayout>
@@ -58,7 +62,7 @@ export default async function ModelosPage() {
           <h1 className="mt-2 font-display text-4xl font-semibold text-white">Modelos</h1>
         </div>
       </div>
-      <ModelosClient modelos={modelos} cuentas={cuentas} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} fotoByModelo={fotoByModelo} />
+      <ModelosClient modelos={modelos} cuentas={cuentas} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} fotoByModelo={fotoByModelo} esDueno={esDueno} />
     </PanelLayout>
   );
 }

@@ -13,6 +13,7 @@ import { urlR2 } from "@/lib/media";
 import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
 import type { SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
+import { alcanceActual, veModelo } from "@/lib/alcance";
 
 export const revalidate = 0;
 
@@ -101,6 +102,7 @@ type FacturacionRow = {
 
 async function getModeloDetail(id: string) {
   if (!canUseSupabase()) return null;
+  if (!veModelo(await alcanceActual(), id)) return null; // modelo no compartida: para tu socio no existe
 
   const supabase = createAdminClient();
   const now = new Date();

@@ -4,6 +4,7 @@ import { VenuzSyncButton } from "./VenuzSyncButton";
 import { VenuzResumen, type ModeloLite, type VenuzCuenta, type VenuzDia, type VenuzMes } from "./VenuzResumen";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
+import { alcanceActual, cuentasVenuzVisibles, soloEn, soloVisibles } from "@/lib/alcance";
 import type { FacturacionModelo, Modelo } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ type BillingWithModel = FacturacionModelo & { modelos?: { nombre?: string | null
 type UltimaSync = { created_at: string; resultado: string; detalle: { problemas?: string[]; error?: string } | null } | null;
 
 const VACIO = {
+  esDueno: false,
   rows: [] as FacturacionModelo[],
   modelos: [] as Modelo[],
   cuentas: [] as VenuzCuenta[],
@@ -38,12 +40,14 @@ async function loadData() {
 
   try {
     const supabase = createAdminClient();
+    const alcance = await alcanceActual();
+    const cuentasOk = await cuentasVenuzVisibles(alcance);
     const [billingResult, modelosResult, cuentasResult, diariosResult, mesesResult, syncResult, fotos] = await Promise.all([
-      supabase.from("facturacion_modelos").select("*, modelos(nombre)").order("periodo_inicio", { ascending: false }),
-      supabase.from("modelos").select("*").order("nombre"),
-      supabase.from("venuz_cuentas").select("id, nombre, username, avatar_url, modelo_id, activa, estado_conexion, suscriptores").order("nombre"),
-      supabase.from("venuz_ingresos_diarios").select("*").order("fecha", { ascending: false }).limit(20000),
-      supabase.from("venuz_resumen_mensual").select("*").order("mes", { ascending: false }).limit(500),
+      soloVisibles(supabase.from("facturacion_modelos").select("*, modelos(nombre)").order("periodo_inicio", { ascending: false }), alcance),
+      soloVisibles(supabase.from("modelos").select("*").order("nombre"), alcance, "id"),
+      soloEn(supabase.from("venuz_cuentas").select("id, nombre, username, avatar_url, modelo_id, activa, estado_conexion, suscriptores").order("nombre"), cuentasOk, "id"),
+      soloEn(supabase.from("venuz_ingresos_diarios").select("*").order("fecha", { ascending: false }).limit(20000), cuentasOk, "cuenta_id"),
+      soloEn(supabase.from("venuz_resumen_mensual").select("*").order("mes", { ascending: false }).limit(500), cuentasOk, "cuenta_id"),
       supabase.from("log_agentes").select("created_at, resultado, detalle").eq("agente", "venuz_sync").eq("accion", "sync").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       versionesFotos(),
     ]);
@@ -53,11 +57,15 @@ async function loadData() {
       modelo_nombre: row.modelos?.nombre ?? row.modelo_nombre ?? "Sin modelo",
     })) as FacturacionModelo[];
     const modelos = (modelosResult.data ?? []) as Modelo[];
+    // Cada cuenta de Venuz hereda el ambito de su modelo (las sin vincular cuentan como solo del dueño)
+    const ambitoPorModelo = new Map(modelos.map((m) => [m.id, m.ambito === "compartido" ? "compartido" : "privado"] as const));
+    const cuentasVenuz = ((cuentasResult.data ?? []) as VenuzCuenta[]).map((c) => ({ ...c, ambito: c.modelo_id ? (ambitoPorModelo.get(c.modelo_id) ?? "privado") : "privado" }));
 
     return {
+      esDueno: alcance.dueno,
       rows,
       modelos,
-      cuentas: (cuentasResult.data ?? []) as VenuzCuenta[],
+      cuentas: cuentasVenuz as VenuzCuenta[],
       diarios: ((diariosResult.data ?? []) as VenuzDia[]).map((d) => numerico(d, CAMPOS_DIA)),
       meses: ((mesesResult.data ?? []) as VenuzMes[]).map((m) => numerico(m, ["total_neto", "total_bruto", "reembolsos"])),
       modelosLite: modelos.map((m) => ({ id: m.id, nombre: m.nombre, foto: fotos[m.id] ?? null })),
@@ -69,7 +77,7 @@ async function loadData() {
 }
 
 export default async function FacturacionPage() {
-  const { rows, modelos, cuentas, diarios, meses, modelosLite, lastSync } = await loadData();
+  const { rows, modelos, cuentas, diarios, meses, modelosLite, lastSync, esDueno } = await loadData();
   const syncOk = lastSync?.resultado === "ok" && !lastSync.detalle?.problemas?.length;
 
   return (
@@ -90,7 +98,7 @@ export default async function FacturacionPage() {
         <VenuzSyncButton />
       </div>
 
-      <VenuzResumen cuentas={cuentas} diarios={diarios} meses={meses} modelos={modelosLite} ultimaSync={lastSync} />
+      <VenuzResumen cuentas={cuentas} diarios={diarios} meses={meses} modelos={modelosLite} ultimaSync={lastSync} esDueno={esDueno} />
 
       <div className="mb-4 mt-12">
         <h2 className="font-display text-2xl font-semibold text-white">Cobros y comisiones</h2>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { generarPassword, guardarCredencial, leerCredencial, slugify } from "@/lib/portalAuth";
+import { exigirModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
+    { const g = await exigirModelo(id); if (g) return g; }
   const supabase = createAdminClient();
   const { data: modelo } = await supabase.from("modelos").select("portal_token").eq("id", id).single();
   const cred = await leerCredencial(id);
@@ -17,6 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
+    { const g = await exigirModelo(id); if (g) return g; }
   const body = (await req.json().catch(() => ({}))) as { usuario?: string };
   const supabase = createAdminClient();
 

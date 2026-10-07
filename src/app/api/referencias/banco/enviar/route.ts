@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { exigirModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
   if (!body.modelo_id) {
     return NextResponse.json({ error: "modelo_id requerido" }, { status: 400 });
   }
+  { const g = await exigirModelo(body.modelo_id); if (g) return g; }
   if (!canUseSupabase()) {
     return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }

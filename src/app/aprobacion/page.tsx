@@ -3,6 +3,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { MesaClient, type VideoRow } from "./MesaClient";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -53,25 +54,26 @@ async function getEditingStats(): Promise<EditingStats> {
 
   try {
     const supabase = createAdminClient();
+    const alcance = await alcanceActual();
     const [processing, pending, errors] = await Promise.all([
-      supabase
+      soloVisibles(supabase
         .from("library_content")
         .select("id", { count: "exact", head: true })
         .eq("estado", "editando")
         .eq("estado_procesamiento", "procesando")
-        .or("tipo.is.null,tipo.neq.5"),
-      supabase
+        .or("tipo.is.null,tipo.neq.5"), alcance),
+      soloVisibles(supabase
         .from("library_content")
         .select("id", { count: "exact", head: true })
         .eq("estado", "editando")
         .eq("estado_procesamiento", "pendiente")
-        .or("tipo.is.null,tipo.neq.5"),
-      supabase
+        .or("tipo.is.null,tipo.neq.5"), alcance),
+      soloVisibles(supabase
         .from("library_content")
         .select("id", { count: "exact", head: true })
         .eq("estado", "editando")
         .eq("estado_procesamiento", "error")
-        .or("tipo.is.null,tipo.neq.5"),
+        .or("tipo.is.null,tipo.neq.5"), alcance),
     ]);
 
     return {
@@ -90,7 +92,8 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
   try {
     const supabase = createAdminClient();
     const fotos = await versionesFotos();
-    const primary = await supabase
+    const alcance = await alcanceActual();
+    const primary = await soloVisibles(supabase
       .from("library_content")
       .select(`
         id, modelo_id, titulo, tipo_video, tipo, estado, recibido_at, publicado_at,
@@ -102,7 +105,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       .eq("estado", estado)
       .or("tipo.is.null,tipo.neq.5") // los trial reels automaticos no pasan por la Mesa
       .order("recibido_at", { ascending: false })
-      .limit(80);
+      .limit(80), alcance);
 
     const data = primary.data as unknown[] | null;
     const error = primary.error;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { exigirModelo } from "@/lib/alcance";
 
 const REDES = ["instagram", "twitter", "tiktok"] as const;
 type RedSocial = (typeof REDES)[number];
@@ -33,6 +34,7 @@ function urlSocial(red: RedSocial, username: string) {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    { const g = await exigirModelo(id); if (g) return g; }
     const body = await req.json();
     const redSocial = REDES.includes(body.red_social as RedSocial) ? (body.red_social as RedSocial) : "instagram";
     const username = normalizarUsername(body.username);

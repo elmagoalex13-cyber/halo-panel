@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (modo === "propias") {
-    const { data, error } = await supabase.from("virales_propios").select("id, codigo").eq("compartidos", 0).limit(400);
+    const { data, error } = await soloVisibles(supabase.from("virales_propios").select("id, codigo").eq("compartidos", 0).limit(400), await alcanceActual());
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ videos: data ?? [] });
   }
@@ -55,8 +56,9 @@ export async function POST(req: NextRequest) {
   let hechos = 0;
 
   if (body.modo === "propias") {
+    const alcance = await alcanceActual();
     for (const a of lista) {
-      const { error } = await supabase.from("virales_propios").update({ vistas: a.vistas, likes: a.likes, comentarios: a.comentarios, compartidos: a.compartidos }).eq("id", a.id);
+      const { error } = await soloVisibles(supabase.from("virales_propios").update({ vistas: a.vistas, likes: a.likes, comentarios: a.comentarios, compartidos: a.compartidos }).eq("id", a.id), alcance);
       if (!error) hechos++;
     }
     return NextResponse.json({ ok: true, hechos });

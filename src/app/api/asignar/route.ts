@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { alcanceActual, exigirFila, modeloProhibido, veModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
   if (tipo === 4 && !urls.length && !archivos.length) return NextResponse.json({ error: "Pega una URL o sube al menos un video de referencia" }, { status: 400 });
   if (invalidas.length) return NextResponse.json({ error: `URL no valida: ${invalidas[0]}` }, { status: 400 });
   if (!modelos.length) return NextResponse.json({ error: "Elige al menos una modelo" }, { status: 400 });
+  { const a = await alcanceActual(); if (!modelos.every((m) => veModelo(a, m))) return modeloProhibido(); }
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
   try {
@@ -148,6 +150,7 @@ export async function DELETE(req: NextRequest) {
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
+  { const g = await exigirFila("encargos", id); if (g) return g; }
   const { error } = await createAdminClient().from("encargos").delete().eq("id", id).neq("estado", "entregado");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
