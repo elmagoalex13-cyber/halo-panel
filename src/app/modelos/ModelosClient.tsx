@@ -120,7 +120,7 @@ export function ModelosClient({
         const res = await fetch("/api/modelos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, ambito: filtroAmbito === "compartidas" ? "compartido" : "privado" }),
+          body: JSON.stringify(form),
         });
         const payload = await res.json();
         if (res.ok && payload.data) {

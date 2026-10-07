@@ -21,9 +21,9 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    // El dueño elige (por defecto, solo suya); una modelo que mete otro usuario nace COMPARTIDA para que pueda verla
+    // Toda modelo nueva nace COMPARTIDA (la meta el dueño o su socio); el dueño puede pasarla a "mis modelos" despues desde su ficha
     const alcance = await alcanceActual();
-    const ambito = alcance.dueno ? (body.ambito === "compartido" ? "compartido" : "privado") : "compartido";
+    const ambito = "compartido";
     let { data, error } = await supabase.from("modelos").insert({ ...payload, ambito }).select().single();
     if (error && /ambito/i.test(error.message)) {
       // Falta el SQL 20261013: solo el dueño puede seguir creando modelos (como antes)
