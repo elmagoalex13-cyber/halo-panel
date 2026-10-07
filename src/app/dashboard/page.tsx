@@ -14,6 +14,7 @@ import { contarOFNuevo } from "@/lib/ofResumen";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { alcanceActual, ambitosModelos, cuentasVenuzVisibles, soloEn, soloVisibles, type GrupoAmbito } from "@/lib/alcance";
 import { SelectorGrupo } from "./SelectorGrupo";
+import { avisosActividad } from "@/lib/actividad";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -123,7 +124,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos()]);
+  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad()]);
   const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
@@ -229,6 +230,8 @@ export default async function DashboardPage({
   const onboardingPendientes = modelos.filter((m) => m.activa && onboardingPorModelo.get(m.id)?.estado !== "enviado");
   type NotifNivel = "rojo" | "amarillo" | "verde";
   const notificaciones: { nivel: NotifNivel; texto: string; href?: string }[] = [
+    // Lo sensible que ha hecho tu socio (solo lo ve el dueño)
+    ...(sesionPanel?.dueno ? avisosSocio : []),
     ...(contenidoBajo.length > 0
       ? [
           {
