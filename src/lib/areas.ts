@@ -5,7 +5,7 @@ export type AreaId = "leads" | "facturacion" | "vault" | "onlyfans" | "landings"
 export const AREAS: Array<{ id: AreaId; label: string; descripcion: string; paginas: string[]; apis: string[] }> = [
   { id: "leads", label: "Leads de la web", descripcion: "Contactos que llegan desde las landings", paginas: ["/leads"], apis: ["/api/leads"] },
   { id: "facturacion", label: "Facturación", descripcion: "Ingresos de Venuz y cobros", paginas: ["/facturacion"], apis: ["/api/facturacion", "/api/venuz"] },
-  { id: "vault", label: "Vault", descripcion: "Contraseñas y accesos guardados", paginas: ["/vault"], apis: ["/api/vault"] },
+  { id: "vault", label: "Vault (baúl compartido)", descripcion: "El baúl compartido. Tu baúl privado nunca lo ve ningún otro usuario", paginas: ["/vault"], apis: ["/api/vault"] },
   { id: "onlyfans", label: "OnlyFans", descripcion: "Scripts, packs y posts de las modelos", paginas: ["/onlyfans"], apis: ["/api/onlyfans"] },
   { id: "landings", label: "Landings", descripcion: "Páginas de captación y sus estadísticas", paginas: ["/landings"], apis: [] },
   { id: "logs", label: "Actividad", descripcion: "Registro de lo que hace el sistema", paginas: ["/logs"], apis: [] },

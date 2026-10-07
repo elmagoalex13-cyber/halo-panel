@@ -211,6 +211,7 @@ export type VaultEntry = {
   categoria: VaultCategoria;
   descripcion?: string | null;
   modelo_id?: string | null;
+  ambito?: "privado" | "compartido";
   created_at: string;
 };
 

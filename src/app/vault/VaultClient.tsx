@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Eye, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Copy, Eye, Loader2, Lock, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import type { VaultCategoria, VaultEntry } from "@/types";
 
 const categories: Array<{ id: VaultCategoria; label: string; icon: string }> = [
@@ -14,7 +14,19 @@ const categories: Array<{ id: VaultCategoria; label: string; icon: string }> = [
   { id: "otro", label: "Otro", icon: "◆" },
 ];
 
-export function VaultClient({ entries, modelos }: { entries: VaultEntry[]; modelos: { id: string; nombre: string }[] }) {
+type Ambito = "privado" | "compartido";
+
+export function VaultClient({
+  entries: todas,
+  modelos,
+  esDueno,
+  ambitoListo,
+}: {
+  entries: VaultEntry[];
+  modelos: { id: string; nombre: string }[];
+  esDueno: boolean;
+  ambitoListo: boolean;
+}) {
   const router = useRouter();
   const [revealed, setRevealed] = useState<{ title: string; value: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -24,6 +36,18 @@ export function VaultClient({ entries, modelos }: { entries: VaultEntry[]; model
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<VaultEntry | null>(null);
+
+  // El dueño tiene dos baules (privado y compartido); los demas usuarios solo ven el compartido
+  const [ambito, setAmbito] = useState<Ambito>(esDueno ? "privado" : "compartido");
+  const [busca, setBusca] = useState("");
+  const [filtroModelo, setFiltroModelo] = useState("");
+  const delAmbito = todas.filter((e) => (e.ambito ?? "privado") === ambito);
+  const entries = delAmbito.filter((e) => {
+    if (filtroModelo && (filtroModelo === "_sin" ? e.modelo_id : e.modelo_id !== filtroModelo)) return false;
+    const q = busca.trim().toLowerCase();
+    return !q || `${e.nombre} ${e.descripcion ?? ""} ${nombreModelo(e.modelo_id) ?? ""}`.toLowerCase().includes(q);
+  });
+  const modelosUsados = modelos.filter((m) => delAmbito.some((e) => e.modelo_id === m.id));
 
   const grouped = useMemo(
     () =>
@@ -80,13 +104,64 @@ export function VaultClient({ entries, modelos }: { entries: VaultEntry[]; model
 
   return (
     <div>
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <p className="text-sm text-[color:var(--text-secondary)]">{entries.length} entradas agrupadas por categoría</p>
-        <button className="btn-primary flex h-10 items-center gap-2 px-4 text-sm" onClick={() => {
+      {esDueno ? (
+        <div className="mb-4 grid gap-2 sm:grid-cols-2">
+          {(["privado", "compartido"] as Ambito[]).map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => {
+                setAmbito(a);
+                setFiltroModelo("");
+              }}
+              className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${ambito === a ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/15" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+            >
+              {a === "privado" ? <Lock className="h-5 w-5 shrink-0 text-[#c4b5fd]" /> : <Users className="h-5 w-5 shrink-0 text-emerald-300" />}
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-white">{a === "privado" ? "Mi baúl" : "Baúl compartido"}</span>
+                <span className="block text-xs text-white/45">{a === "privado" ? "Solo lo ves tú" : "Lo ves tú y tu socio"}</span>
+              </span>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold text-white/70">{todas.filter((e) => (e.ambito ?? "privado") === a).length}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+          <Users className="h-4 w-4" /> Baúl compartido: lo que guardes aquí lo ven tú y el dueño del panel.
+        </p>
+      )}
+      {esDueno && !ambitoListo ? (
+        <p className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          Falta ejecutar el SQL <code>20261011_vault_ambito.sql</code> en Supabase para poder compartir entradas. Mientras tanto todo sigue siendo privado.
+        </p>
+      ) : null}
+
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <p className="text-sm text-[color:var(--text-secondary)]">
+          {entries.length}
+          {entries.length !== delAmbito.length ? ` de ${delAmbito.length}` : ""} entradas
+        </p>
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="input-base w-44 py-1.5 text-xs" />
+        {modelosUsados.length ? (
+          <select value={filtroModelo} onChange={(e) => setFiltroModelo(e.target.value)} className="input-base py-1.5 text-xs">
+            <option value="">Todas las modelos</option>
+            <option value="_sin">Sin modelo asociada</option>
+            {modelosUsados.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nombre}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <span className="flex-1" />
+        <button
+          className="btn-primary flex h-10 items-center gap-2 px-4 text-sm"
+          onClick={() => {
             setEditando(null);
             setShowForm(true);
-          }}>
-          <Plus className="h-4 w-4" /> Nueva
+          }}
+        >
+          <Plus className="h-4 w-4" /> Nueva {esDueno ? (ambito === "privado" ? "en mi baúl" : "en el compartido") : ""}
         </button>
       </div>
 
@@ -207,7 +282,16 @@ export function VaultClient({ entries, modelos }: { entries: VaultEntry[]; model
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
           <form onSubmit={addEntry} className="glass-card w-full max-w-lg p-5">
             <h2 className="font-display text-2xl font-semibold text-white">{editando ? "Editar entrada" : "Nueva entrada"}</h2>
-            <input name="nombre" className="input mt-4 h-10 w-full px-3 text-sm" placeholder="Nombre" defaultValue={editando?.nombre ?? ""} required />
+            {esDueno ? (
+              <label className="mt-4 block text-xs text-[color:var(--text-secondary)]">
+                ¿Dónde se guarda?
+                <select name="ambito" className="input mt-1 h-10 w-full px-3 text-sm" defaultValue={editando?.ambito ?? ambito} disabled={!ambitoListo}>
+                  <option value="privado">Mi baúl (solo yo)</option>
+                  <option value="compartido">Baúl compartido (yo y mi socio)</option>
+                </select>
+              </label>
+            ) : null}
+            <input name="nombre" className="input mt-3 h-10 w-full px-3 text-sm" placeholder="Nombre" defaultValue={editando?.nombre ?? ""} required />
             <select name="categoria" className="input mt-3 h-10 w-full px-3 text-sm" defaultValue={editando?.categoria ?? "otro"}>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
