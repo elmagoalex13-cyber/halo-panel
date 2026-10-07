@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Eye, Loader2, Lock, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import type { VaultCategoria, VaultEntry } from "@/types";
+import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
 
 const categories: Array<{ id: VaultCategoria; label: string; icon: string }> = [
   { id: "of_credentials", label: "OF credentials", icon: "🔑" },
@@ -37,6 +38,9 @@ export function VaultClient({
   const nombreModelo = (id?: string | null) => modelos.find((m) => m.id === id)?.nombre;
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [borrarDef, setBorrarDef] = useState<VaultEntry | null>(null);
+  const [borrandoDef, setBorrandoDef] = useState(false);
+  const [errorDef, setErrorDef] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<VaultEntry | null>(null);
 
   // El dueño tiene dos baules (privado y compartido); los demas usuarios solo ven el compartido
@@ -89,6 +93,23 @@ export function VaultClient({
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function borrarParaSiempre() {
+    if (!borrarDef) return;
+    setBorrandoDef(true);
+    setErrorDef(null);
+    try {
+      const res = await fetch(`/api/vault?id=${borrarDef.id}&definitivo=1&confirmar=${encodeURIComponent(borrarDef.nombre)}`, { method: "DELETE" });
+      if (res.ok) {
+        setBorrarDef(null);
+        router.refresh();
+      } else setErrorDef(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo borrar");
+    } catch {
+      setErrorDef("No se pudo conectar con el servidor.");
+    } finally {
+      setBorrandoDef(false);
     }
   }
 
@@ -369,11 +390,31 @@ export function VaultClient({
                 </div>
                 <button onClick={() => reveal(e)} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 hover:text-white">Ver</button>
                 <button onClick={() => restaurar(e)} className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20">Restaurar</button>
+                <button
+                  onClick={() => {
+                    setErrorDef(null);
+                    setBorrarDef(e);
+                  }}
+                  className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-semibold text-red-300/80 hover:bg-red-500/10 hover:text-red-300"
+                >
+                  Eliminar para siempre
+                </button>
               </li>
             ))}
           </ul>
         </details>
       ) : null}
+
+      <ConfirmacionDoble
+        abierto={Boolean(borrarDef)}
+        titulo={`Eliminar «${borrarDef?.nombre ?? ""}» para siempre`}
+        detalle="Se borrará esta credencial y todas sus versiones anteriores guardadas. No habrá forma de recuperarla."
+        nombre={borrarDef?.nombre ?? ""}
+        ocupado={borrandoDef}
+        error={errorDef}
+        onConfirmar={borrarParaSiempre}
+        onCancelar={() => setBorrarDef(null)}
+      />
     </div>
   );
 }

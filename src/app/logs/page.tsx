@@ -2,6 +2,7 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
+import { MarcarVista } from "./MarcarVista";
 
 export const metadata = { title: "Actividad" };
 export const revalidate = 0;
@@ -22,6 +23,7 @@ type ActividadRow = {
   accion: string;
   sensible: boolean;
   ids: string[] | null;
+  vista_at?: string | null;
   created_at: string;
 };
 
@@ -114,6 +116,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
   return (
     <PanelLayout>
       <div className="space-y-5">
+        {usuarios ? <MarcarVista hayNuevos={(act?.data ?? []).some((l) => l.sensible && !l.vista_at)} /> : null}
         <div>
           <p className="text-sm text-[color:var(--text-secondary)]">{usuarios ? "Todo lo que hace tu socio en el panel" : "Lo que hace el sistema por su cuenta"}</p>
           <h1 className="mt-2 font-display text-4xl font-semibold text-white">Actividad</h1>
@@ -163,6 +166,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
                         {log.accion}
                         {sobre.length ? <span className="text-white/45"> · {sobre.join(", ")}</span> : null}
                       </span>
+                      {log.sensible && !log.vista_at ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Nuevo</span> : null}
                       {log.sensible ? <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">Sensible</span> : null}
                     </li>
                   );

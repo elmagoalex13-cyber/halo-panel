@@ -201,3 +201,8 @@ CREATE TRIGGER trg_version_vault BEFORE UPDATE ON vault_panel FOR EACH ROW EXECU
 ALTER TABLE modelos DROP CONSTRAINT IF EXISTS modelos_email_key;
 DROP INDEX IF EXISTS modelos_email_key;
 CREATE UNIQUE INDEX IF NOT EXISTS modelos_email_unico_activas ON modelos (email) WHERE eliminada_at IS NULL AND email IS NOT NULL;
+
+-- ===== 20261018_actividad_vista.sql =====
+-- Marca de "visto" en la actividad de tu socio: el numero rojo del menu lateral cuenta las acciones sensibles que aun no has abierto.
+ALTER TABLE panel_actividad ADD COLUMN IF NOT EXISTS vista_at timestamptz;
+CREATE INDEX IF NOT EXISTS panel_actividad_nuevas_idx ON panel_actividad (created_at DESC) WHERE sensible AND vista_at IS NULL;

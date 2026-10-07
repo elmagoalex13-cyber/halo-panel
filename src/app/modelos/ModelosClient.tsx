@@ -8,6 +8,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { FotoModelo } from "./FotoModelo";
 import { PortalAccesoButton } from "./PortalAccesoButton";
 import type { CuentaInstagram, MetricoolEstado, Modelo, SocialNetwork } from "@/types";
+import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
 
 const METRICOOL_DOT: Record<MetricoolEstado, string> = {
   conectada: "bg-emerald-400",
@@ -81,6 +82,9 @@ export function ModelosClient({
   const [ambitoNueva, setAmbitoNueva] = useState<"compartido" | "privado">("compartido");
   const [saving, setSaving] = useState(false);
   const [errorModal, setErrorModal] = useState<string | null>(null);
+  const [borrarDef, setBorrarDef] = useState<Modelo | null>(null);
+  const [borrandoDef, setBorrandoDef] = useState(false);
+  const [errorDef, setErrorDef] = useState<string | null>(null);
   const [cuentaDrafts, setCuentaDrafts] = useState<Record<string, CuentaDraft>>({});
   const [cuentaErrors, setCuentaErrors] = useState<Record<string, string>>({});
   const [cuentaEdit, setCuentaEdit] = useState<CuentaEditState>(null);
@@ -174,6 +178,25 @@ export function ModelosClient({
     const res = await fetch(`/api/modelos/${modelo.id}`, { method: "DELETE" });
     if (res.ok) setModelos((prev) => prev.filter((m) => m.id !== modelo.id));
     else window.alert(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo eliminar");
+  }
+
+  async function borrarParaSiempre() {
+    if (!borrarDef) return;
+    setBorrandoDef(true);
+    setErrorDef(null);
+    try {
+      const res = await fetch(`/api/modelos/${borrarDef.id}/papelera`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmar: borrarDef.nombre }),
+      });
+      if (res.ok) window.location.reload();
+      else setErrorDef(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo borrar");
+    } catch {
+      setErrorDef("No se pudo conectar con el servidor.");
+    } finally {
+      setBorrandoDef(false);
+    }
   }
 
   async function restaurarModelo(modelo: Modelo) {
@@ -550,11 +573,31 @@ export function ModelosClient({
                 <button onClick={() => restaurarModelo(m)} className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20">
                   Restaurar
                 </button>
+                <button
+                  onClick={() => {
+                    setErrorDef(null);
+                    setBorrarDef(m);
+                  }}
+                  className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-semibold text-red-300/80 hover:bg-red-500/10 hover:text-red-300"
+                >
+                  Eliminar para siempre
+                </button>
               </li>
             ))}
           </ul>
         </details>
       ) : null}
+
+      <ConfirmacionDoble
+        abierto={Boolean(borrarDef)}
+        titulo={`Eliminar a ${borrarDef?.nombre ?? ""} para siempre`}
+        detalle="Se borrará la modelo y TODO lo que cuelga de ella en el panel: sus cuentas, vídeos, contenido de OnlyFans, facturación y perfil, y también las copias de seguridad de la papelera. Los archivos de vídeo guardados en el almacenamiento no se tocan."
+        nombre={borrarDef?.nombre ?? ""}
+        ocupado={borrandoDef}
+        error={errorDef}
+        onConfirmar={borrarParaSiempre}
+        onCancelar={() => setBorrarDef(null)}
+      />
 
       {modal ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true">

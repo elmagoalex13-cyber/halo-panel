@@ -17,7 +17,7 @@ const NAV = [
   { href: "/landings", label: "Landings", icon: "◇" },
   { href: "/modelos", label: "Modelos", icon: "◉" },
   { href: "/frases", label: "Frases", icon: "✦" },
-  { href: "/logs", label: "Actividad", icon: "◌" },
+  { href: "/logs", label: "Actividad", icon: "◌", actBadge: true },
   { href: "/vault", label: "Vault", icon: "◆" },
   { href: "/ajustes", label: "Ajustes", icon: "⚙" },
 ];
@@ -42,7 +42,7 @@ function AvatarMini({ modelo }: { modelo: ModeloMenu }) {
 // Cada pagina monta su propia barra lateral, asi que al navegar se desmonta y se vuelve a montar:
 // sin esto la lista de modelos y los contadores se vaciaban unos instantes (parpadeo). El modulo
 // sobrevive a la navegacion en el navegador; en el servidor nunca se rellena (solo lo hacen efectos).
-const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number } | null; denegadas: AreaId[] | null } = {
+const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number; actividad: number } | null; denegadas: AreaId[] | null } = {
   modelos: [],
   modelosAbierto: null,
   counts: null,
@@ -60,7 +60,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0 });
+  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0, actividad: 0 });
   // Secciones que este usuario no puede ver (un socio sin acceso a Leads, etc.): se quitan del menu
   const [denegadas, setDenegadas] = useState<AreaId[]>(cache.denegadas ?? []);
   useEffect(() => {
@@ -134,11 +134,12 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
       try {
         const res = await fetch("/api/panel/counts", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { approval?: number; leads?: number; onlyfans?: number };
+        const data = (await res.json()) as { approval?: number; leads?: number; onlyfans?: number; actividad?: number };
         cache.counts = {
           approval: Number(data.approval ?? 0),
           leads: Number(data.leads ?? 0),
           onlyfans: Number(data.onlyfans ?? 0),
+          actividad: Number(data.actividad ?? 0),
         };
         if (!disposed) setCounts(cache.counts);
       } catch {
@@ -171,8 +172,12 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
     if (item.badge && counts.approval > 0) return counts.approval > 99 ? "99+" : String(counts.approval);
     if (item.leadsBadge && counts.leads > 0) return counts.leads > 99 ? "99+" : String(counts.leads);
     if ("ofBadge" in item && item.ofBadge && counts.onlyfans > 0) return counts.onlyfans > 99 ? "99+" : String(counts.onlyfans);
+    if ("actBadge" in item && item.actBadge && counts.actividad > 0) return counts.actividad > 99 ? "99+" : String(counts.actividad);
     return null;
   }
+
+  // Rojo para lo sensible de tu socio, turquesa para leads, violeta para el resto
+  const colorBadge = (item: (typeof NAV)[number]) => ("actBadge" in item && item.actBadge ? "bg-red-500" : item.leadsBadge ? "bg-[#06B6D4]" : "bg-[#8B5CF6]");
 
   const primaryItems = NAV_VISIBLE.filter((item) => MOBILE_PRIMARY.includes(item.href));
   const moreItems = NAV_VISIBLE.filter((item) => !MOBILE_PRIMARY.includes(item.href));
@@ -197,7 +202,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
         <nav className="flex-1 overflow-y-auto py-4">
           <div className="flex flex-col gap-1 px-3">
             {NAV_VISIBLE.map((item) => {
-              const { href, label, icon, leadsBadge } = item;
+              const { href, label, icon } = item;
               const active = activeFor(href);
               const badgeText = badgeFor(item);
               const esModelos = href === "/modelos";
@@ -216,7 +221,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                   {badgeText ? (
                     <span
                       className={`min-w-[18px] rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold text-white shadow-[0_0_10px_-2px_rgba(139,92,246,0.8)] ${
-                        leadsBadge ? "bg-[#06B6D4]" : "bg-[#8B5CF6]"
+                        colorBadge(item)
                       }`}
                     >
                       {badgeText}
@@ -299,7 +304,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                 <span className="text-base leading-none">{item.icon}</span>
                 <span className="max-w-full truncate">{item.label.replace("Aprobación", "Aprobar")}</span>
                 {badgeText ? (
-                  <span className="absolute right-1.5 top-1 rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[9px] font-bold text-white">
+                  <span className={`absolute right-1.5 top-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white ${colorBadge(item)}`}>
                     {badgeText}
                   </span>
                 ) : null}
@@ -374,7 +379,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                   >
                     <span className="text-base leading-none">{item.icon}</span>
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                    {badgeText ? <span className="rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[10px] text-white">{badgeText}</span> : null}
+                    {badgeText ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] text-white ${colorBadge(item)}`}>{badgeText}</span> : null}
                   </Link>
                 );
               })}

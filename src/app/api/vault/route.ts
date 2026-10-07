@@ -83,6 +83,23 @@ export async function DELETE(request: Request) {
   const sesion = await sesionPanelActual();
   if (!sesion) return sinSesion();
 
+  // Borrado DEFINITIVO desde la papelera: solo el dueño, solo si ya esta en la papelera y con el nombre exacto (2.ª confirmacion)
+  const url = new URL(request.url);
+  if (url.searchParams.get("definitivo") === "1") {
+    if (!sesion.dueno) return prohibido();
+    const db = createAdminClient();
+    const { data: fila } = await db.from("vault_panel").select("nombre, eliminada_at").eq("id", id).maybeSingle();
+    if (!fila || fila.nombre?.startsWith("portal:")) return NextResponse.json({ error: "No encontrada" }, { status: 404 });
+    if (!fila.eliminada_at) return NextResponse.json({ error: "Solo se puede borrar para siempre lo que ya está en la papelera" }, { status: 409 });
+    if ((url.searchParams.get("confirmar") ?? "").trim().toLowerCase() !== String(fila.nombre).trim().toLowerCase()) {
+      return NextResponse.json({ error: "El nombre escrito no coincide" }, { status: 400 });
+    }
+    const { error: errBorrar } = await db.from("vault_panel").delete().eq("id", id);
+    if (errBorrar) return NextResponse.json({ error: errBorrar.message }, { status: 500 });
+    await db.from("papelera_filas").delete().eq("tabla", "vault_panel").eq("fila->>id", id); // tambien las copias y versiones anteriores
+    return NextResponse.json({ ok: true });
+  }
+
   if (!sesion.dueno) {
     const a = await ambitoDe(id);
     if (!a.existe || a.eliminada || a.ambito !== "compartido" || a.nombre?.startsWith("portal:")) return prohibido();

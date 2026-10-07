@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!canUseSupabase()) {
-    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0 });
+    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0 });
   }
 
   try {
@@ -16,20 +16,26 @@ export async function GET() {
     const sesion = await sesionPanelActual();
     const puedeLeads = !sesion?.denegadas.includes("leads");
     const puedeOF = !sesion?.denegadas.includes("onlyfans");
-    const [approvalResult, leadsResult, of] = await Promise.all([
+    // Acciones sensibles de tu socio que aun no has abierto (solo las ve el dueño; si falta el SQL 20261018, 0)
+    const nuevasSensibles = sesion?.dueno
+      ? supabase.from("panel_actividad").select("id", { count: "exact", head: true }).eq("sensible", true).is("vista_at", null)
+      : Promise.resolve({ count: 0 });
+    const [approvalResult, leadsResult, of, actividad] = await Promise.all([
       soloVisibles(supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "en_aprobacion"), await alcanceActual()),
       puedeLeads
         ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("estado", "nuevo")
         : Promise.resolve({ count: 0 }),
       puedeOF ? contarOFNuevo() : Promise.resolve({ count: 0, modelos: [] as string[] }),
+      nuevasSensibles,
     ]);
 
     return NextResponse.json({
       approval: approvalResult.count ?? 0,
       leads: leadsResult.count ?? 0,
       onlyfans: of.count,
+      actividad: actividad.count ?? 0,
     });
   } catch {
-    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0 });
+    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0 });
   }
 }
