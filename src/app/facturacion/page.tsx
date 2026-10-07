@@ -58,8 +58,14 @@ async function loadData() {
     })) as FacturacionModelo[];
     const modelos = (modelosResult.data ?? []) as Modelo[];
     // Cada cuenta de Venuz hereda el ambito de su modelo (las sin vincular cuentan como solo del dueño)
+    // El socio tambien ve (solo el nombre, sin ingresos) las cuentas de Venuz sin vincular, para poder asignarlas a sus modelos
+    let sinVincular: VenuzCuenta[] = [];
+    if (!alcance.dueno) {
+      const { data } = await supabase.from("venuz_cuentas").select("id, nombre, username, avatar_url, modelo_id, activa, estado_conexion, suscriptores").is("modelo_id", null).order("nombre");
+      sinVincular = (data ?? []) as VenuzCuenta[];
+    }
     const ambitoPorModelo = new Map(modelos.map((m) => [m.id, m.ambito === "compartido" ? "compartido" : "privado"] as const));
-    const cuentasVenuz = ((cuentasResult.data ?? []) as VenuzCuenta[]).map((c) => ({ ...c, ambito: c.modelo_id ? (ambitoPorModelo.get(c.modelo_id) ?? "privado") : "privado" }));
+    const cuentasVenuz = [...((cuentasResult.data ?? []) as VenuzCuenta[]), ...sinVincular].map((c) => ({ ...c, ambito: c.modelo_id ? (ambitoPorModelo.get(c.modelo_id) ?? "privado") : "privado" }));
 
     return {
       esDueno: alcance.dueno,
