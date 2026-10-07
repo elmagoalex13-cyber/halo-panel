@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, modeloProhibido, veModelo } from "@/lib/alcance";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
+import { errorDb } from "@/lib/erroresDb";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -22,10 +23,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const supabase = createAdminClient();
     const { data, error } = await supabase.from("modelos").update(payload).eq("id", id).select().single();
-    if (error) throw error;
+    if (error) {
+      const e = errorDb(error, "No se pudo guardar la modelo");
+      return NextResponse.json({ error: e.mensaje }, { status: e.estado });
+    }
     return NextResponse.json({ data });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
+    const e = errorDb(error, "Error interno");
+    return NextResponse.json({ error: e.mensaje }, { status: e.estado });
   }
 }
 

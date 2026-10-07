@@ -80,6 +80,7 @@ export function ModelosClient({
   const [form, setForm] = useState(emptyForm);
   const [ambitoNueva, setAmbitoNueva] = useState<"compartido" | "privado">("compartido");
   const [saving, setSaving] = useState(false);
+  const [errorModal, setErrorModal] = useState<string | null>(null);
   const [cuentaDrafts, setCuentaDrafts] = useState<Record<string, CuentaDraft>>({});
   const [cuentaErrors, setCuentaErrors] = useState<Record<string, string>>({});
   const [cuentaEdit, setCuentaEdit] = useState<CuentaEditState>(null);
@@ -99,12 +100,14 @@ export function ModelosClient({
   }, [cuentas]);
 
   function openCreate() {
+    setErrorModal(null);
     setForm(emptyForm);
     setAmbitoNueva(filtroAmbito === "mias" ? "privado" : "compartido");
     setModal({ mode: "create" });
   }
 
   function openEdit(modelo: Modelo) {
+    setErrorModal(null);
     setForm({
       nombre: modelo.nombre,
       nombre_real: modelo.nombre_real ?? "",
@@ -119,6 +122,7 @@ export function ModelosClient({
   async function submitModal() {
     if (!form.nombre.trim() || !modal) return;
     setSaving(true);
+    setErrorModal(null);
     try {
       if (modal.mode === "create") {
         const res = await fetch("/api/modelos", {
@@ -126,10 +130,12 @@ export function ModelosClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...form, ambito: ambitoNueva }),
         });
-        const payload = await res.json();
+        const payload = (await res.json().catch(() => ({}))) as { data?: Modelo; error?: string };
         if (res.ok && payload.data) {
           setModelos((prev) => [...prev, payload.data as Modelo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
           setModal(null);
+        } else {
+          setErrorModal(payload.error ?? "No se pudo crear la modelo");
         }
       } else {
         const res = await fetch(`/api/modelos/${modal.modelo.id}`, {
@@ -140,8 +146,12 @@ export function ModelosClient({
         if (res.ok) {
           setModelos((prev) => prev.map((m) => (m.id === modal.modelo.id ? { ...m, ...form } : m)));
           setModal(null);
+        } else {
+          setErrorModal(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar");
         }
       }
+    } catch {
+      setErrorModal("No se pudo conectar con el servidor. Inténtalo otra vez.");
     } finally {
       setSaving(false);
     }
@@ -587,6 +597,7 @@ export function ModelosClient({
                 />
               </Field>
             </div>
+            {errorModal ? <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{errorModal}</p> : null}
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setModal(null)} className="btn-secondary px-4 py-2 text-sm">
                 Cancelar

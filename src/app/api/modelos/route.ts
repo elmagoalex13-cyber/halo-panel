@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual } from "@/lib/alcance";
+import { errorDb } from "@/lib/erroresDb";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    if (typeof body.nombre !== "string" || !body.nombre.trim()) return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
     const payload = {
-      nombre: body.nombre,
+      nombre: body.nombre.trim(),
       nombre_real: body.nombre_real || null,
       email: body.email || null,
       telefono: body.telefono || null,
@@ -30,9 +32,13 @@ export async function POST(req: NextRequest) {
       if (!alcance.dueno) return NextResponse.json({ error: "Falta ejecutar el SQL 20261013_modelos_ambito.sql en Supabase." }, { status: 409 });
       ({ data, error } = await supabase.from("modelos").insert(payload).select().single());
     }
-    if (error) throw error;
+    if (error) {
+      const e = errorDb(error, "No se pudo crear la modelo");
+      return NextResponse.json({ error: e.mensaje }, { status: e.estado });
+    }
     return NextResponse.json({ data });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
+    const e = errorDb(error, "Error interno");
+    return NextResponse.json({ error: e.mensaje }, { status: e.estado });
   }
 }
