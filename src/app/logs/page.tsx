@@ -2,7 +2,6 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
-import { PREFIJO } from "@/lib/actividad";
 
 export const metadata = { title: "Actividad" };
 export const revalidate = 0;
@@ -17,6 +16,15 @@ interface SearchParams {
   page?: string;
 }
 
+type ActividadRow = {
+  id: string;
+  usuario: string;
+  accion: string;
+  sensible: boolean;
+  ids: string[] | null;
+  created_at: string;
+};
+
 type LogRow = {
   id: string;
   agente: string;
@@ -27,44 +35,50 @@ type LogRow = {
   created_at: string;
 };
 
-async function getLogs(params: SearchParams, usuarios: boolean) {
+async function getActividad(params: SearchParams) {
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
   const from = (page - 1) * PAGE_SIZE;
-  if (!canUseSupabase()) return { data: [] as LogRow[], total: 0, page, pages: 1, usuariosVistos: [] as string[], nombres: new Map<string, string>() };
+  const vacio = { data: [] as ActividadRow[], total: 0, page, pages: 1, usuariosVistos: [] as string[], nombres: new Map<string, string>(), tablaLista: true };
+  if (!canUseSupabase()) return vacio;
 
   const supabase = createAdminClient();
-  let query = supabase.from("log_agentes").select("*", { count: "exact" });
-  if (usuarios) {
-    query = params.usuario ? query.eq("agente", `${PREFIJO}${params.usuario}`) : query.like("agente", `${PREFIJO}%`);
-  } else {
-    query = query.not("agente", "like", `${PREFIJO}%`);
-    if (params.agente) query = query.eq("agente", params.agente);
+  let query = supabase.from("panel_actividad").select("*", { count: "exact" });
+  if (params.usuario) query = query.eq("usuario", params.usuario);
+  if (params.resultado === "warning") query = query.eq("sensible", true);
+  const { data, count, error } = await query.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
+  if (error) return { ...vacio, tablaLista: !/panel_actividad|relation/i.test(error.message) };
+  const filas = (data ?? []) as ActividadRow[];
+
+  const { data: u } = await supabase.from("panel_actividad").select("usuario").order("created_at", { ascending: false }).limit(500);
+  const usuariosVistos = Array.from(new Set((u ?? []).map((f) => String(f.usuario))));
+  // Nombre de lo que se ha tocado (modelo, cuenta, contraseña del Vault...)
+  const nombres = new Map<string, string>();
+  const ids = Array.from(new Set(filas.flatMap((f) => f.ids ?? [])));
+  if (ids.length) {
+    const [mod, cue, vau, ref] = await Promise.all([
+      supabase.from("modelos").select("id, nombre").in("id", ids),
+      supabase.from("cuentas_instagram").select("id, username").in("id", ids),
+      supabase.from("vault_panel").select("id, nombre").in("id", ids),
+      supabase.from("referencias_cuentas").select("id, username").in("id", ids),
+    ]);
+    for (const m of mod.data ?? []) nombres.set(m.id as string, `Modelo ${m.nombre}`);
+    for (const c of cue.data ?? []) nombres.set(c.id as string, `Cuenta @${c.username}`);
+    for (const v of vau.data ?? []) nombres.set(v.id as string, `Vault: ${v.nombre}`);
+    for (const r of ref.data ?? []) nombres.set(r.id as string, `Referencia @${r.username}`);
   }
+  return { data: filas, total: count ?? 0, page, pages: Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE)), usuariosVistos, nombres, tablaLista: true };
+}
+
+async function getLogs(params: SearchParams) {
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const from = (page - 1) * PAGE_SIZE;
+  if (!canUseSupabase()) return { data: [] as LogRow[], total: 0, page, pages: 1 };
+
+  let query = createAdminClient().from("log_agentes").select("*", { count: "exact" });
+  if (params.agente) query = query.eq("agente", params.agente);
   if (params.resultado) query = query.eq("resultado", params.resultado);
   const { data, count } = await query.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
-  const filas = (data ?? []) as LogRow[];
-
-  // Quien ha hecho cosas (para los botones de filtro) y nombre de lo que se ha tocado
-  let usuariosVistos: string[] = [];
-  const nombres = new Map<string, string>();
-  if (usuarios) {
-    const { data: u } = await supabase.from("log_agentes").select("agente").like("agente", `${PREFIJO}%`).order("created_at", { ascending: false }).limit(500);
-    usuariosVistos = Array.from(new Set((u ?? []).map((f) => String(f.agente).slice(PREFIJO.length))));
-    const ids = Array.from(new Set(filas.flatMap((f) => f.detalle?.ids ?? [])));
-    if (ids.length) {
-      const [mod, cue, vau, ref] = await Promise.all([
-        supabase.from("modelos").select("id, nombre").in("id", ids),
-        supabase.from("cuentas_instagram").select("id, username").in("id", ids),
-        supabase.from("vault_panel").select("id, nombre").in("id", ids),
-        supabase.from("referencias_cuentas").select("id, username").in("id", ids),
-      ]);
-      for (const m of mod.data ?? []) nombres.set(m.id as string, `Modelo ${m.nombre}`);
-      for (const c of cue.data ?? []) nombres.set(c.id as string, `Cuenta @${c.username}`);
-      for (const v of vau.data ?? []) nombres.set(v.id as string, `Vault: ${v.nombre}`);
-      for (const r of ref.data ?? []) nombres.set(r.id as string, `Referencia @${r.username}`);
-    }
-  }
-  return { data: filas, total: count ?? 0, page, pages: Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE)), usuariosVistos, nombres };
+  return { data: (data ?? []) as LogRow[], total: count ?? 0, page, pages: Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE)) };
 }
 
 function buildUrl(base: SearchParams, patch: Record<string, string | undefined>) {
@@ -89,7 +103,13 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
   const sesion = await sesionPanelActual();
   const esDueno = sesion?.dueno ?? false;
   const usuarios = esDueno && params.origen === "usuarios"; // la actividad de los usuarios solo la ve el dueño
-  const { data, total, page, pages, usuariosVistos, nombres } = await getLogs(params, usuarios);
+  const act = usuarios ? await getActividad(params) : null;
+  const sis = usuarios ? null : await getLogs(params);
+  const total = act?.total ?? sis?.total ?? 0;
+  const page = act?.page ?? sis?.page ?? 1;
+  const pages = act?.pages ?? sis?.pages ?? 1;
+  const usuariosVistos = act?.usuariosVistos ?? [];
+  const nombres = act?.nombres ?? new Map<string, string>();
 
   return (
     <PanelLayout>
@@ -127,22 +147,23 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
 
         {usuarios ? (
           <GlassCard className="overflow-hidden p-0">
-            {data.length === 0 ? (
+            {act && !act.tablaLista ? (
+              <p className="py-14 text-center text-sm text-amber-300">Falta ejecutar el SQL <code>20261015_panel_actividad.sql</code> en Supabase para que se guarde la actividad.</p>
+            ) : act && act.data.length === 0 ? (
               <p className="py-14 text-center text-sm text-white/40">Todavía no hay actividad de usuarios.</p>
             ) : (
               <ul className="divide-y divide-white/[0.06]">
-                {data.map((log) => {
-                  const sensible = log.resultado === "warning";
-                  const sobre = (log.detalle?.ids ?? []).map((id) => nombres.get(id)).filter(Boolean) as string[];
+                {(act?.data ?? []).map((log) => {
+                  const sobre = (log.ids ?? []).map((id) => nombres.get(id)).filter(Boolean) as string[];
                   return (
-                    <li key={log.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5 ${sensible ? "bg-amber-400/[0.04]" : ""}`}>
+                    <li key={log.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5 ${log.sensible ? "bg-amber-400/[0.04]" : ""}`}>
                       <span className="w-28 shrink-0 text-xs text-white/40">{cuandoTexto(log.created_at)}</span>
-                      <span className="w-28 shrink-0 truncate text-sm font-semibold text-cyan-200">{log.agente.slice(PREFIJO.length)}</span>
+                      <span className="w-28 shrink-0 truncate text-sm font-semibold text-cyan-200">{log.usuario}</span>
                       <span className="min-w-0 flex-1 text-sm text-white">
                         {log.accion}
                         {sobre.length ? <span className="text-white/45"> · {sobre.join(", ")}</span> : null}
                       </span>
-                      {sensible ? <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">Sensible</span> : null}
+                      {log.sensible ? <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">Sensible</span> : null}
                     </li>
                   );
                 })}
@@ -160,8 +181,8 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
                 </tr>
               </thead>
               <tbody>
-                {data.length === 0 ? <tr><td colSpan={5} className="py-12 text-center text-white/40">Sin entradas</td></tr> : null}
-                {data.map((log) => (
+                {(sis?.data ?? []).length === 0 ? <tr><td colSpan={5} className="py-12 text-center text-white/40">Sin entradas</td></tr> : null}
+                {(sis?.data ?? []).map((log) => (
                   <tr key={log.id} className="border-b border-white/[0.05] hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5"><span className="rounded bg-white/[0.06] px-2 py-0.5 font-mono text-xs text-white/80">{log.agente}</span></td>
                     <td className="px-4 py-2.5">

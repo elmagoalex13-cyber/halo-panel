@@ -3,8 +3,6 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 // Avisos para el dueño y datos del registro de actividad del resto de usuarios (ver actividadEdge.ts).
 
-export const PREFIJO = "usuario:";
-
 const cuando = (iso: string) => {
   const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   if (dias <= 0) return "hoy";
@@ -17,21 +15,19 @@ export const avisosActividad = cache(async (): Promise<Array<{ nivel: "rojo"; te
   try {
     const desde = new Date(Date.now() - 7 * 86400000).toISOString();
     const { data } = await createAdminClient()
-      .from("log_agentes")
-      .select("agente, accion, created_at")
-      .like("agente", `${PREFIJO}%`)
-      .eq("resultado", "warning")
+      .from("panel_actividad")
+      .select("usuario, accion, created_at")
+      .eq("sensible", true)
       .gte("created_at", desde)
       .order("created_at", { ascending: false })
       .limit(300);
     const grupos = new Map<string, { usuario: string; accion: string; n: number; ultima: string }>();
     for (const f of data ?? []) {
-      const usuario = String(f.agente).slice(PREFIJO.length);
       const dia = String(f.created_at).slice(0, 10);
-      const clave = `${usuario}|${f.accion}|${dia}`;
+      const clave = `${f.usuario}|${f.accion}|${dia}`;
       const g = grupos.get(clave);
       if (g) g.n++;
-      else grupos.set(clave, { usuario, accion: String(f.accion), n: 1, ultima: String(f.created_at) });
+      else grupos.set(clave, { usuario: String(f.usuario), accion: String(f.accion), n: 1, ultima: String(f.created_at) });
     }
     return [...grupos.values()]
       .slice(0, 5)

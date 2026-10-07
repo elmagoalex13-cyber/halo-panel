@@ -1,5 +1,5 @@
 // Registro de actividad de los usuarios que NO son el dueño (tu socio). Sin dependencias de Node: lo usa el middleware (edge).
-// Se guarda en la tabla log_agentes con agente = "usuario:<nombre>", resultado "warning" si es una acción sensible.
+// Se guarda en la tabla panel_actividad (SQL 20261015).
 
 export type Actividad = { accion: string; sensible: boolean; ids: string[] };
 
@@ -70,18 +70,19 @@ export function clasificarActividad(metodo: string, pathname: string, params: UR
   return r ? { accion: r.accion, sensible: Boolean(r.sensible), ids: Array.from(new Set(ids)) } : null;
 }
 
-/** Guarda la entrada en log_agentes (no bloquea al usuario: el middleware lo lanza con waitUntil). */
+/** Guarda la entrada en panel_actividad (no bloquea al usuario: el middleware lo lanza con waitUntil). */
 export async function registrarActividad(usuario: string, a: Actividad, metodo: string, ruta: string): Promise<void> {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const clave = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !clave) return;
   try {
-    await fetch(`${url}/rest/v1/log_agentes`, {
+    const res = await fetch(`${url}/rest/v1/panel_actividad`, {
       method: "POST",
       headers: { apikey: clave, Authorization: `Bearer ${clave}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ agente: `usuario:${usuario}`, accion: a.accion, resultado: a.sensible ? "warning" : "ok", detalle: { ids: a.ids, metodo, ruta } }),
+      body: JSON.stringify({ usuario, accion: a.accion, sensible: a.sensible, ids: a.ids, metodo, ruta }),
     });
-  } catch {
-    /* el registro nunca debe romper la accion del usuario */
+    if (!res.ok) console.error("[actividad] no se pudo guardar:", res.status, await res.text().catch(() => ""));
+  } catch (e) {
+    console.error("[actividad] error:", e instanceof Error ? e.message : e); // nunca debe romper la accion del usuario
   }
 }
