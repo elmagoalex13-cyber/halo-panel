@@ -39,18 +39,28 @@ export async function crearAdminSesion(username: string) {
   return `${payload}.${sig}`;
 }
 
-export async function verificarAdminSesion(cookie: string | undefined | null) {
-  if (!cookie || !adminAuthConfigured()) return false;
+/** Sesion valida de CUALQUIER usuario del panel (dueño o usuario adicional): { u: nombre de usuario } o null. */
+export async function leerAdminSesion(cookie: string | undefined | null): Promise<{ u: string } | null> {
+  if (!cookie || !adminAuthConfigured()) return null;
   const [payload, sig] = cookie.split(".");
-  if (!payload || !sig) return false;
+  if (!payload || !sig) return null;
   const esperado = await hmac(payload, sessionSecret());
-  if (sig !== esperado) return false;
+  if (sig !== esperado) return null;
   try {
     const data = JSON.parse(fromBase64Url(payload)) as { u?: string; exp?: number };
-    return data.u === process.env.ADMIN_USERNAME && Number(data.exp) > Date.now();
+    if (typeof data.u !== "string" || !data.u || !(Number(data.exp) > Date.now())) return null;
+    return { u: data.u };
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** El dueño es el usuario de las variables de entorno: lo ve todo y gestiona al resto. */
+export const esDueno = (u: string) => Boolean(process.env.ADMIN_USERNAME) && u === process.env.ADMIN_USERNAME;
+
+export async function verificarAdminSesion(cookie: string | undefined | null) {
+  const s = await leerAdminSesion(cookie);
+  return Boolean(s && esDueno(s.u));
 }
 
 export function verificarCredenciales(username: string, password: string) {

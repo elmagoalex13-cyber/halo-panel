@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { contarOFNuevo } from "@/lib/ofResumen";
+import { sesionPanelActual } from "@/lib/panelUsuarios";
 
 export const dynamic = "force-dynamic";
 
@@ -11,16 +12,18 @@ export async function GET() {
 
   try {
     const supabase = createAdminClient();
+    const sesion = await sesionPanelActual();
+    const puedeLeads = !sesion?.denegadas.includes("leads");
+    const puedeOF = !sesion?.denegadas.includes("onlyfans");
     const [approvalResult, leadsResult, of] = await Promise.all([
       supabase
         .from("library_content")
         .select("id", { count: "exact", head: true })
         .eq("estado", "en_aprobacion"),
-      supabase
-        .from("leads")
-        .select("id", { count: "exact", head: true })
-        .eq("estado", "nuevo"),
-      contarOFNuevo(),
+      puedeLeads
+        ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("estado", "nuevo")
+        : Promise.resolve({ count: 0 }),
+      puedeOF ? contarOFNuevo() : Promise.resolve({ count: 0, modelos: [] as string[] }),
     ]);
 
     return NextResponse.json({

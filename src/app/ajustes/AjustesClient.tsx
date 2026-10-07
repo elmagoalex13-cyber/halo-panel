@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { UsuariosPanel } from "./UsuariosPanel";
 
 type Estado = {
   configurado: boolean;
@@ -70,6 +71,7 @@ export function AjustesClient() {
           ))}
         </ul>
       </div>
+      <UsuariosPanel />
     </div>
   );
 }

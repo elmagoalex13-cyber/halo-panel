@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { areaDePath, type AreaId } from "@/lib/areas";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
@@ -41,10 +42,11 @@ function AvatarMini({ modelo }: { modelo: ModeloMenu }) {
 // Cada pagina monta su propia barra lateral, asi que al navegar se desmonta y se vuelve a montar:
 // sin esto la lista de modelos y los contadores se vaciaban unos instantes (parpadeo). El modulo
 // sobrevive a la navegacion en el navegador; en el servidor nunca se rellena (solo lo hacen efectos).
-const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number } | null } = {
+const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number } | null; denegadas: AreaId[] | null } = {
   modelos: [],
   modelosAbierto: null,
   counts: null,
+  denegadas: null,
 };
 
 const MOBILE_PRIMARY = ["/dashboard", "/aprobacion", "/leads", "/modelos"];
@@ -59,6 +61,26 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
   const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0 });
+  // Secciones que este usuario no puede ver (un socio sin acceso a Leads, etc.): se quitan del menu
+  const [denegadas, setDenegadas] = useState<AreaId[]>(cache.denegadas ?? []);
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/panel/yo", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { denegadas?: AreaId[] } | null) => {
+        if (!j) return;
+        cache.denegadas = j.denegadas ?? [];
+        if (vivo) setDenegadas(cache.denegadas);
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const NAV_VISIBLE = NAV.filter((item) => {
+    const area = areaDePath(item.href);
+    return !area || !denegadas.includes(area);
+  });
   const [modelos, setModelos] = useState<ModeloMenu[]>(cache.modelos);
   const [modelosAbierto, setModelosAbierto] = useState(cache.modelosAbierto ?? true);
 
@@ -152,8 +174,8 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
     return null;
   }
 
-  const primaryItems = NAV.filter((item) => MOBILE_PRIMARY.includes(item.href));
-  const moreItems = NAV.filter((item) => !MOBILE_PRIMARY.includes(item.href));
+  const primaryItems = NAV_VISIBLE.filter((item) => MOBILE_PRIMARY.includes(item.href));
+  const moreItems = NAV_VISIBLE.filter((item) => !MOBILE_PRIMARY.includes(item.href));
 
   return (
     <>
@@ -174,7 +196,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
         </div>
         <nav className="flex-1 overflow-y-auto py-4">
           <div className="flex flex-col gap-1 px-3">
-            {NAV.map((item) => {
+            {NAV_VISIBLE.map((item) => {
               const { href, label, icon, leadsBadge } = item;
               const active = activeFor(href);
               const badgeText = badgeFor(item);

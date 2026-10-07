@@ -11,6 +11,7 @@ import { PeriodoSelect } from "./PeriodoSelect";
 import { CreadorasFilter } from "./CreadorasFilter";
 import { AvisosDashboard } from "./AvisosDashboard";
 import { contarOFNuevo } from "@/lib/ofResumen";
+import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -116,7 +117,9 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales(), loadVenuzMes(), contarOFNuevo()]);
+  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel] = await Promise.all([loadDashboardData(), loadCuentasInstagramReales(), loadVenuzMes(), contarOFNuevo(), sesionPanelActual()]);
+  const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
+  const veOnlyFans = !sesionPanel?.denegadas.includes("onlyfans");
   const cuentasIG = loadCuentasIG(cuentasReales);
 
   const now = new Date();
@@ -253,7 +256,7 @@ export default async function DashboardPage({
     ...(enAprobacion > 0 && aprobacionUrgente.length === 0
       ? [{ nivel: "verde" as NotifNivel, texto: `${enAprobacion} vídeo${enAprobacion > 1 ? "s" : ""} listo${enAprobacion > 1 ? "s" : ""} para revisar`, href: "/aprobacion" }]
       : []),
-    ...(ofNuevo.count > 0
+    ...(veOnlyFans && ofNuevo.count > 0
       ? [{ nivel: "verde" as NotifNivel, texto: `Contenido de OnlyFans nuevo${ofNuevo.modelos.length ? ` de ${ofNuevo.modelos.join(", ")}` : ""} (${ofNuevo.count} ${ofNuevo.count === 1 ? "entrega" : "entregas"})`, href: "/onlyfans" }]
       : []),
   ];
@@ -483,6 +486,7 @@ export default async function DashboardPage({
           </div>
         </CollapsibleSection>
 
+        {veFacturacion ? (
         <GlassCard className="p-5">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-white">
@@ -529,6 +533,7 @@ export default async function DashboardPage({
             </div>
           )}
         </GlassCard>
+        ) : null}
       </div>
 
       <GlassCard className="mt-6 overflow-hidden">
