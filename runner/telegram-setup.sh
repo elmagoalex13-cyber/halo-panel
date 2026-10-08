@@ -9,26 +9,36 @@ read -rsp "Pega el token del bot (no se vera al escribirlo) y pulsa Enter: " TOK
 if ! curl -s "https://api.telegram.org/bot$TOKEN/getMe" | grep -q '"ok":true'; then echo "Ese token no es valido."; exit 1; fi
 echo "Token correcto."
 
+# Por si el bot tuviera un webhook puesto (impediria leer los mensajes); no hace nada si no lo tiene
+curl -s "https://api.telegram.org/bot$TOKEN/deleteWebhook" >/dev/null || true
+
 echo
-echo "Ahora ESCRIBE un mensaje cualquiera en el grupo (con el bot ya dentro) y pulsa Enter aqui."
+echo "Ahora, EN EL GRUPO (con el bot ya dentro), escribe exactamente:  /start"
+echo "(Telegram solo entrega a los bots los comandos que empiezan por /; un mensaje normal no les llega)."
+echo "Cuando lo hayas escrito, pulsa Enter aqui."
 read -r _
 buscar() { # $1 = tipo de chat: group | private
-  curl -s "https://api.telegram.org/bot$TOKEN/getUpdates" | python3 -c '
+  curl -s "https://api.telegram.org/bot$TOKEN/getUpdates?allowed_updates=%5B%22message%22%2C%22my_chat_member%22%2C%22channel_post%22%5D" | python3 -c '
 import sys, json
 tipo = sys.argv[1]
+datos = json.load(sys.stdin)
 vistos = {}
-for u in json.load(sys.stdin).get("result", []):
+todos = {}
+for u in datos.get("result", []):
     for k in ("message", "my_chat_member", "edited_message", "channel_post"):
         c = (u.get(k) or {}).get("chat")
         if not c: continue
         t = c.get("type")
+        todos[c["id"]] = (t, c.get("title") or c.get("first_name") or "")
         if (tipo == "group" and t in ("group", "supergroup")) or (tipo == "private" and t == "private"):
             vistos[c["id"]] = c.get("title") or c.get("first_name") or str(c["id"])
-for i, n in vistos.items(): print(f"{i}\t{n}")
+for i, n in vistos.items(): print(f"{i}	{n}")
+if not vistos and tipo == "group":
+    sys.stderr.write("[diagnostico] ok=%s actualizaciones=%s chats_vistos=%s\n" % (datos.get("ok"), len(datos.get("result", [])), list(todos.values())))
 ' "$1"
 }
 GRUPOS=$(buscar group)
-if [ -z "$GRUPOS" ]; then echo "No veo ningun grupo. Comprueba que el bot esta dentro del grupo y que has escrito un mensaje, y vuelve a ejecutar."; exit 1; fi
+if [ -z "$GRUPOS" ]; then echo "No veo ningun grupo. Comprueba que el bot esta DENTRO del grupo y que has escrito /start en el grupo, y vuelve a ejecutar."; exit 1; fi
 CHAT=$(echo "$GRUPOS" | head -n1 | cut -f1)
 echo "Grupo elegido: $(echo "$GRUPOS" | head -n1 | cut -f2) ($CHAT)"
 
