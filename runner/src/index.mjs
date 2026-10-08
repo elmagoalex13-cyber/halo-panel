@@ -7,7 +7,9 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { config, faltanVariables } from "./config.mjs";
-import { cicloOnce } from "./queue.mjs";
+import { iniciarTrabajadores } from "./queue.mjs";
+import { latido } from "./salud.mjs";
+import { backupDb } from "./backup_db.mjs";
 import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
 import { cicloTrials } from "./trials.mjs";
@@ -23,23 +25,18 @@ if (falta.length) {
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
 
-let ocupado = false;
-async function ciclo() {
-  if (ocupado) return;
-  ocupado = true;
-  try {
-    await cicloOnce();
-  } catch (err) {
-    console.error("[runner] error inesperado en el ciclo:", err.message);
-  } finally {
-    ocupado = false;
-  }
-}
-
 const pieceTimeoutMinutes = Number.isFinite(config.pieceTimeoutMs) ? Math.round(config.pieceTimeoutMs / 60000) : 18;
 console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta, concurrencia ${config.runnerConcurrency}, ffmpeg ${config.ffmpegPreset}/crf${config.ffmpegCrf}/threads${config.ffmpegThreads}, timeout pieza ${pieceTimeoutMinutes}m`);
-await ciclo();
-setInterval(ciclo, config.pollMs);
+// Trabajadores continuos (sin esperar a que acabe una "vuelta" para coger la siguiente pieza)
+iniciarTrabajadores();
+
+// Latido para el panel (aviso si el editor deja de responder o la cola se atasca)
+setTimeout(() => latido(supabase), 5000);
+setInterval(() => latido(supabase), 60000);
+
+// Copia de seguridad nocturna de la base de datos (una vez al dia, a partir de las 03:00 UTC)
+setTimeout(() => backupDb(supabase).catch((e) => console.error("[backup]", e.message)), 60000);
+setInterval(() => backupDb(supabase).catch((e) => console.error("[backup]", e.message)), 30 * 60000);
 
 // Referencias asignadas por URL: se descargan a R2 para que la modelo (y el editor) las vean
 setTimeout(() => descargarReferenciasPendientes(supabase), 5000);

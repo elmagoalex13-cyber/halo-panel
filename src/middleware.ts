@@ -12,6 +12,7 @@ const PUBLIC_PREFIXES = [
   "/api/leads/public",
   "/api/landing-track",
   "/api/publer/programar",
+  "/api/mantenimiento/", // limpieza automatica (cron de Vercel, con CRON_SECRET)
   "/_next/",
 ];
 

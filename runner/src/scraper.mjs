@@ -260,6 +260,7 @@ async function registrar(supabase, resultado, detalle, entidadId = null) {
 }
 
 let corriendo = false;
+let pausadoHasta = 0; // si Instagram limita (429) se deja de insistir un buen rato: insistir solo empeora el bloqueo
 
 /**
  * Un ciclo del scraper: analiza las cuentas activas cuyo ultimo analisis es mas viejo que
@@ -268,6 +269,7 @@ let corriendo = false;
  */
 export async function cicloScraper(supabase, { forzar = false } = {}) {
   if (corriendo) return;
+  if (!forzar && Date.now() < pausadoHasta) return;
   corriendo = true;
   try {
     const limite = Date.now() - config.scraperHoras * 3600000;
@@ -284,6 +286,11 @@ export async function cicloScraper(supabase, { forzar = false } = {}) {
         await registrar(supabase, "ok", r, cuenta.id);
       } catch (err) {
         console.error(`[scraper] @${cuenta.username}: ${err.message}`);
+        if (/429|limita las peticiones/i.test(String(err.message))) {
+          pausadoHasta = Date.now() + 6 * 3600000;
+          console.error("[scraper] Instagram limita las peticiones: pausa de 6 h");
+          break;
+        }
         await registrar(supabase, "error", { username: cuenta.username, error: String(err.message).slice(0, 300) }, cuenta.id);
         // marcar el intento para no reintentar en bucle cada minuto
         await supabase.from("referencias_cuentas").update({ ultimo_scrape_at: new Date().toISOString() }).eq("id", cuenta.id);

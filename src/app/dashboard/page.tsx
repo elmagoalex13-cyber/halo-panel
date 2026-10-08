@@ -14,12 +14,14 @@ import { contarOFNuevo } from "@/lib/ofResumen";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { alcanceActual, ambitosModelos, cuentasVenuzVisibles, soloEn, soloVisibles, type GrupoAmbito } from "@/lib/alcance";
 import { SelectorGrupo } from "./SelectorGrupo";
+import { cargarAgregados, type ClaveAgg, type FilaAgg } from "@/lib/dashboardAgg";
 import { avisosActividad } from "@/lib/actividad";
+import { avisosSistema, leerSistema } from "@/lib/sistema";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
 import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
-import type { FacturacionModelo, LibraryContent, Modelo } from "@/types";
+import type { FacturacionModelo, Modelo } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +30,7 @@ type OnboardingResumen = { modelo_id: string; estado: "borrador" | "enviado"; en
 type WithModelName<T> = T & { modelos?: { nombre?: string | null } | null };
 
 async function loadDashboardData(grupo?: GrupoAmbito) {
-  const vacio = { videos: [] as LibraryContent[], modelos: [] as Modelo[], facturacion: [] as FacturacionModelo[], trials: [] as Array<{ estado: string; publicado_at: string | null }>, onboarding: [] as OnboardingResumen[] };
-  let trials: Array<{ estado: string; publicado_at: string | null }> = [];
+  const vacio = { agg: [] as FilaAgg[], modelos: [] as Modelo[], facturacion: [] as FacturacionModelo[], onboarding: [] as OnboardingResumen[] };
   if (!canUseSupabase()) return vacio;
 
   try {
@@ -37,8 +38,8 @@ async function loadDashboardData(grupo?: GrupoAmbito) {
     const alcance = await alcanceActual(grupo);
     const now = new Date();
     const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const [videosResult, modelosResult, facturacionResult, onboardingResult] = await Promise.all([
-      soloVisibles(supabase.from("library_content").select("id, modelo_id, estado, tipo, recibido_at, aprobado_at, publicado_at, estado_procesamiento, modelos(nombre)").order("recibido_at", { ascending: false }).limit(5000), alcance),
+    const [agg, modelosResult, facturacionResult, onboardingResult] = await Promise.all([
+      cargarAgregados(supabase, alcance, now),
       soloVisibles(supabase.from("modelos").select("*"), alcance, "id"),
       soloVisibles(supabase.from("facturacion_modelos").select("*, modelos(nombre)").gte("periodo_inicio", mesInicio), alcance),
       soloVisibles(supabase.from("modelo_onboarding").select("modelo_id, estado, enviado_at, updated_at, datos"), alcance),
@@ -50,19 +51,12 @@ async function loadDashboardData(grupo?: GrupoAmbito) {
       updated_at: row.updated_at,
       progreso: progresoOnboarding(sanearDatos(row.datos)),
     }));
-
-    const todas = (videosResult.data ?? []) as unknown as Array<WithModelName<LibraryContent> & { tipo?: number | null }>;
-    trials = todas.filter((v) => v.tipo === 5).map((v) => ({ estado: v.estado, publicado_at: (v as { publicado_at?: string | null }).publicado_at ?? null }));
-    const videos = todas.filter((v) => v.tipo !== 5).map((video) => ({
-      ...video,
-      modelo_nombre: video.modelos?.nombre ?? "Sin modelo",
-    })) as LibraryContent[];
     const facturacion = ((facturacionResult.data ?? []) as Array<WithModelName<FacturacionModelo>>).map((row) => ({
       ...row,
       modelo_nombre: row.modelos?.nombre ?? "Sin modelo",
     })) as FacturacionModelo[];
 
-    return { videos, modelos: (modelosResult.data ?? []) as Modelo[], facturacion, trials, onboarding };
+    return { agg, modelos: (modelosResult.data ?? []) as Modelo[], facturacion, onboarding };
   } catch {
     return vacio;
   }
@@ -124,72 +118,55 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ videos, modelos, facturacion, trials, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad()]);
+  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema()]);
   const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
   const veOnlyFans = !sesionPanel?.denegadas.includes("onlyfans");
   const cuentasIG = loadCuentasIG(cuentasReales);
 
+  // Suma de un agregado en todas las modelos visibles; por modelo se consulta en `aggPorModelo`
+  const S = (k: ClaveAgg) => agg.reduce((acc, r) => acc + (r[k] ?? 0), 0);
+  const aggPorModelo = new Map(agg.map((r) => [r.modelo_id, r]));
+
   const now = new Date();
-  const weekAgo = Date.now() - 7 * 24 * 3600000;
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-  function withinPeriodo(dateStr: string) {
-    const d = new Date(dateStr);
-    if (periodo === "semana") return d.getTime() >= weekAgo;
-    if (periodo === "mes") return d >= monthStart;
-    return true;
-  }
-
-  const enAprobacion = videos.filter((video) => video.estado === "en_aprobacion").length;
-  const reelsEsteMes = videos.filter((video) => new Date(video.recibido_at) >= monthStart).length;
-  const reelsMesPasado = videos.filter((video) => {
-    const d = new Date(video.recibido_at);
-    return d >= lastMonthStart && d < monthStart;
-  }).length;
+  const enAprobacion = S("en_aprobacion");
+  const reelsEsteMes = S("este_mes");
+  const reelsMesPasado = S("mes_pasado");
   const deltaReelsPct = reelsMesPasado ? Math.round(((reelsEsteMes - reelsMesPasado) / reelsMesPasado) * 100) : undefined;
 
-  type Pieza = LibraryContent & { estado_procesamiento?: string | null; publicado_at?: string | null };
-  const piezas = videos as Pieza[];
   const modelosActivas = modelos.filter((m) => m.activa).length;
-  const aprobadosSemana = piezas.filter(
-    (v) => (v.estado === "aprobado" || v.estado === "publicado") && v.aprobado_at && new Date(v.aprobado_at).getTime() >= weekAgo,
-  ).length;
-  const publicados = piezas.filter((v) => v.estado === "publicado").length;
-  const ahoraMs = Date.now();
-  const programadas = piezas.filter((v) => v.estado === "aprobado" && v.publicado_at && new Date(v.publicado_at).getTime() > ahoraMs).length;
-  const sinProgramar = piezas.filter((v) => v.estado === "aprobado" && !(v.publicado_at && new Date(v.publicado_at).getTime() > ahoraMs)).length;
+  const aprobadosSemana = S("aprob_semana");
+  const publicados = S("publicado");
+  const programadas = S("aprobado_futuro");
+  const sinProgramar = S("aprobado") - S("aprobado_futuro");
   const etapas = [
-    { label: "Editando", href: "/aprobacion?estado=editando", desc: "el editor IA los procesa", total: piezas.filter((v) => v.estado === "editando").length },
-    { label: "En aprobación", href: "/aprobacion", desc: "esperan tu decisión", total: piezas.filter((v) => v.estado === "en_aprobacion").length },
+    { label: "Editando", href: "/aprobacion?estado=editando", desc: "el editor IA los procesa", total: S("editando") },
+    { label: "En aprobación", href: "/aprobacion", desc: "esperan tu decisión", total: S("en_aprobacion") },
     { label: "Sin programar", href: "/aprobacion?estado=aprobado", desc: "aprobados, para descargar", total: sinProgramar },
     { label: "Programados", href: "/aprobacion?estado=aprobado", desc: "en Publer", total: programadas },
-    { label: "Publicados", href: "/aprobacion?estado=aprobado", desc: "ya en Instagram", total: piezas.filter((v) => v.estado === "publicado").length },
+    { label: "Publicados", href: "/aprobacion?estado=aprobado", desc: "ya en Instagram", total: S("publicado") },
   ].map((e) => ({ ...e, estado: e.label }));
-  const trialsSinProgramar = trials.filter((t) => t.estado === "aprobado" && !(t.publicado_at && new Date(t.publicado_at).getTime() > ahoraMs)).length;
-  const trialsProgramados = trials.filter((t) => t.estado === "aprobado" && t.publicado_at && new Date(t.publicado_at).getTime() > ahoraMs).length;
-  const trialsPublicados = trials.filter((t) => t.estado === "publicado").length;
+  const trialsSinProgramar = S("trial_aprob_sin");
+  const trialsProgramados = S("trial_aprob_futuro");
+  const trialsPublicados = S("trial_publicados");
   const maxEtapa = Math.max(1, ...etapas.map((e) => e.total));
-  const rechazados = piezas.filter((v) => v.estado === "rechazado").length;
-  const runnerPendiente = piezas.filter((v) => v.estado === "editando" && v.estado_procesamiento === "pendiente").length;
-  const runnerProcesando = piezas.filter((v) => v.estado === "editando" && v.estado_procesamiento === "procesando").length;
-  const runnerError = piezas.filter((v) => v.estado_procesamiento === "error").length;
+  const rechazados = S("rechazado");
+  const runnerPendiente = S("r_pend");
+  const runnerProcesando = S("r_proc");
+  const runnerError = S("r_err");
 
   // Dias de contenido: reels aprobados que aun no han salido, entre lo que consumen las cuentas
   // de IG de la modelo (2 reels al dia por cuenta; los trial reels son aparte).
   const REELS_POR_CUENTA_DIA = 2;
   const UMBRAL_DIAS = 3;
-  const ahoraContenido = Date.now();
   const contenidoModelos = modelos
     .map((modelo) => {
       const cuentasIG = cuentasReales.filter((c) => c.modelo_id === modelo.id && c.activa !== false).length;
-      const propias = piezas.filter((v) => v.modelo_id === modelo.id);
-      const stock = propias.filter(
-        (v) => v.estado === "aprobado" && !(v.publicado_at && new Date(v.publicado_at).getTime() <= ahoraContenido),
-      ).length;
-      const enCamino = propias.filter((v) => v.estado === "en_aprobacion" || v.estado === "editando").length;
+      const a = aggPorModelo.get(modelo.id);
+      const stock = a ? a.aprobado - a.aprobado_pasado : 0; // aprobados que aun no han salido
+      const enCamino = a ? a.en_aprobacion + a.editando : 0;
       const consumoDia = cuentasIG * REELS_POR_CUENTA_DIA;
       return { modelo, cuentasIG, stock, enCamino, consumoDia, dias: consumoDia ? stock / consumoDia : null };
     })
@@ -199,8 +176,8 @@ export default async function DashboardPage({
   const contenidoBajo = contenidoModelos.filter((c) => c.dias <= UMBRAL_DIAS);
   const fmtDias = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 1 });
 
-  const aprobados = videos.filter((video) => video.estado === "aprobado" && withinPeriodo(video.aprobado_at ?? video.recibido_at)).length;
-  const completados = videos.filter((video) => video.estado === "publicado" && withinPeriodo(video.aprobado_at ?? video.recibido_at)).length;
+  const aprobados = S(periodo === "semana" ? "ap_semana" : periodo === "mes" ? "ap_mes" : "ap_todo");
+  const completados = S(periodo === "semana" ? "co_semana" : periodo === "mes" ? "co_mes" : "co_todo");
   const periodoLabel = periodo === "mes" ? "Este mes" : periodo === "semana" ? "Esta semana" : "Todo el tiempo";
 
   // Saludo dinamico
@@ -208,19 +185,12 @@ export default async function DashboardPage({
   const saludo = hour < 12 ? "Buenos días" : hour < 20 ? "Buenas tardes" : "Buenas noches";
 
   // Notificaciones
-  const h24ago = Date.now() - 24 * 3600000;
   const d7ago = Date.now() - 7 * 24 * 3600000;
-  const aprobacionUrgente = videos.filter(
-    (v) => v.estado === "en_aprobacion" && new Date(v.recibido_at).getTime() < h24ago,
-  );
-  const rehacerPendientes = videos.filter(
-    (v) => v.estado === "editando" && new Date(v.recibido_at).getTime() < h24ago,
-  );
+  const aprobacionUrgente = { length: S("urg_aprob") }; // en aprobacion desde hace mas de 24 h
+  const rehacerPendientes = { length: S("urg_edit") }; // en edicion desde hace mas de 24 h
   const modelosSinMaterial = modelos.filter((m) => {
-    const last = videos
-      .filter((v) => v.modelo_id === m.id)
-      .sort((a, b) => new Date(b.recibido_at).getTime() - new Date(a.recibido_at).getTime())[0];
-    return !last || new Date(last.recibido_at).getTime() < d7ago;
+    const ult = aggPorModelo.get(m.id)?.ult_recibido;
+    return !ult || new Date(ult).getTime() < d7ago;
   });
   const onboardingPorModelo = new Map(onboarding.map((o) => [o.modelo_id, o]));
   const onboardingNuevos = modelos.filter((m) => {
@@ -232,6 +202,8 @@ export default async function DashboardPage({
   const notificaciones: { nivel: NotifNivel; texto: string; href?: string }[] = [
     // Lo sensible que ha hecho tu socio (solo lo ve el dueño)
     ...(sesionPanel?.dueno ? avisosSocio : []),
+    // Editor de video caido o cola atascada
+    ...avisosSistema(sistema),
     ...(contenidoBajo.length > 0
       ? [
           {
@@ -276,14 +248,12 @@ export default async function DashboardPage({
   const totalComision = facturacion.reduce((sum, row) => sum + Number(row.comision_agencia), 0);
   const totalNeto = facturacion.reduce((sum, row) => sum + Number(row.neto_modelo), 0);
 
-  const treintaDiasAtras = Date.now() - 30 * 24 * 3600000;
   const resumenCreadoras = modelos.map((modelo) => {
-    const videosModelo = videos
-      .filter((video) => video.modelo_id === modelo.id)
-      .filter((video) => (creadorasPeriodo === "30d" ? new Date(video.recibido_at).getTime() >= treintaDiasAtras : true));
-    const producidos = videosModelo.length;
-    const aprobadosModelo = videosModelo.filter((v) => v.estado === "aprobado" || v.estado === "publicado").length;
-    const publicadosModelo = videosModelo.filter((v) => v.estado === "publicado").length;
+    const a = aggPorModelo.get(modelo.id);
+    const treinta = creadorasPeriodo === "30d";
+    const producidos = a ? (treinta ? a.p30_total : a.total) : 0;
+    const aprobadosModelo = a ? (treinta ? a.p30_aprobados : a.aprobado + a.publicado) : 0;
+    const publicadosModelo = a ? (treinta ? a.p30_publicados : a.publicado) : 0;
     const tasa = producidos ? Math.round((aprobadosModelo / producidos) * 100) : 0;
     return { modelo, producidos, aprobados: aprobadosModelo, publicados: publicadosModelo, tasa };
   });
@@ -314,7 +284,7 @@ export default async function DashboardPage({
               : `${contenidoModelos[0].modelo.nombre}, la que menos tiene · ${REELS_POR_CUENTA_DIA} reels/día por cuenta`
           }
         />
-        <StatTile label="Vídeos en sistema" value={videos.length} icon={Clapperboard} subtitle="en total" />
+        <StatTile label="Vídeos en sistema" value={S("total")} icon={Clapperboard} subtitle="en total" />
         <StatTile
           label="Por revisar"
           value={enAprobacion}

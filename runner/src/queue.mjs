@@ -52,6 +52,10 @@ function withTimeout(promise, ms, label) {
 
 export async function procesarPieza(pieza) {
   const tipo = tipoNumero(pieza);
+  // Mientras se edita, se renueva updated_at cada minuto: asi nunca se la da por atascada (ni la coge otra maquina) aunque tarde
+  const latido = setInterval(() => {
+    supabase.from("library_content").update({ updated_at: new Date().toISOString() }).eq("id", pieza.id).eq("estado_procesamiento", "procesando").then(() => undefined, () => undefined);
+  }, 60000);
   console.log(`[runner] pieza ${pieza.id} tipo ${tipo}`);
   try {
     if (tipo === 2 && !pieza.frase_quemada) {
@@ -97,6 +101,8 @@ export async function procesarPieza(pieza) {
       .update({ estado_procesamiento: "error", error_mensaje: String(err.message).slice(0, 500), updated_at: new Date().toISOString() })
       .eq("id", pieza.id);
     return { ok: false, id: pieza.id, error: err.message };
+  } finally {
+    clearInterval(latido);
   }
 }
 
@@ -113,20 +119,79 @@ async function runPool(items, concurrency, task) {
   return results;
 }
 
-export async function cicloOnce({ logEmpty = false } = {}) {
-  await liberarAtascadas();
-  const { data: piezas, error } = await supabase
+const COLUMNAS_COLA = "id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada, layout_json, recorte_inicio, recorte_fin, notas_editor";
+
+/**
+ * Reparto justo: si una modelo sube 60 videos de golpe, las demas no esperan a que acabe. Se toma el 1.º de cada modelo, luego el 2.º
+ * de cada una, etc. (dentro de cada modelo, por orden de llegada; entre modelos, gana la que lleva mas esperando).
+ */
+export function entrelazar(piezas) {
+  const colas = new Map();
+  for (const p of piezas) {
+    const k = p.modelo_id ?? "_";
+    if (!colas.has(k)) colas.set(k, []);
+    colas.get(k).push(p);
+  }
+  const listas = [...colas.values()];
+  const salida = [];
+  for (let i = 0; salida.length < piezas.length; i++) for (const l of listas) if (l[i]) salida.push(l[i]);
+  return salida;
+}
+
+async function candidatas() {
+  const { data, error } = await supabase
     .from("library_content")
-    .select("id, modelo_id, cuenta_id, tipo, tipo_video, r2_key, r2_key_original, r2_key_referencia, audio_referencia_url, frase_quemada, layout_json, recorte_inicio, recorte_fin, notas_editor")
+    .select(COLUMNAS_COLA)
     .eq("estado", "editando")
     .eq("estado_procesamiento", "pendiente")
     .order("recibido_at", { ascending: true })
-    .limit(config.maxPiezas);
-
+    .limit(200);
   if (error) {
     console.error("[runner] error consultando la cola:", error.message);
-    return { claimed: 0, results: [] };
+    return [];
   }
+  return entrelazar(data ?? []);
+}
+
+/** Reclama (de forma atomica: varios trabajadores o maquinas no se pisan) la siguiente pieza que toque. */
+export async function tomarSiguiente() {
+  for (const pieza of await candidatas()) if (await reclamar(pieza.id)) return pieza;
+  return null;
+}
+
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+let ultimaLiberacion = 0;
+
+async function trabajador(num) {
+  await dormir(num * 1500);
+  for (;;) {
+    try {
+      if (Date.now() - ultimaLiberacion > 60000) {
+        ultimaLiberacion = Date.now();
+        await liberarAtascadas();
+      }
+      const pieza = await tomarSiguiente();
+      if (!pieza) {
+        await dormir(config.pollMs);
+        continue;
+      }
+      console.log(`[runner#${num}] procesando ${pieza.id}`);
+      await procesarPieza(pieza);
+    } catch (err) {
+      console.error(`[runner#${num}] error inesperado:`, err.message);
+      await dormir(config.pollMs);
+    }
+  }
+}
+
+/** Arranca N trabajadores que van cogiendo piezas sin parar (en cuanto uno acaba coge la siguiente, sin esperar a los demas). */
+export function iniciarTrabajadores(n = config.runnerConcurrency) {
+  for (let i = 1; i <= n; i++) void trabajador(i);
+}
+
+export async function cicloOnce({ logEmpty = false } = {}) {
+  await liberarAtascadas();
+  const piezas = (await candidatas()).slice(0, config.maxPiezas);
 
   if (!piezas?.length) {
     if (logEmpty) console.log("[runner] no hay piezas pendientes para procesar");
