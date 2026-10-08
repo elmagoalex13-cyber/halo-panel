@@ -4,7 +4,7 @@ import { sesionActual } from "@/lib/portalAuth";
 import { keyR2 } from "@/lib/media";
 import { columnasTipo } from "@/lib/tipoVideo";
 import { elegirFrase, registrarUsoFrase } from "@/lib/frases";
-import { encolarTelegram } from "@/lib/telegramCola";
+import { evaluarUmbral } from "@/lib/captacion";
 
 export const dynamic = "force-dynamic";
 
@@ -103,18 +103,7 @@ export async function POST(req: NextRequest) {
   if (body.encargo_id) await supabase.from("encargos").update({ estado: "entregado", updated_at: ahora }).eq("id", body.encargo_id);
 
   // Telegram: las subidas sueltas NO avisan (van en el resumen diario); solo al llegar al objetivo: "crea su cuenta de Instagram"
-  if (enCaptacion && modeloCap && !modeloCap.umbral_avisado_at) {
-    const { count } = await supabase
-      .from("library_content")
-      .select("id", { count: "exact", head: true })
-      .eq("modelo_id", sesion.modeloId)
-      .eq("origen", "upload_manual")
-      .or("tipo.is.null,tipo.neq.5");
-    if ((count ?? 0) >= Number(modeloCap.objetivo_videos)) {
-      const { data: marcado } = await supabase.from("modelos").update({ umbral_avisado_at: ahora }).eq("id", sesion.modeloId).is("umbral_avisado_at", null).select("id");
-      if (marcado?.length) await encolarTelegram("umbral", sesion.modeloId, { subidos: count, objetivo: Number(modeloCap.objetivo_videos) });
-    }
-  }
+  if (modeloCap?.objetivo_videos && !modeloCap.umbral_avisado_at) await evaluarUmbral(sesion.modeloId);
 
   return NextResponse.json({ ok: true, id: pieza.id });
 }

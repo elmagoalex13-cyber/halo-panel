@@ -7,6 +7,8 @@ import { OnboardingForm } from "./OnboardingForm";
 import { OnlyFansPortal, type ArchivoVista } from "./OnlyFansPortal";
 import type { ColeccionOF } from "@/lib/onlyfans";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
+import { GuiaOF, type ReferenciaVista } from "./GuiaOF";
+import type { ProgresoCaptacion } from "@/lib/captacion";
 
 export type Referencia = {
   id: string;
@@ -47,7 +49,7 @@ const TEXTO_ENCARGO: Record<number, string> = {
 };
 const POR_PAGINA = 5;
 
-type Pestana = "grabar" | "subir" | "subidos" | "contenido";
+type Pestana = "grabar" | "subir" | "guia" | "subidos" | "contenido";
 
 function VideoReferencia({ r }: { r: Referencia }) {
   return (
@@ -253,8 +255,10 @@ export function PortalClient({
   contenidoOF,
   accesos,
   captacion,
+  guia,
 }: {
-  captacion: { objetivo: number; subidos: number } | null;
+  guia: { packs: string; posts: string; referencias: ReferenciaVista[] };
+  captacion: { progreso: ProgresoCaptacion; reelsAbiertos: boolean } | null;
   accesos: { modo: "of" | "completo"; dado: boolean };
   nombre: string;
   slug: string;
@@ -293,6 +297,7 @@ export function PortalClient({
   const pestanas: Array<{ id: Pestana; label: string; n: number | null }> = [
     { id: "grabar", label: "Por grabar", n: pendientes.length },
     { id: "subir", label: "Subir vídeos", n: null },
+    { id: "guia", label: "Guía", n: null },
     { id: "subidos", label: "Subidos", n: entregas.length },
     ...(contenidoOF ? [{ id: "contenido" as Pestana, label: "Contenido", n: contenidoOF.colecciones.filter((c) => c.estado === "en_curso").length || null }] : []),
   ];
@@ -311,22 +316,43 @@ export function PortalClient({
 
       {captacion ? (
         <section className="rounded-2xl border border-[#8B5CF6]/35 bg-[#8B5CF6]/10 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-display text-lg font-semibold text-white">🎬 Tus primeros {captacion.objetivo} reels</p>
-            <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold text-white">
-              {captacion.subidos}/{captacion.objetivo}
-            </span>
-          </div>
-          <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-[#8B5CF6] transition-all" style={{ width: `${Math.min(100, Math.round((captacion.subidos / captacion.objetivo) * 100))}%` }} />
-          </div>
-          <p className="mt-3 text-sm leading-relaxed text-white/65">
-            {captacion.subidos >= captacion.objetivo
-              ? "¡Ya tenemos los que necesitamos! Los estamos revisando y pronto te contamos los siguientes pasos."
-              : `Necesitamos ${captacion.objetivo} reels tuyos para empezar a trabajar juntos. Sube los que vayas grabando (te faltan ${captacion.objetivo - captacion.subidos}): se van acumulando y los vamos revisando para decirte si vas bien.`}
+          <p className="font-display text-lg font-semibold text-white">🎯 Para empezar a trabajar contigo</p>
+          <p className="mt-1 text-sm leading-relaxed text-white/60">
+            {captacion.progreso.cumplido
+              ? "¡Ya cumples todo lo que necesitamos! Lo estamos revisando y pronto te contamos los siguientes pasos."
+              : "Necesitamos esto de ti antes de crearte la cuenta de Instagram. Mira la pestaña «Guía» para hacerlo exactamente como se indica."}
           </p>
+          <div className="mt-3 space-y-3">
+            {(
+              [
+                ["Reels", captacion.progreso.reels, null],
+                ["Scripts completos y aprobados", captacion.progreso.scripts, `${captacion.progreso.scriptsEntregados} entregados`],
+                ["Packs de fotos", captacion.progreso.packs, null],
+                ["Posts de OnlyFans", captacion.progreso.posts, null],
+              ] as const
+            )
+              .filter(([, m]) => m.obj !== null)
+              .map(([nombre, m, extra]) => {
+                const obj = m.obj as number;
+                const hecho = m.n >= obj;
+                return (
+                  <div key={nombre}>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="font-semibold text-white">{hecho ? "✅ " : ""}{nombre}</span>
+                      <span className={hecho ? "font-semibold text-emerald-300" : "text-white/70"}>
+                        {Math.min(m.n, obj)}/{obj}
+                        {extra && !hecho ? <span className="ml-2 text-xs text-white/40">({extra})</span> : null}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10">
+                      <div className={`h-full rounded-full transition-all ${hecho ? "bg-emerald-400" : "bg-[#8B5CF6]"}`} style={{ width: `${Math.min(100, Math.round((m.n / obj) * 100))}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
           {entregas.some((e) => e.feedback_tipo === "mejorar") ? (
-            <p className="mt-2 text-sm font-semibold text-amber-200">
+            <p className="mt-3 text-sm font-semibold text-amber-200">
               Tienes {entregas.filter((e) => e.feedback_tipo === "mejorar").length} reel{entregas.filter((e) => e.feedback_tipo === "mejorar").length === 1 ? "" : "s"} con comentarios del equipo: míralos en «Subidos».
             </p>
           ) : null}
@@ -486,6 +512,8 @@ export function PortalClient({
           )}
         </section>
       ) : null}
+
+      {pestana === "guia" ? <GuiaOF packs={guia.packs} posts={guia.posts} referencias={guia.referencias} /> : null}
 
       {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} /> : null}
 

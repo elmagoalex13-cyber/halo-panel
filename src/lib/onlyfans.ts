@@ -147,6 +147,8 @@ export type ColeccionOF = {
   entregado_at: string | null;
   subido_of_at: string | null;
   created_at: string;
+  revision?: "aprobado" | "mejorar" | null; // revision de la agencia (la modelo la ve en su portal)
+  revision_texto?: string | null;
 };
 
 /** Cuantos archivos hay en un hueco de un script. */

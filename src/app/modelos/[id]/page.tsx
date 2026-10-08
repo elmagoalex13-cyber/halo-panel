@@ -16,6 +16,7 @@ import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 import { alcanceActual, veModelo } from "@/lib/alcance";
 import { CaptacionRevision } from "./CaptacionRevision";
 import { piezasEnEspera } from "@/lib/captacionPiezas";
+import { progresoCaptacion } from "@/lib/captacion";
 
 export const revalidate = 0;
 
@@ -331,6 +332,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   const captacion = modelo.objetivo_videos
     ? {
         ...(await piezasEnEspera(modelo.id)),
+        progreso: await progresoCaptacion(modelo.id),
         subidos:
           (
             await createAdminClient()
@@ -370,6 +372,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
                 enEdicion={captacion.enEdicion}
                 terminada={Boolean(modelo.captacion_aprobada_at)}
                 piezas={captacion.piezas}
+                progreso={captacion.progreso}
               />
             ),
           } satisfies Pestana,

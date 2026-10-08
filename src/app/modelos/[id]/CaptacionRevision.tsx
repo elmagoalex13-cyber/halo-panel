@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { PiezaEnEspera } from "@/lib/captacionPiezas";
+import type { ProgresoCaptacion } from "@/lib/captacion";
 
 const NOMBRE_TIPO: Record<number, string> = { 1: "Hablado", 2: "Frases + música", 3: "Parar imagen", 4: "Con referencia" };
 const mb = (b: number | null) => (b ? `${Math.round(b / 1e6)} MB` : "");
@@ -123,7 +125,9 @@ export function CaptacionRevision({
   enEdicion,
   terminada,
   piezas,
+  progreso,
 }: {
+  progreso: ProgresoCaptacion | null;
   modeloId: string;
   nombre: string;
   objetivo: number;
@@ -163,6 +167,44 @@ export function CaptacionRevision({
 
   return (
     <div className="space-y-4">
+      {progreso ? (
+        <div className={`rounded-2xl border p-4 ${progreso.cumplido ? "border-cyan-400/40 bg-cyan-400/[0.07]" : "border-white/10 bg-white/[0.03]"}`}>
+          <p className="text-sm font-semibold text-white">
+            Mínimos para crear su cuenta de Instagram {progreso.cumplido ? <span className="text-cyan-200">· ¡todo cumplido!</span> : null}
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {(
+              [
+                ["Reels subidos", progreso.reels, null],
+                ["Scripts completos y aprobados", progreso.scripts, `${progreso.scriptsEntregados} entregados`],
+                ["Packs de fotos", progreso.packs, null],
+                ["Posts de OnlyFans", progreso.posts, null],
+              ] as const
+            )
+              .filter(([, m]) => m.obj !== null)
+              .map(([nombre, m, extra]) => {
+                const obj = m.obj as number;
+                const hecho = m.n >= obj;
+                return (
+                  <div key={nombre} className="rounded-xl border border-white/[0.08] bg-black/20 p-3">
+                    <p className="text-xs text-white/50">{nombre}</p>
+                    <p className={`mt-0.5 font-display text-xl font-semibold ${hecho ? "text-emerald-300" : "text-white"}`}>
+                      {m.n}/{obj}
+                    </p>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div className={`h-full rounded-full ${hecho ? "bg-emerald-400" : "bg-[#8B5CF6]"}`} style={{ width: `${Math.min(100, Math.round((m.n / obj) * 100))}%` }} />
+                    </div>
+                    {extra && !hecho ? <p className="mt-1 text-[11px] text-white/35">{extra}</p> : null}
+                  </div>
+                );
+              })}
+          </div>
+          <p className="mt-3 text-xs text-white/40">
+            Los scripts solo cuentan cuando los <span className="text-white/70">apruebas</span> en <Link href="/onlyfans" className="font-semibold text-[#A78BFA] hover:underline">OnlyFans</Link>; los packs y posts, cuando la modelo los entrega.
+          </p>
+        </div>
+      ) : null}
+
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <span className="font-semibold text-white">

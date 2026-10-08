@@ -2,6 +2,7 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { cargarResumenOF } from "@/lib/ofResumen";
 import { ambitosModelos } from "@/lib/alcance";
 import { OnlyFansClient } from "./OnlyFansClient";
+import { GuiasPanel } from "./GuiasPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function OnlyFansPage({ searchParams }: { searchParams: Pro
           Falta activar esta sección: ejecuta el SQL <code>20261008_onlyfans_contenido.sql</code> en el SQL Editor de Supabase y recarga.
         </div>
       )}
+      <GuiasPanel />
     </PanelLayout>
   );
 }

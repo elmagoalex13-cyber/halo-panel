@@ -251,8 +251,13 @@ export function OnlyFansPortal({
                 {pr ? `${pr.subidos}/${pr.total} archivos · ${pr.fasesCompletas}/8 fases completas` : `${mios.length} archivo${mios.length === 1 ? "" : "s"}`}
               </p>
             </div>
-            {bloqueado ? <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">Entregado</span> : null}
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              {bloqueado ? <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">Entregado</span> : null}
+              {col.revision === "aprobado" ? <span className="text-xs font-semibold text-emerald-300">✅ Aprobado por la agencia</span> : null}
+              {col.revision === "mejorar" ? <span className="text-xs font-semibold text-amber-200">⚠️ A mejorar</span> : null}
+            </div>
           </div>
+          {col.revision_texto ? <p className="mt-3 rounded-xl bg-white/[0.06] px-3 py-2 text-sm leading-relaxed text-white/75">💬 {col.revision_texto}</p> : null}
           {pr ? (
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
               <div className="h-full rounded-full bg-[#8B5CF6]" style={{ width: `${(pr.subidos / pr.total) * 100}%` }} />
@@ -443,6 +448,8 @@ export function OnlyFansPortal({
                   <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${c.estado === "entregado" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-400/15 text-amber-300"}`}>
                     {c.estado === "entregado" ? "Entregado" : "En curso"}
                   </span>
+                  {c.revision === "aprobado" ? <span className="shrink-0 text-xs font-semibold text-emerald-300">✅</span> : null}
+                  {c.revision === "mejorar" ? <span className="shrink-0 text-xs font-semibold text-amber-200">⚠️</span> : null}
                 </button>
               </li>
             );

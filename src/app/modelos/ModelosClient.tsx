@@ -431,20 +431,37 @@ export function ModelosClient({
               {(() => {
                 const c = captacion.find((x) => x.modelo_id === modelo.id);
                 if (!c) return null;
-                const pct = Math.min(100, Math.round((c.subidos / c.objetivo) * 100));
-                const llegado = c.subidos >= c.objetivo;
+                const p = c.progreso;
+                const filas = [
+                  ["Reels", p.reels],
+                  ["Scripts aprobados", p.scripts],
+                  ["Packs", p.packs],
+                  ["Posts", p.posts],
+                ] as const;
                 return (
-                  <div className={`mt-5 rounded-2xl border p-4 ${llegado ? "border-cyan-400/40 bg-cyan-400/[0.07]" : "border-white/10 bg-white/[0.03]"}`}>
+                  <div className={`mt-5 rounded-2xl border p-4 ${p.cumplido ? "border-cyan-400/40 bg-cyan-400/[0.07]" : "border-white/10 bg-white/[0.03]"}`}>
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="font-semibold uppercase tracking-wider text-white/55">Captación</span>
-                      <span className={`font-semibold ${llegado ? "text-cyan-200" : "text-white/70"}`}>
-                        {c.subidos}/{c.objetivo} vídeos subidos
-                      </span>
+                      <span className={`font-semibold ${p.cumplido ? "text-cyan-200" : "text-white/55"}`}>{p.cumplido ? "Todo cumplido" : "mínimos para su cuenta de Instagram"}</span>
                     </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                      <div className={`h-full rounded-full ${llegado ? "bg-cyan-400" : "bg-[#8B5CF6]"}`} style={{ width: `${pct}%` }} />
+                    <div className="mt-2 space-y-1.5">
+                      {filas
+                        .filter(([, m]) => m.obj !== null)
+                        .map(([nombre, m]) => {
+                          const obj = m.obj as number;
+                          const hecho = m.n >= obj;
+                          return (
+                            <div key={nombre} className="flex items-center gap-2 text-xs">
+                              <span className="w-28 shrink-0 text-white/60">{hecho ? "✅ " : ""}{nombre}</span>
+                              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                                <div className={`h-full rounded-full ${hecho ? "bg-emerald-400" : "bg-[#8B5CF6]"}`} style={{ width: `${Math.min(100, Math.round((m.n / obj) * 100))}%` }} />
+                              </div>
+                              <span className="w-10 shrink-0 text-right font-semibold text-white/75">{Math.min(m.n, obj)}/{obj}</span>
+                            </div>
+                          );
+                        })}
                     </div>
-                    {llegado && !c.tieneCuenta ? <p className="mt-2 text-xs font-semibold text-cyan-200">Ya puede empezar: crea su cuenta de Instagram abajo.</p> : null}
+                    {p.cumplido && !c.tieneCuenta ? <p className="mt-2 text-xs font-semibold text-cyan-200">Ya cumple todo: crea su cuenta de Instagram abajo.</p> : null}
                     <Link href={`/modelos/${modelo.id}#captacion`} className="btn-primary mt-3 block w-full px-3 py-2 text-center text-sm">
                       {c.enEspera > 0 ? `Revisar los ${c.enEspera} reels en espera` : "Ver captación"}
                     </Link>

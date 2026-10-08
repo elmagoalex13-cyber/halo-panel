@@ -18,6 +18,7 @@ import {
   type ColeccionOF,
   type SlotFase,
 } from "@/lib/onlyfans";
+import { RevisionOF } from "./RevisionOF";
 
 export type ArchivoConVista = ArchivoOF & { vista: string | null };
 
@@ -222,6 +223,8 @@ export function ColeccionDetalle({
           Las descargas son el archivo exacto que subió la modelo, sin recomprimir, con el nombre ordenado por fase (ej. {modelo.nombre}_{coleccion.nombre.replace(/\s+/g, "_")}_F03_video.mov).
         </p>
       </GlassCard>
+
+      <RevisionOF coleccionId={coleccion.id} tipo={coleccion.tipo} inicial={coleccion.revision ?? null} textoInicial={coleccion.revision_texto ?? null} />
 
       {esScript ? (
         <div className="space-y-4">

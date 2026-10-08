@@ -10,6 +10,9 @@ import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
 import { urlVista } from "@/lib/r2/onlyfans";
 import type { ArchivoVista } from "./OnlyFansPortal";
 import { modeloEliminada } from "@/lib/papelera";
+import { progresoCaptacion } from "@/lib/captacion";
+import { CLAVE_GUIA } from "@/lib/guiaOF";
+import type { ReferenciaVista } from "./GuiaOF";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mi portal" };
@@ -113,32 +116,54 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
 
   let entregas = (entregasRes.data ?? []) as Entrega[];
 
-  // Captacion: cuantos reels lleva y el feedback del equipo sobre cada uno
-  let captacion: { objetivo: number; subidos: number } | null = null;
+  // Captacion: lo que le falta para poder crearle la cuenta de Instagram (reels, scripts, packs y posts) y el feedback sobre sus reels
+  let captacion: { progreso: NonNullable<Awaited<ReturnType<typeof progresoCaptacion>>>; reelsAbiertos: boolean } | null = null;
   {
     const { data: cap } = await supabase.from("modelos").select("objetivo_videos, captacion_aprobada_at").eq("id", modelo.id).maybeSingle();
-    if (cap?.objetivo_videos && !cap.captacion_aprobada_at) {
-      const [{ count }, extra] = await Promise.all([
-        supabase.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", modelo.id).eq("origen", "upload_manual").or("tipo.is.null,tipo.neq.5"),
-        supabase
-          .from("library_content")
-          .select("id, titulo, tipo, recibido_at, estado, feedback_tipo, feedback_texto")
-          .eq("modelo_id", modelo.id)
-          .eq("origen", "upload_manual")
-          .or("tipo.is.null,tipo.neq.5")
-          .order("recibido_at", { ascending: false })
-          .limit(80),
+    if (cap?.objetivo_videos) {
+      const [progreso, cuentas] = await Promise.all([
+        progresoCaptacion(modelo.id as string),
+        supabase.from("cuentas_instagram").select("id", { count: "exact", head: true }).eq("modelo_id", modelo.id).eq("activa", true),
       ]);
-      captacion = { objetivo: Number(cap.objetivo_videos), subidos: count ?? 0 };
-      // Con captacion se listan todos los reels (no solo los 12 ultimos), con su estado y feedback (si aun no existe el SQL, se queda como estaba)
-      if (!extra.error && extra.data) entregas = extra.data as Entrega[];
+      if (progreso && (cuentas.count ?? 0) === 0) {
+        captacion = { progreso, reelsAbiertos: !cap.captacion_aprobada_at };
+        if (!cap.captacion_aprobada_at) {
+          // Reels aun en revision: se listan todos (no solo los 12 ultimos), con su estado y el feedback del equipo
+          const extra = await supabase
+            .from("library_content")
+            .select("id, titulo, tipo, recibido_at, estado, feedback_tipo, feedback_texto")
+            .eq("modelo_id", modelo.id)
+            .eq("origen", "upload_manual")
+            .or("tipo.is.null,tipo.neq.5")
+            .order("recibido_at", { ascending: false })
+            .limit(80);
+          if (!extra.error && extra.data) entregas = extra.data as Entrega[];
+        }
+      }
     }
   }
+
+  // Guia para la modelo: textos de packs y posts + fotos/videos de referencia (con enlace temporal)
+  const [guiasRes, refsRes] = await Promise.all([
+    supabase.from("panel_config").select("key, value").in("key", [CLAVE_GUIA.pack, CLAVE_GUIA.post]),
+    supabase.from("of_referencias").select("id, categoria, titulo, tipo_archivo, storage_key, bucket").order("created_at", { ascending: false }).limit(150),
+  ]);
+  const textoGuia = (k: string) => String((guiasRes.data ?? []).find((f) => f.key === k)?.value?.texto ?? "");
+  const referencias: ReferenciaVista[] = await Promise.all(
+    (refsRes.data ?? []).map(async (r) => ({
+      id: r.id as string,
+      categoria: r.categoria as ReferenciaVista["categoria"],
+      titulo: (r.titulo as string | null) ?? null,
+      tipo_archivo: r.tipo_archivo as ReferenciaVista["tipo_archivo"],
+      vista: await urlVista(r.storage_key as string, (r.bucket as string | null) ?? undefined).catch(() => null),
+    })),
+  );
+  const guia = { packs: textoGuia(CLAVE_GUIA.pack), posts: textoGuia(CLAVE_GUIA.post), referencias };
 
   const onboarding = {
     datos: sanearDatos(onboardingRes.data?.datos ?? {}),
     estado: (onboardingRes.data?.estado === "enviado" ? "enviado" : "borrador") as "borrador" | "enviado",
   };
 
-  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} captacion={captacion} />;
+  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} captacion={captacion} guia={guia} />;
 }
