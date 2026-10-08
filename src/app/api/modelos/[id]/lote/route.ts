@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { exigirModelo } from "@/lib/alcance";
-import { encolarTelegram } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +33,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await db.from("modelos").update({ captacion_aprobada_at: ahora }).eq("id", id);
 
-  await encolarTelegram("lote", id, { n: pasados?.length ?? 0 });
   return NextResponse.json({ ok: true, aprobados: pasados?.length ?? 0 });
 }

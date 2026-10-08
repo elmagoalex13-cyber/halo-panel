@@ -102,8 +102,7 @@ export async function POST(req: NextRequest) {
   if (frase) await registrarUsoFrase(supabase, frase.id, pieza.id, cuentaId);
   if (body.encargo_id) await supabase.from("encargos").update({ estado: "entregado", updated_at: ahora }).eq("id", body.encargo_id);
 
-  // Avisos para el grupo de Telegram (el editor los agrupa): subida y, al llegar al objetivo, "crea su cuenta de Instagram"
-  await encolarTelegram("subida", sesion.modeloId, { n: 1 });
+  // Telegram: las subidas sueltas NO avisan (van en el resumen diario); solo al llegar al objetivo: "crea su cuenta de Instagram"
   if (enCaptacion && modeloCap && !modeloCap.umbral_avisado_at) {
     const { count } = await supabase
       .from("library_content")

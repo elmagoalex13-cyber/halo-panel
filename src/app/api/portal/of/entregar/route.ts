@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { UUID, coleccionDeModelo } from "@/lib/ofServer";
+import { encolarTelegram } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -22,5 +23,7 @@ export async function POST(req: NextRequest) {
   const ahora = new Date().toISOString();
   const { error } = await supabase.from("of_colecciones").update({ estado: "entregado", entregado_at: ahora, updated_at: ahora }).eq("id", col.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Telegram: un aviso por script/pack/post entregado (no por archivo)
+  await encolarTelegram("of_entrega", sesion.modeloId, { tipo: col.tipo, nombre: col.nombre ?? null, archivos: count });
   return NextResponse.json({ ok: true, entregado_at: ahora });
 }
