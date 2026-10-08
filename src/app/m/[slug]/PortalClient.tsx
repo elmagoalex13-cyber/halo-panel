@@ -32,6 +32,7 @@ export type Entrega = {
   estado?: string; // "recibido" = en espera de que la agencia lo revise (captacion)
   feedback_tipo?: "bien" | "mejorar" | null;
   feedback_texto?: string | null;
+  preview?: { poster: string; video: string } | null; // vista previa para que ella pueda ver el reel
 };
 
 const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Parar imagen", 4: "Con referencia" };
@@ -272,6 +273,7 @@ export function PortalClient({
 }) {
   const router = useRouter();
   const [onboardingAbierto, setOnboardingAbierto] = useState(false);
+  const [reelAbierto, setReelAbierto] = useState<Entrega | null>(null);
   const [onboardingDatos, setOnboardingDatos] = useState(onboarding.datos);
   const [onboardingEstado, setOnboardingEstado] = useState(onboarding.estado);
   const alCambiarOnboarding = useCallback((d: DatosOnboarding, e: "borrador" | "enviado") => {
@@ -510,8 +512,25 @@ export function PortalClient({
           {entregas.length ? (
             <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
               {entregas.map((e) => (
-                <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
+                <li key={e.id} className="flex items-center gap-3 px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => e.preview && setReelAbierto(e)}
+                    disabled={!e.preview}
+                    aria-label={e.preview ? "Ver el vídeo" : "Vídeo en preparación"}
+                    className="relative grid h-[72px] w-[54px] shrink-0 place-items-center overflow-hidden rounded-lg border border-white/10 bg-black/40 disabled:cursor-default"
+                  >
+                    {e.preview ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={e.preview.poster} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        <span className="absolute inset-0 grid place-items-center bg-black/30 text-xl text-white">▶</span>
+                      </>
+                    ) : (
+                      <span className="px-1 text-center text-[9px] leading-tight text-white/35">Preparando vídeo…</span>
+                    )}
+                  </button>
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-white/85">{e.titulo ?? "Video"}</p>
                     <p className="text-xs text-white/35">
                       {NOMBRE_TIPO[e.tipo ?? 1]} · {new Date(e.recibido_at).toLocaleDateString("es-ES")}
@@ -537,6 +556,24 @@ export function PortalClient({
       {pestana === "guia" ? <GuiaOF packs={guia.packs} posts={guia.posts} referencias={guia.referencias} /> : null}
 
       {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} /> : null}
+
+      {reelAbierto?.preview ? (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/95 p-3" role="dialog" aria-modal="true" onClick={() => setReelAbierto(null)}>
+          <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 pb-2">
+            <p className="truncate text-sm font-semibold text-white">{reelAbierto.titulo ?? "Vídeo"}</p>
+            <button type="button" onClick={() => setReelAbierto(null)} className="btn-secondary shrink-0 px-4 py-2 text-xs">Cerrar</button>
+          </div>
+          <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col gap-3" onClick={(ev) => ev.stopPropagation()}>
+            <video src={reelAbierto.preview.video} poster={reelAbierto.preview.poster} controls autoPlay playsInline className="min-h-0 w-full flex-1 rounded-xl bg-black object-contain" />
+            {reelAbierto.feedback_tipo ? (
+              <div className={`rounded-xl border px-3 py-2.5 text-sm ${reelAbierto.feedback_tipo === "mejorar" ? "border-amber-400/40 bg-amber-400/10 text-amber-100" : "border-emerald-400/40 bg-emerald-400/10 text-emerald-100"}`}>
+                <p className="font-semibold">{reelAbierto.feedback_tipo === "mejorar" ? "⚠️ A mejorar" : "✅ Va bien"}</p>
+                {reelAbierto.feedback_texto ? <p className="mt-1 leading-relaxed">💬 {reelAbierto.feedback_texto}</p> : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <ModalVideo pendiente={videoAbierto} onClose={() => setVideoAbierto(null)} />
     </main>

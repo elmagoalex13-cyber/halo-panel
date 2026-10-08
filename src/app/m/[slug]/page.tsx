@@ -14,6 +14,8 @@ import { progresoCaptacion } from "@/lib/captacion";
 import { CLAVE_GUIA } from "@/lib/guiaOF";
 import type { ReferenciaVista } from "./GuiaOF";
 import { estadoTelegramModelo } from "@/lib/telegramModelo";
+import { createHash } from "node:crypto";
+import { listarClavesR2 } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mi portal" };
@@ -91,7 +93,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
       .order("created_at", { ascending: true }),
     supabase
       .from("library_content")
-      .select("id, titulo, tipo, recibido_at")
+      .select("id, titulo, tipo, recibido_at, r2_key, r2_key_original")
       .eq("modelo_id", modelo.id)
       .like("r2_key", `bruto/${modelo.id}/%`)
       // Los fragmentos de 6 s que se sacan de una misma subida (titulo "... · parte 2/5") no cuentan como subidas nuevas.
@@ -132,7 +134,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
           // Reels aun en revision: se listan todos (no solo los 12 ultimos), con su estado y el feedback del equipo
           const extra = await supabase
             .from("library_content")
-            .select("id, titulo, tipo, recibido_at, estado, feedback_tipo, feedback_texto")
+            .select("id, titulo, tipo, recibido_at, estado, feedback_tipo, feedback_texto, r2_key, r2_key_original")
             .eq("modelo_id", modelo.id)
             .eq("origen", "upload_manual")
             .or("tipo.is.null,tipo.neq.5")
@@ -142,6 +144,23 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
         }
       }
     }
+  }
+
+  // Cada reel se puede ver desde el portal: se usa la vista previa ligera (H.264) que genera el editor, que se reproduce en cualquier movil.
+  // Las claves internas del almacen no llegan al navegador.
+  {
+    let listas = new Set<string>();
+    try {
+      listas = new Set((await listarClavesR2("previews/", 50000)).filter((k) => k.endsWith(".mp4")).map((k) => k.slice("previews/".length, -4)));
+    } catch {
+      /* sin R2: se muestran sin vista previa */
+    }
+    const base = (process.env.R2_PUBLIC_URL ?? process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+    entregas = (entregas as Array<Entrega & { r2_key?: string | null; r2_key_original?: string | null }>).map(({ r2_key, r2_key_original, ...resto }) => {
+      const clave = r2_key_original ?? r2_key ?? "";
+      const h = clave ? createHash("sha1").update(clave).digest("hex").slice(0, 20) : "";
+      return { ...resto, preview: h && base && listas.has(h) ? { poster: `${base}/previews/${h}.jpg`, video: `${base}/previews/${h}.mp4` } : null };
+    });
   }
 
   // Guia para la modelo: textos de packs y posts + fotos/videos de referencia (con enlace temporal)

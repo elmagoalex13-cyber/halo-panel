@@ -10,8 +10,8 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { config } from "./config.mjs";
 
 const ZONA = "Europe/Madrid";
-const RACHA_QUIETA_MS = 3 * 60000;
-const RACHA_MAXIMA_MS = 15 * 60000;
+const RACHA_QUIETA_MS = 60000; // se junta lo que comentes seguido y se avisa 1 minuto despues del ultimo comentario
+const RACHA_MAXIMA_MS = 5 * 60000;
 const CADA_RECORDATORIO_MS = 72 * 3600000;
 let ultimoRecordatorios = 0;
 let ultimaInfoBot = 0;
