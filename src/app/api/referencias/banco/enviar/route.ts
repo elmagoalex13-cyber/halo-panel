@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { exigirModelo } from "@/lib/alcance";
+import { encolarAsignaciones } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) throw error;
+    await encolarAsignaciones(new Map([[body.modelo_id as string, 1]]));
     return NextResponse.json({ ok: true, data });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

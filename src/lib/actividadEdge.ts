@@ -34,6 +34,7 @@ const REGLAS: Regla[] = [
   { metodo: "POST", ruta: /^\/api\/aprobacion$/, accion: "Actuó en la mesa de aprobación" },
   { metodo: "DELETE", ruta: /^\/api\/asignar$/, accion: "Quitó una asignación de vídeo", sensible: true },
   { metodo: "POST", ruta: /^\/api\/asignar$/, accion: "Asignó vídeos a modelos" },
+  { metodo: "POST", ruta: /^\/api\/avisos$/, accion: "Envió un aviso a modelos pidiéndoles contenido" },
   { metodo: "POST", ruta: /^\/api\/referencias\/videos\/[^/]+\/asignar$/, accion: "Asignó un vídeo de referencia" },
   { metodo: "POST", ruta: /^\/api\/referencias\/banco\/enviar$/, accion: "Envió vídeos del banco a modelos" },
   { metodo: "PATCH", ruta: /^\/api\/virales-propios\/[^/]+$/, accion: "Cambió el estado de un viral propio" },

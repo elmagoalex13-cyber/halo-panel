@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, modeloProhibido, veModelo } from "@/lib/alcance";
+import { encolarAsignaciones } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const encargoIds: string[] = [];
+    const nuevosPorModelo = new Map<string, number>();
     for (const modeloId of modelos) {
       const query = supabase
         .from("encargos")
@@ -93,7 +95,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         .single();
       if (eErr || !enc) throw eErr ?? new Error("No se pudo crear el encargo");
       encargoIds.push(enc.id);
+      nuevosPorModelo.set(modeloId, (nuevosPorModelo.get(modeloId) ?? 0) + 1);
     }
+    await encolarAsignaciones(nuevosPorModelo);
 
     const ahora = new Date().toISOString();
     const upd = { estado_triaje: "confirmado", formato_confirmado: tipoVideo, confirmado_at: ahora };

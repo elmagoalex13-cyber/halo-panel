@@ -24,6 +24,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
 import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
 import type { FacturacionModelo, Modelo } from "@/types";
+import { AvisarModelos } from "./AvisarModelos";
 
 export const dynamic = "force-dynamic";
 
@@ -281,6 +282,8 @@ export default async function DashboardPage({
       ) : null}
 
       <AvisosDashboard avisos={notificaciones} />
+
+      <AvisarModelos />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile label="Modelos activas" value={modelosActivas} icon={Users} subtitle={`de ${modelos.length} registradas`} />

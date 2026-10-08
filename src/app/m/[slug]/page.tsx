@@ -179,6 +179,15 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
     })),
   );
   const guia = { packs: textoGuia(CLAVE_GUIA.pack), posts: textoGuia(CLAVE_GUIA.post), referencias };
+  // Avisos del equipo ("necesitamos ..."): los ultimos 30 dias
+  const avisosRes = await supabase
+    .from("avisos_modelos")
+    .select("id, items, texto, created_at")
+    .eq("modelo_id", modelo.id)
+    .gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(5);
+  const avisosEquipo = avisosRes.error ? [] : ((avisosRes.data ?? []) as Array<{ id: string; items: Array<{ tipo: string; cantidad?: number }>; texto: string | null; created_at: string }>);
   const telegram = await estadoTelegramModelo(modelo.id as string); // avisos privados por Telegram (opcional, los activa ella)
 
   const onboarding = {
@@ -186,5 +195,5 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
     estado: (onboardingRes.data?.estado === "enviado" ? "enviado" : "borrador") as "borrador" | "enviado",
   };
 
-  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} captacion={captacion} guia={guia} telegram={telegram} />;
+  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} captacion={captacion} guia={guia} telegram={telegram} avisosEquipo={avisosEquipo} />;
 }

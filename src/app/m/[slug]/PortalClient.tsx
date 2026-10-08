@@ -8,6 +8,7 @@ import { OnlyFansPortal, type ArchivoVista } from "./OnlyFansPortal";
 import type { ColeccionOF } from "@/lib/onlyfans";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 import { GuiaOF, type ReferenciaVista } from "./GuiaOF";
+import { AvisosEquipo } from "./AvisosEquipo";
 import type { ProgresoCaptacion } from "@/lib/captacion";
 
 export type Referencia = {
@@ -258,7 +259,9 @@ export function PortalClient({
   captacion,
   guia,
   telegram,
+  avisosEquipo,
 }: {
+  avisosEquipo: Array<{ id: string; items: Array<{ tipo: string; cantidad?: number }>; texto: string | null; created_at: string }>;
   telegram: { vinculado: boolean; url: string | null };
   guia: { packs: string; posts: string; referencias: ReferenciaVista[] };
   captacion: { progreso: ProgresoCaptacion; reelsAbiertos: boolean } | null;
@@ -317,6 +320,8 @@ export function PortalClient({
           Salir
         </button>
       </header>
+
+      <AvisosEquipo avisos={avisosEquipo} />
 
       {captacion ? (
         <section className="rounded-2xl border border-[#8B5CF6]/35 bg-[#8B5CF6]/10 p-4">

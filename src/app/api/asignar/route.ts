@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, exigirFila, modeloProhibido, veModelo } from "@/lib/alcance";
+import { encolarAsignaciones } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
     let referenciasNuevas = 0;
     let encargosCreados = 0;
     let yaAsignados = 0;
+    const nuevosPorModelo = new Map<string, number>(); // para avisar a cada modelo de lo que se le ha asignado
 
     if (tipo !== 4 && urls.length === 0 && archivos.length === 0) {
       const instrucciones = body.instrucciones?.trim() || null;
@@ -72,7 +74,9 @@ export async function POST(req: NextRequest) {
         });
         if (error) throw error;
         encargosCreados++;
+        nuevosPorModelo.set(modeloId, (nuevosPorModelo.get(modeloId) ?? 0) + 1);
       }
+      await encolarAsignaciones(nuevosPorModelo);
       return NextResponse.json({ ok: true, urls: 0, archivos: 0, referencias_nuevas: 0, encargos: encargosCreados, ya_asignados: yaAsignados });
     }
 
@@ -137,8 +141,10 @@ export async function POST(req: NextRequest) {
         });
         if (error) throw error;
         encargosCreados++;
+        nuevosPorModelo.set(modeloId, (nuevosPorModelo.get(modeloId) ?? 0) + 1);
       }
     }
+    await encolarAsignaciones(nuevosPorModelo);
     return NextResponse.json({ ok: true, urls: urls.length, archivos: archivos.length, referencias_nuevas: referenciasNuevas, encargos: encargosCreados, ya_asignados: yaAsignados });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : (e as { message?: string })?.message ?? "Error interno" }, { status: 500 });

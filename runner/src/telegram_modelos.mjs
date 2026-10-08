@@ -132,6 +132,30 @@ export async function avisosModelos(sb) {
           await marcar(fb.map((e) => e.id));
         }
       }
+      // Asignacion de videos nuevos: se juntan los de una misma tanda (1 minuto sin mas)
+      const asig = lista.filter((e) => e.tipo === "modelo_asignacion");
+      if (asig.length) {
+        const nuevo = Math.max(...asig.map((e) => new Date(e.created_at).getTime()));
+        const viejo = Math.min(...asig.map((e) => new Date(e.created_at).getTime()));
+        if (ahora - nuevo >= RACHA_QUIETA_MS || ahora - viejo >= RACHA_MAXIMA_MS) {
+          const n = asig.reduce((s, e) => s + (Number(e.datos?.n) || 1), 0);
+          await enviar(m.telegram_id, `🎬 <b>${esc(m.nombre)}</b>, tienes ${n} ${n === 1 ? "vídeo nuevo" : "vídeos nuevos"} por grabar.\nLo verás en tu portal, pestaña «Por grabar», con las indicaciones.${enlacePortal(m)}`);
+          await marcar(asig.map((e) => e.id));
+        }
+      }
+      // Avisos del equipo ("necesitamos ..."): al momento
+      for (const e of lista.filter((x) => x.tipo === "modelo_aviso")) {
+        const d = e.datos ?? {};
+        const ETQ = { reels: "🎬 Reels", script: "📝 Scripts completos", pack: "📦 Packs de fotos", post: "🖼 Posts de OnlyFans", otro: "✨ Otro contenido" };
+        const items = (Array.isArray(d.items) ? d.items : []).map((i) => `• ${i.cantidad ? i.cantidad + " " : ""}${ETQ[i.tipo] ?? i.tipo}`);
+        const conOF = (Array.isArray(d.items) ? d.items : []).some((i) => ["script", "pack", "post"].includes(i.tipo));
+        const partes = [`📣 <b>${esc(m.nombre)}</b>, el equipo necesita contenido tuyo:`];
+        if (items.length) partes.push(...items);
+        if (d.texto) partes.push(`💬 ${esc(d.texto)}`);
+        if (conOF) partes.push("Para el contenido de OnlyFans sigue la pestaña «Guía OnlyFans» de tu portal, tal cual.");
+        await enviar(m.telegram_id, `${partes.join("\n")}${enlacePortal(m)}`);
+        await marcar([e.id]);
+      }
       // Revision de scripts, packs y posts
       for (const e of lista.filter((x) => x.tipo === "modelo_revision")) {
         const d = e.datos ?? {};
@@ -150,7 +174,7 @@ export async function avisosModelos(sb) {
 async function pendientesDe(sb, m) {
   const cuenta = (q) => q.then((r) => r.count ?? 0, () => 0);
   const entregadas = (tipo) => sb.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("tipo", tipo).eq("estado", "entregado");
-  const [reels, scriptsEnt, scriptsOk, packs, posts, cuentas, encargos] = await Promise.all([
+  const [reels, scriptsEnt, scriptsOk, packs, posts, cuentas, encargos, aprobadosSinSalir, enCamino] = await Promise.all([
     cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("origen", "upload_manual").or("tipo.is.null,tipo.neq.5")),
     cuenta(entregadas("script")),
     sb.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("tipo", "script").eq("estado", "entregado").eq("revision", "aprobado").then((r) => (r.error ? null : (r.count ?? 0))),
@@ -158,6 +182,8 @@ async function pendientesDe(sb, m) {
     cuenta(entregadas("post")),
     cuenta(sb.from("cuentas_instagram").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("activa", true)),
     cuenta(sb.from("encargos").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).not("estado", "in", "(entregado,cancelado)")),
+    cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("estado", "aprobado").or(`publicado_at.is.null,publicado_at.gt.${new Date().toISOString()}`).or("tipo.is.null,tipo.neq.5")),
+    cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).in("estado", ["en_aprobacion", "editando"]).or("tipo.is.null,tipo.neq.5")),
   ]);
   // Dos bloques bien separados: los REELS (para su Instagram) y el contenido de ONLYFANS (scripts, packs y posts, que sigue la guia)
   const reelsFalta = [];
@@ -171,7 +197,10 @@ async function pendientesDe(sb, m) {
     ];
     for (const [nombre, n, obj] of objs) if (n < obj) ofFalta.push(`• ${nombre}: ${n}/${obj} (mínimo)`);
   }
-  const metas = { reelsFalta, ofFalta };
+  // Poco contenido para publicar: con cuenta de Instagram, 2 reels al dia por cuenta; avisa si quedan 3 dias o menos
+  const diasContenido = cuentas > 0 ? (aprobadosSinSalir + enCamino) / (cuentas * 2) : null;
+  const stockBajo = diasContenido !== null && diasContenido <= 3 ? Math.round(diasContenido * 10) / 10 : null;
+  const metas = { reelsFalta, ofFalta, stockBajo };
   return { metas, encargos };
 }
 
@@ -187,12 +216,13 @@ export async function recordatorios(sb, { forzar = false, soloMostrar = false } 
       const previo = await leer(sb, `recordatorio:${m.id}`);
       if (!forzar && previo?.at && Date.now() - new Date(previo.at).getTime() < CADA_RECORDATORIO_MS) continue;
       const { metas, encargos } = await pendientesDe(sb, m);
-      if (!metas.reelsFalta.length && !metas.ofFalta.length && !encargos) continue;
+      if (!metas.reelsFalta.length && !metas.ofFalta.length && !encargos && metas.stockBajo === null) continue;
       const lineas = [];
       if (metas.reelsFalta.length || metas.ofFalta.length) lineas.push("Esto te falta para empezar a trabajar con nosotros:");
       if (metas.reelsFalta.length) lineas.push("", "🎬 <b>Reels para tu Instagram</b>", ...metas.reelsFalta, "Súbelos en la pestaña «Subir vídeos».");
       if (metas.ofFalta.length) lineas.push("", "📦 <b>Contenido de OnlyFans</b>", ...metas.ofFalta, "Para esto, sigue la pestaña «Guía OnlyFans» de tu portal y hazlo exactamente como se indica (la guía es solo de OnlyFans, no de los reels).");
       if (encargos) lineas.push("", `🎬 Tienes ${encargos} ${encargos === 1 ? "vídeo" : "vídeos"} por grabar.`);
+      if (metas.stockBajo !== null) lineas.push("", `⚠️ Te quedan pocos vídeos para publicar (unos ${metas.stockBajo} días de contenido): necesitamos que grabes y subas más reels.`);
       if (soloMostrar) {
         console.log(`📋 Hola ${m.nombre}\n${lineas.join("\n")}${enlacePortal(m)}`);
         continue;
