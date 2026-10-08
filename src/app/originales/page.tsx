@@ -52,21 +52,28 @@ async function cargar(): Promise<Original[]> {
     const supabase = createAdminClient();
     const alcance = await alcanceActual();
     const columnas = "id, modelo_id, titulo, filename_original, size_bytes, recibido_at, estado, estado_procesamiento, error_mensaje, tipo_video, tipo, r2_key, r2_key_original, video_procesado_url, recorte_inicio, modelo:modelos(nombre)";
-    const consulta = (extra: string) =>
-      soloVisibles(
-        supabase
-          .from("library_content")
-          .select(`${columnas}${extra}`)
-          .eq("origen", "upload_manual")
-          .or("tipo.is.null,tipo.neq.5")
-          .order("recibido_at", { ascending: false })
-          .limit(1500),
-        alcance,
-      );
+    // Supabase corta cada consulta en 1.000 filas: se piden hasta 3 paginas (3.000 piezas) para no perder originales
+    const consulta = (extra: string, pagina = 0) => {
+      let q = supabase
+        .from("library_content")
+        .select(`${columnas}${extra}`)
+        .eq("origen", "upload_manual")
+        .or("tipo.is.null,tipo.neq.5")
+        .order("recibido_at", { ascending: false })
+        .range(pagina * 1000, pagina * 1000 + 999);
+      if (extra.includes("original_borrado_at")) q = q.is("original_borrado_at", null); // los ya borrados no hacen falta
+      return soloVisibles(q, alcance);
+    };
     // original_borrado_at la crea el SQL 20261007; mientras no exista se lista sin ella.
     const [primera, fotos, previews] = await Promise.all([consulta(", original_borrado_at"), versionesFotos(), vistasPreviasListas()]);
-    const { data, error } = primera.error ? await consulta("") : primera;
+    const conColumna = !primera.error;
+    const { data: pagina1, error } = primera.error ? await consulta("") : primera;
     if (error) return [];
+    let data = (pagina1 ?? []) as unknown[];
+    for (let pag = 1; pag <= 2 && data.length === pag * 1000; pag++) {
+      const r = await consulta(conColumna ? ", original_borrado_at" : "", pag);
+      data = [...data, ...(r.data ?? [])];
+    }
 
     // Varias piezas pueden salir del mismo original (frase con musica: un original largo se parte en
     // fragmentos, y "rehacer" crea otra pieza): se agrupan por el archivo original.
@@ -78,7 +85,7 @@ async function cargar(): Promise<Original[]> {
       grupos.set(clave, [...(grupos.get(clave) ?? []), f]);
     }
 
-    return [...grupos.values()].slice(0, 300).map((piezas) => {
+    return [...grupos.values()].slice(0, 500).map((piezas) => {
       const primera = piezas[0];
       const ultima = piezas[piezas.length - 1]; // la mas antigua = la subida original
       const claveOriginal = (primera.r2_key_original ?? primera.r2_key) as string;
