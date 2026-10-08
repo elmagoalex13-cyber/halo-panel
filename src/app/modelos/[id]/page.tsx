@@ -14,6 +14,8 @@ import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
 import type { SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 import { alcanceActual, veModelo } from "@/lib/alcance";
+import { CaptacionRevision } from "./CaptacionRevision";
+import { piezasEnEspera } from "@/lib/captacionPiezas";
 
 export const revalidate = 0;
 
@@ -74,6 +76,8 @@ type ModeloRow = {
   portal_token?: string | null;
   activa?: boolean | null;
   created_at?: string | null;
+  objetivo_videos?: number | null;
+  captacion_aprobada_at?: string | null;
 };
 
 type PipelineRow = {
@@ -323,6 +327,21 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   const instagram: VideoInstagram[] = ((filasIG ?? []) as Array<{ id: string; titulo: string | null; estado: string; recibido_at: string; publicado_at: string | null; video_procesado_url: string | null }>)
     .map((v) => ({ id: v.id, titulo: v.titulo, estado: v.estado, recibido_at: v.recibido_at, publicado_at: v.publicado_at, url: urlR2(v.video_procesado_url) ?? "" }))
     .filter((v) => v.url);
+  // Captacion: reels en espera para revisar, dar feedback y mandar a editar
+  const captacion = modelo.objetivo_videos
+    ? {
+        ...(await piezasEnEspera(modelo.id)),
+        subidos:
+          (
+            await createAdminClient()
+              .from("library_content")
+              .select("id", { count: "exact", head: true })
+              .eq("modelo_id", modelo.id)
+              .eq("origen", "upload_manual")
+              .or("tipo.is.null,tipo.neq.5")
+          ).count ?? 0,
+      }
+    : null;
   const of = await cargarResumenOF(modelo.id);
   const ofNuevos = of.resumen.filter((c) => c.nuevo).length;
 
@@ -335,6 +354,27 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
       aviso: onboarding ? (onboardingEnviado ? null : "a medias") : "nuevo",
       contenido: <OnboardingFicha modelo={{ id: modelo.id, nombre: modelo.nombre }} onboarding={onboarding} datos={onboardingDatos} historial={onboardingHistorial} />,
     },
+    ...(captacion
+      ? [
+          {
+            id: "captacion",
+            label: "Captación",
+            icono: "🎬",
+            aviso: captacion.piezas.length ? `${captacion.piezas.length} en espera` : null,
+            contenido: (
+              <CaptacionRevision
+                modeloId={modelo.id}
+                nombre={modelo.nombre}
+                objetivo={Number(modelo.objetivo_videos)}
+                subidos={captacion.subidos}
+                enEdicion={captacion.enEdicion}
+                terminada={Boolean(modelo.captacion_aprobada_at)}
+                piezas={captacion.piezas}
+              />
+            ),
+          } satisfies Pestana,
+        ]
+      : []),
     { id: "videos", label: "Vídeos", icono: "🎞", aviso: pendientes.length ? String(pendientes.length) : null, contenido: videos },
     { id: "redes", label: "Redes", icono: "◎", aviso: cuentas.length ? String(cuentas.length) : null, contenido: redes },
     {

@@ -27,6 +27,9 @@ export type Entrega = {
   titulo: string | null;
   tipo: number | null;
   recibido_at: string;
+  estado?: string; // "recibido" = en espera de que la agencia lo revise (captacion)
+  feedback_tipo?: "bien" | "mejorar" | null;
+  feedback_texto?: string | null;
 };
 
 const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Parar imagen", 4: "Con referencia" };
@@ -249,7 +252,9 @@ export function PortalClient({
   onboarding,
   contenidoOF,
   accesos,
+  captacion,
 }: {
+  captacion: { objetivo: number; subidos: number } | null;
   accesos: { modo: "of" | "completo"; dado: boolean };
   nombre: string;
   slug: string;
@@ -303,6 +308,30 @@ export function PortalClient({
           Salir
         </button>
       </header>
+
+      {captacion ? (
+        <section className="rounded-2xl border border-[#8B5CF6]/35 bg-[#8B5CF6]/10 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-display text-lg font-semibold text-white">🎬 Tus primeros {captacion.objetivo} reels</p>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold text-white">
+              {captacion.subidos}/{captacion.objetivo}
+            </span>
+          </div>
+          <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-[#8B5CF6] transition-all" style={{ width: `${Math.min(100, Math.round((captacion.subidos / captacion.objetivo) * 100))}%` }} />
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-white/65">
+            {captacion.subidos >= captacion.objetivo
+              ? "¡Ya tenemos los que necesitamos! Los estamos revisando y pronto te contamos los siguientes pasos."
+              : `Necesitamos ${captacion.objetivo} reels tuyos para empezar a trabajar juntos. Sube los que vayas grabando (te faltan ${captacion.objetivo - captacion.subidos}): se van acumulando y los vamos revisando para decirte si vas bien.`}
+          </p>
+          {entregas.some((e) => e.feedback_tipo === "mejorar") ? (
+            <p className="mt-2 text-sm font-semibold text-amber-200">
+              Tienes {entregas.filter((e) => e.feedback_tipo === "mejorar").length} reel{entregas.filter((e) => e.feedback_tipo === "mejorar").length === 1 ? "" : "s"} con comentarios del equipo: míralos en «Subidos».
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <TarjetaOnboarding datos={onboardingDatos} estado={onboardingEstado} onAbrir={() => setOnboardingAbierto(true)} />
 
@@ -440,8 +469,15 @@ export function PortalClient({
                     <p className="text-xs text-white/35">
                       {NOMBRE_TIPO[e.tipo ?? 1]} · {new Date(e.recibido_at).toLocaleDateString("es-ES")}
                     </p>
+                    {e.feedback_texto ? <p className="mt-1 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-xs leading-relaxed text-white/70">💬 {e.feedback_texto}</p> : null}
                   </div>
-                  <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">Subido</span>
+                  <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${e.estado === "recibido" ? "bg-white/10 text-white/70" : "bg-emerald-500/15 text-emerald-300"}`}>
+                      {e.estado === "recibido" ? "En revisión" : "Subido"}
+                    </span>
+                    {e.feedback_tipo === "bien" ? <span className="text-xs font-semibold text-emerald-300">✅ Va bien</span> : null}
+                    {e.feedback_tipo === "mejorar" ? <span className="text-xs font-semibold text-amber-200">⚠️ Mejorar</span> : null}
+                  </div>
                 </li>
               ))}
             </ul>

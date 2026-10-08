@@ -206,17 +206,6 @@ export function ModelosClient({
     }
   }
 
-  async function aprobarLote(modelo: Modelo, c: ResumenCaptacion) {
-    const completo = c.enEspera >= c.objetivo;
-    const aviso = completo
-      ? `¿Aprobar el lote de ${modelo.nombre}? Sus ${c.enEspera} vídeos pasan a edición y, desde ahora, lo que suba se edita directamente.`
-      : `${modelo.nombre} lleva ${c.enEspera} de ${c.objetivo} vídeos. ¿Aprobar el lote igualmente? Sus ${c.enEspera} vídeos pasan a edición.`;
-    if (!window.confirm(aviso)) return;
-    const res = await fetch(`/api/modelos/${modelo.id}/lote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ forzar: !completo }) });
-    if (res.ok) window.location.reload();
-    else window.alert(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo aprobar el lote");
-  }
-
   async function restaurarModelo(modelo: Modelo) {
     const res = await fetch(`/api/modelos/${modelo.id}/restaurar`, { method: "POST" });
     if (res.ok) window.location.reload();
@@ -456,11 +445,9 @@ export function ModelosClient({
                       <div className={`h-full rounded-full ${llegado ? "bg-cyan-400" : "bg-[#8B5CF6]"}`} style={{ width: `${pct}%` }} />
                     </div>
                     {llegado && !c.tieneCuenta ? <p className="mt-2 text-xs font-semibold text-cyan-200">Ya puede empezar: crea su cuenta de Instagram abajo.</p> : null}
-                    {c.enEspera > 0 ? (
-                      <button onClick={() => aprobarLote(modelo, c)} className="btn-primary mt-3 w-full px-3 py-2 text-sm">
-                        {c.enEspera >= c.objetivo ? `Aprobar lote y editar (${c.enEspera} vídeos)` : `Aprobar ya ${c.enEspera} vídeos (aún no llega a ${c.objetivo})`}
-                      </button>
-                    ) : null}
+                    <Link href={`/modelos/${modelo.id}#captacion`} className="btn-primary mt-3 block w-full px-3 py-2 text-center text-sm">
+                      {c.enEspera > 0 ? `Revisar los ${c.enEspera} reels en espera` : "Ver captación"}
+                    </Link>
                   </div>
                 );
               })()}

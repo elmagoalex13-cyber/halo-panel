@@ -4,34 +4,28 @@ import { exigirModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
-// POST { forzar?: boolean }  Aprueba el lote de una modelo en captacion: todos sus videos EN ESPERA pasan a la cola de edicion y, desde
-// ahora, lo que suba se edita directamente. Exige haber llegado al objetivo salvo que se fuerce (con confirmacion en la pantalla).
+// POST { ids: [...] }   -> manda a EDICION solo esos reels en espera (5, 10, 30... los que queráis); la captacion sigue abierta y lo que
+//                          la modelo suba despues se sigue quedando en espera para revisarlo.
+// POST { todos: true }  -> manda TODOS los que haya en espera y TERMINA la captacion: desde ahora, lo que suba se edita directamente.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
   { const g = await exigirModelo(id); if (g) return g; }
-  const body = (await req.json().catch(() => null)) as { forzar?: boolean } | null;
+  const body = (await req.json().catch(() => null)) as { ids?: unknown; todos?: boolean } | null;
+  const ids = Array.isArray(body?.ids) ? (body.ids as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 300) : [];
+  if (!ids.length && !body?.todos) return NextResponse.json({ error: "Elige qué reels mandar a edición" }, { status: 400 });
 
   const db = createAdminClient();
-  const { data: modelo } = await db.from("modelos").select("nombre, objetivo_videos, captacion_aprobada_at").eq("id", id).maybeSingle();
-  if (!modelo) return NextResponse.json({ error: "Modelo no encontrada" }, { status: 404 });
-
-  const { count } = await db.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", id).eq("estado", "recibido");
-  const enEspera = count ?? 0;
-  const objetivo = Number(modelo.objetivo_videos ?? 0);
-  if (!body?.forzar && objetivo && enEspera < objetivo) {
-    return NextResponse.json({ error: `Aún no llega al mínimo: ${enEspera} de ${objetivo} vídeos.` }, { status: 409 });
-  }
-
   const ahora = new Date().toISOString();
-  const { data: pasados, error } = await db
+  let q = db
     .from("library_content")
     .update({ estado: "editando", estado_procesamiento: "pendiente", reparto_at: ahora, updated_at: ahora })
     .eq("modelo_id", id)
-    .eq("estado", "recibido")
-    .select("id");
+    .eq("estado", "recibido");
+  if (ids.length) q = q.in("id", ids);
+  const { data: pasados, error } = await q.select("id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await db.from("modelos").update({ captacion_aprobada_at: ahora }).eq("id", id);
 
-  return NextResponse.json({ ok: true, aprobados: pasados?.length ?? 0 });
+  if (!ids.length && body?.todos) await db.from("modelos").update({ captacion_aprobada_at: ahora }).eq("id", id);
+  return NextResponse.json({ ok: true, aprobados: pasados?.length ?? 0, terminada: !ids.length });
 }

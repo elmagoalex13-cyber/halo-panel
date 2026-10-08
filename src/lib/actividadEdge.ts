@@ -14,6 +14,8 @@ const REGLAS: Regla[] = [
   // Modelos y su portal
   { metodo: "POST", ruta: /^\/api\/modelos\/[^/]+\/portal$/, accion: "Generó el acceso al portal de una modelo", sensible: true },
   { metodo: "POST", ruta: /^\/api\/modelos\/[^/]+\/cuentas$/, accion: "Añadió una cuenta de Instagram a una modelo" },
+  { metodo: "POST", ruta: /^\/api\/modelos\/[^/]+\/lote$/, accion: "Mandó reels de captación a edición" },
+  { metodo: "POST", ruta: /^\/api\/modelos\/[^/]+\/feedback$/, accion: "Dio feedback a una modelo sobre un reel" },
   { metodo: "DELETE", ruta: /^\/api\/modelos\/[^/]+\/foto$/, accion: "Quitó la foto de una modelo" },
   { metodo: "PUT", ruta: /^\/api\/modelos\/[^/]+\/foto$/, accion: "Cambió la foto de una modelo" },
   { metodo: "DELETE", ruta: /^\/api\/modelos\/[^/]+$/, accion: "Mandó una modelo a la papelera", sensible: true },
