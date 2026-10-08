@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { exigirFila } from "@/lib/alcance";
 import { evaluarUmbral } from "@/lib/captacion";
+import { encolarTelegram } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +23,13 @@ export async function POST(req: NextRequest) {
     .from("of_colecciones")
     .update({ revision, revision_texto: revision ? texto || null : null, revision_at: revision ? new Date().toISOString() : null })
     .eq("id", id)
-    .select("modelo_id");
+    .select("modelo_id, nombre, tipo");
   if (error) {
     const falta = /revision/i.test(error.message);
     return NextResponse.json({ error: falta ? "Falta ejecutar el SQL 20261022_guias_y_objetivos.sql en Supabase." : error.message }, { status: falta ? 409 : 500 });
   }
   if (!data?.length) return NextResponse.json({ error: "No se encontró" }, { status: 404 });
+  if (revision) await encolarTelegram("modelo_revision", data[0].modelo_id as string, { revision, texto, nombre: data[0].nombre, tipo: data[0].tipo });
   await evaluarUmbral(data[0].modelo_id as string);
   return NextResponse.json({ ok: true });
 }

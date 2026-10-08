@@ -13,6 +13,7 @@ import { modeloEliminada } from "@/lib/papelera";
 import { progresoCaptacion } from "@/lib/captacion";
 import { CLAVE_GUIA } from "@/lib/guiaOF";
 import type { ReferenciaVista } from "./GuiaOF";
+import { estadoTelegramModelo } from "@/lib/telegramModelo";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mi portal" };
@@ -159,11 +160,12 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
     })),
   );
   const guia = { packs: textoGuia(CLAVE_GUIA.pack), posts: textoGuia(CLAVE_GUIA.post), referencias };
+  const telegram = await estadoTelegramModelo(modelo.id as string); // avisos privados por Telegram (opcional, los activa ella)
 
   const onboarding = {
     datos: sanearDatos(onboardingRes.data?.datos ?? {}),
     estado: (onboardingRes.data?.estado === "enviado" ? "enviado" : "borrador") as "borrador" | "enviado",
   };
 
-  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} captacion={captacion} guia={guia} />;
+  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} captacion={captacion} guia={guia} telegram={telegram} />;
 }

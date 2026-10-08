@@ -15,6 +15,7 @@
  * Configuracion en el .env del VPS: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_CHAT_ID_PRIVADO (opcional), TELEGRAM_RESUMEN_HORA (opcional).
  */
 import { config } from "./config.mjs";
+import { cicloModelos } from "./telegram_modelos.mjs";
 
 const CADUCA_MS = 6 * 3600000; // un aviso de hace mas de 6 h ya no sirve
 const ZONA = "Europe/Madrid";
@@ -48,7 +49,7 @@ const guardarConfig = (supabase, key, value) => supabase.from("panel_config").up
 
 // ------------------------------------------------------------------------------------------------ cola de avisos importantes
 async function colaInmediata(supabase) {
-  const { data: cola, error } = await supabase.from("telegram_cola").select("*").is("enviado_at", null).order("created_at", { ascending: true }).limit(300);
+  const { data: cola, error } = await supabase.from("telegram_cola").select("*").is("enviado_at", null).not("tipo", "like", "modelo_%").order("created_at", { ascending: true }).limit(300);
   if (error || !cola?.length) return;
   const ahora = Date.now();
   const marcar = (ids) => (ids.length ? supabase.from("telegram_cola").update({ enviado_at: new Date().toISOString() }).in("id", ids) : null);
@@ -259,5 +260,6 @@ export async function cicloTelegram(supabase) {
   await colaInmediata(supabase);
   await actividadDelSocio(supabase);
   await resumenDiario(supabase);
+  await cicloModelos(supabase).catch((e) => console.error("[telegram-modelos]", e.message)); // avisos privados a las modelos
   await guardarEstado(supabase);
 }

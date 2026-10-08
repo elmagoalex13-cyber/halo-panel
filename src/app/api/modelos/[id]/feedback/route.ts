@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { exigirModelo } from "@/lib/alcance";
+import { encolarTelegram } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +26,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: /feedback_/.test(error.message) ? "Falta ejecutar el SQL 20261021_feedback_captacion.sql en Supabase." : error.message }, { status: /feedback_/.test(error.message) ? 409 : 500 });
   }
   if (!data?.length) return NextResponse.json({ error: "Vídeo no encontrado" }, { status: 404 });
+  if (tipo) await encolarTelegram("modelo_feedback", id, { tipo }); // la modelo recibe un aviso agrupado por Telegram (si lo tiene activado)
   return NextResponse.json({ ok: true });
 }

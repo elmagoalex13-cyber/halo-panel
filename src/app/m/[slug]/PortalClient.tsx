@@ -256,7 +256,9 @@ export function PortalClient({
   accesos,
   captacion,
   guia,
+  telegram,
 }: {
+  telegram: { vinculado: boolean; url: string | null };
   guia: { packs: string; posts: string; referencias: ReferenciaVista[] };
   captacion: { progreso: ProgresoCaptacion; reelsAbiertos: boolean } | null;
   accesos: { modo: "of" | "completo"; dado: boolean };
@@ -351,11 +353,30 @@ export function PortalClient({
                 );
               })}
           </div>
+          {(contenidoOF?.colecciones ?? []).some((c) => c.revision === "mejorar") ? (
+            <p className="mt-3 text-sm font-semibold text-amber-200">
+              Tienes {(contenidoOF?.colecciones ?? []).filter((c) => c.revision === "mejorar").length} script, pack o post a mejorar: míralo en «Contenido».
+            </p>
+          ) : null}
           {entregas.some((e) => e.feedback_tipo === "mejorar") ? (
             <p className="mt-3 text-sm font-semibold text-amber-200">
               Tienes {entregas.filter((e) => e.feedback_tipo === "mejorar").length} reel{entregas.filter((e) => e.feedback_tipo === "mejorar").length === 1 ? "" : "s"} con comentarios del equipo: míralos en «Subidos».
             </p>
           ) : null}
+        </section>
+      ) : null}
+
+      {telegram.vinculado ? (
+        <p className="rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.07] px-4 py-3 text-sm text-emerald-200">🔔 Avisos de Telegram activados: te escribiremos con lo que te falte y los comentarios del equipo.</p>
+      ) : telegram.url ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="min-w-0">
+            <p className="font-semibold text-white">🔔 Recibe avisos en tu Telegram</p>
+            <p className="text-sm text-white/50">Te diremos lo que te falta por hacer y lo que opine el equipo de tus vídeos, sin tener que entrar aquí.</p>
+          </div>
+          <a href={telegram.url} target="_blank" rel="noreferrer" className="btn-primary shrink-0 px-4 py-2.5 text-sm">
+            Activar avisos en Telegram
+          </a>
         </section>
       ) : null}
 
