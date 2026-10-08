@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GlassCard } from "@/components/GlassCard";
 import { formatDate } from "@/lib/utils";
 import { TIPOS_EDICION, nombreTipo } from "@/lib/tiposEdicion";
@@ -31,7 +31,10 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   const [cuenta, setCuenta] = useState("todas");
   const [categoria, setCategoria] = useState("todas");
   const [orden, setOrden] = useState<"score" | "vistas" | "likes" | "comentarios" | "compartidos" | "reciente">("score");
-  const [enviando, setEnviando] = useState<ReferenciaVideo | null>(null);
+  const [enviando, setEnviando] = useState<ReferenciaVideo[] | null>(null); // videos que se van a asignar (uno o varios)
+  const [seleccion, setSeleccion] = useState<string[]>([]); // videos marcados desde fuera para asignarlos de golpe
+  const [asignados, setAsignados] = useState<Record<string, Array<{ modelo_id: string; estado: string }>>>({});
+  const [progreso, setProgreso] = useState("");
   const [elegidas, setElegidas] = useState<string[]>([]);
   const [nota, setNota] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -65,6 +68,31 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   }, [videos, vista, dias, cuenta, categoria, orden]);
 
   const conteo = (x: Vista) => videos.filter((v) => estadoDe(v) === x).length;
+  const nombreModelo = useMemo(() => new Map(modelos.map((m) => [m.id, m.nombre])), [modelos]);
+
+  // A quien ya esta asignado cada video aprobado que se ve ahora (para poder anadirlo a mas modelos)
+  const idsAprobadosVisibles = vista === "aprobado" ? visibles.slice(0, 300).map((v) => v.id).join(",") : "";
+  const cargarAsignados = useCallback(async (ids: string) => {
+    if (!ids) return;
+    try {
+      const r = await fetch("/api/referencias/videos/asignados", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: ids.split(",") }) });
+      if (!r.ok) return;
+      const nuevo = (await r.json()) as Record<string, Array<{ modelo_id: string; estado: string }>>;
+      setAsignados((p) => ({ ...p, ...nuevo }));
+    } catch {
+      /* sin esto solo se pierde la etiqueta de a quien esta asignado */
+    }
+  }, []);
+  useEffect(() => {
+    void cargarAsignados(idsAprobadosVisibles);
+  }, [idsAprobadosVisibles, cargarAsignados]);
+
+  const seleccionables = visibles.filter((v) => tipoDe(v) && (tipoDe(v) !== 4 || v.video_url));
+  const alternarSeleccion = (id: string) => setSeleccion((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const cambiarVista = (x: Vista) => {
+    setVista(x);
+    setSeleccion([]);
+  };
 
   function parchear(id: string, cambios: Partial<ReferenciaVideo>) {
     setVideos((prev) => prev.map((v) => (v.id === id ? { ...v, ...cambios } : v)));
@@ -90,32 +118,52 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
     });
   }
 
-  function abrirEnvio(v: ReferenciaVideo) {
-    setEnviando(v);
+  function abrirEnvio(lista: ReferenciaVideo[]) {
+    setEnviando(lista);
     setElegidas([]);
     setNota("");
     setMsg(null);
+    setProgreso("");
   }
 
+  // Asigna los videos elegidos a las modelos elegidas, en tandas pequenas (cada video con el tipo que ya tiene)
   async function aprobar() {
-    if (!enviando) return;
-    const tipo = tipoDe(enviando);
-    if (!tipo) return;
+    if (!enviando?.length) return;
     setCargando(true);
     setMsg(null);
+    const lista = enviando;
+    let videosOk = 0;
+    let encargos = 0;
+    let yaTenian = 0;
+    const fallos: string[] = [];
     try {
-      const res = await fetch(`/api/referencias/videos/${enviando.id}/asignar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelo_ids: elegidas, tipo, instrucciones: nota }),
-      });
-      const j = (await res.json().catch(() => ({}))) as { error?: string; confirmado_at?: string };
-      if (!res.ok) throw new Error(j.error ?? "No se pudo enviar");
-      parchear(enviando.id, { estado_triaje: "confirmado", confirmado_at: j.confirmado_at ?? new Date().toISOString() });
+      for (let i = 0; i < lista.length; i += 10) {
+        const tanda = lista.slice(i, i + 10);
+        setProgreso(lista.length > 10 ? `Asignando ${Math.min(i + 10, lista.length)}/${lista.length}…` : "");
+        const res = await fetch("/api/referencias/videos/asignar-lote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ video_ids: tanda.map((v) => v.id), modelo_ids: elegidas, instrucciones: nota }),
+        });
+        const j = (await res.json().catch(() => ({}))) as { error?: string; videos?: number; ok_ids?: string[]; encargos?: number; ya_tenian?: number; fallos?: Array<{ error: string }> };
+        if (!res.ok) throw new Error(j.error ?? "No se pudo enviar");
+        videosOk += j.videos ?? 0;
+        encargos += j.encargos ?? 0;
+        yaTenian += j.ya_tenian ?? 0;
+        fallos.push(...(j.fallos ?? []).map((f) => f.error));
+        for (const id of j.ok_ids ?? []) parchear(id, { estado_triaje: "confirmado", confirmado_at: new Date().toISOString() });
+      }
       setEnviando(null);
+      setSeleccion([]);
+      setMsg({
+        ok: fallos.length === 0,
+        texto: `${videosOk} ${videosOk === 1 ? "vídeo asignado" : "vídeos asignados"}: ${encargos} ${encargos === 1 ? "envío nuevo" : "envíos nuevos"}${yaTenian ? ` · ${yaTenian} ya lo tenían y no se han repetido` : ""}.${fallos.length ? ` ${fallos.length} con error: ${[...new Set(fallos)].join("; ")}` : ""}`,
+      });
+      await cargarAsignados(lista.map((v) => v.id).join(","));
     } catch (e) {
       setMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
     } finally {
+      setProgreso("");
       setCargando(false);
     }
   }
@@ -152,7 +200,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
         {(["pendiente", "aprobado", "descartado"] as const).map((x) => (
           <button
             key={x}
-            onClick={() => setVista(x)}
+            onClick={() => cambiarVista(x)}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${vista === x ? "bg-[#8B5CF6] text-white" : "bg-white/[0.05] text-white/50 hover:text-white/80"}`}
           >
             {x === "pendiente" ? "Por revisar" : x === "aprobado" ? "Aprobados" : "Descartados"} ({conteo(x)})
@@ -192,7 +240,18 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
           </select>
         </div>
       </div>
-      {msg ? <p className={`rounded-xl border px-3 py-2 text-xs ${msg.ok ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-red-500/25 bg-red-500/10 text-red-300"}`}>{msg.texto}</p> : null}
+      {vista !== "descartado" && seleccionables.length ? (
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <button
+            onClick={() => setSeleccion(seleccion.length >= seleccionables.length ? [] : seleccionables.map((v) => v.id))}
+            className="font-semibold text-[#A78BFA] hover:underline"
+          >
+            {seleccion.length >= seleccionables.length ? "Quitar selección" : `Seleccionar todos los visibles (${seleccionables.length})`}
+          </button>
+          <span className="text-white/35">Marca los vídeos con la casilla y asígnalos de golpe a varias modelos.</span>
+        </div>
+      ) : null}
+      {msg && !enviando ? <p className={`rounded-xl border px-3 py-2 text-xs ${msg.ok ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-red-500/25 bg-red-500/10 text-red-300"}`}>{msg.texto}</p> : null}
 
       {visibles.length === 0 ? (
         <div className="grid min-h-[40vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 text-center text-sm text-white/35">
@@ -207,7 +266,17 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
             const src = urlVideo(v.video_url);
             const tipo = tipoDe(v);
             return (
-              <article key={v.id} className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3">
+              <article key={v.id} className={`relative flex flex-col gap-3 rounded-2xl border p-3 ${seleccion.includes(v.id) ? "border-emerald-500/50 bg-emerald-500/[0.06]" : "border-white/[0.08] bg-white/[0.03]"}`}>
+                {vista !== "descartado" && tipo && (tipo !== 4 || v.video_url) ? (
+                  <button
+                    type="button"
+                    onClick={() => alternarSeleccion(v.id)}
+                    aria-label={seleccion.includes(v.id) ? "Quitar de la selección" : "Seleccionar para asignar"}
+                    className={`absolute left-4 top-4 z-10 grid h-7 w-7 place-items-center rounded-lg border text-sm font-bold shadow-lg backdrop-blur ${seleccion.includes(v.id) ? "border-emerald-400 bg-emerald-500 text-white" : "border-white/30 bg-black/60 text-transparent hover:text-white/60"}`}
+                  >
+                    ✓
+                  </button>
+                ) : null}
                 <div className="mx-auto w-full max-w-[240px] overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
                   {src ? (
                     <video src={src} poster={v.thumbnail_url ?? undefined} controls playsInline preload="none" className="aspect-[9/16] w-full object-contain" />
@@ -277,7 +346,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                         </button>
                       ) : null}
                       <button
-                        onClick={() => abrirEnvio(v)}
+                        onClick={() => abrirEnvio([v])}
                         disabled={!tipo}
                         title={tipo ? undefined : "Etiqueta el tipo primero"}
                         className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-40"
@@ -293,11 +362,29 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                     </div>
                   </>
                 ) : (
-                  <div className="mt-auto flex items-center justify-between">
-                    <span className="badge">{tipo ? `Tipo ${tipo} · ${nombreTipo(tipo)}` : "Sin tipo"}</span>
-                    <button onClick={() => guardar(v, { estado_triaje: "pendiente" })} className="text-xs text-white/40 hover:text-white">
-                      Devolver a revisar
-                    </button>
+                  <div className="mt-auto space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="badge">{tipo ? `Tipo ${tipo} · ${nombreTipo(tipo)}` : "Sin tipo"}</span>
+                      <button onClick={() => guardar(v, { estado_triaje: "pendiente" })} className="text-xs text-white/40 hover:text-white">
+                        {vista === "aprobado" ? "Devolver a revisar" : "Recuperar"}
+                      </button>
+                    </div>
+                    {vista === "aprobado" ? (
+                      <>
+                        <p className="text-[11px] leading-relaxed text-white/45">
+                          {asignados[v.id]?.length
+                            ? `Asignado a: ${asignados[v.id].map((a) => `${nombreModelo.get(a.modelo_id) ?? "—"}${a.estado === "entregado" ? " ✓" : ""}`).join(", ")}`
+                            : "Sin asignar a ninguna modelo todavía"}
+                        </p>
+                        <button
+                          onClick={() => abrirEnvio([v])}
+                          disabled={!tipo || (tipo === 4 && !v.video_url)}
+                          className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
+                        >
+                          ＋ Asignar a más modelos
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 )}
               </article>
@@ -306,28 +393,57 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
         </div>
       )}
 
+      {seleccion.length && !enviando ? (
+        <div className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-[min(92vw,34rem)] items-center justify-between gap-3 rounded-2xl border border-emerald-500/40 bg-[#14101f]/95 px-4 py-3 shadow-2xl backdrop-blur">
+          <p className="text-sm font-semibold text-white">{seleccion.length} {seleccion.length === 1 ? "vídeo seleccionado" : "vídeos seleccionados"}</p>
+          <div className="flex gap-2">
+            <button onClick={() => setSeleccion([])} className="btn-secondary px-3 py-2 text-sm">
+              Quitar
+            </button>
+            <button onClick={() => abrirEnvio(videos.filter((v) => seleccion.includes(v.id)))} className="btn-primary px-4 py-2 text-sm">
+              Asignar a modelos
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {enviando ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
           <GlassCard className="w-full max-w-md space-y-4 p-5">
             <div>
-              <h3 className="font-display text-lg font-semibold text-white">Enviar a las modelos</h3>
+              <h3 className="font-display text-lg font-semibold text-white">
+                {enviando.length === 1 ? "Enviar a las modelos" : `Enviar ${enviando.length} vídeos a las modelos`}
+              </h3>
               <p className="text-xs text-white/40">
-                Tipo {tipoDe(enviando)} · {nombreTipo(tipoDe(enviando) ?? 4)}. Les aparecerá en su portal como vídeo pendiente.
+                {enviando.length === 1
+                  ? `Tipo ${tipoDe(enviando[0])} · ${nombreTipo(tipoDe(enviando[0]) ?? 4)}. `
+                  : "Cada vídeo se envía con el tipo de edición que ya tiene. "}
+                Les aparecerá en su portal como vídeo pendiente. A quien ya lo tenga no se le repite.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {modelos.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setElegidas((p) => (p.includes(m.id) ? p.filter((x) => x !== m.id) : [...p, m.id]))}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition ${
-                    elegidas.includes(m.id) ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300" : "border-white/[0.1] bg-white/[0.04] text-white/60 hover:text-white"
-                  }`}
-                >
-                  {elegidas.includes(m.id) ? "✓ " : ""}
-                  {m.nombre}
-                </button>
-              ))}
+              {modelos.map((m) => {
+                const yaLa = enviando.length === 1 && (asignados[enviando[0].id] ?? []).some((a) => a.modelo_id === m.id);
+                return (
+                  <button
+                    key={m.id}
+                    disabled={yaLa}
+                    onClick={() => setElegidas((p) => (p.includes(m.id) ? p.filter((x) => x !== m.id) : [...p, m.id]))}
+                    title={yaLa ? "Ya tiene este vídeo asignado" : undefined}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                      yaLa
+                        ? "cursor-not-allowed border-white/[0.06] bg-white/[0.02] text-white/25 line-through"
+                        : elegidas.includes(m.id)
+                          ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                          : "border-white/[0.1] bg-white/[0.04] text-white/60 hover:text-white"
+                    }`}
+                  >
+                    {elegidas.includes(m.id) ? "✓ " : ""}
+                    {m.nombre}
+                    {yaLa ? " · ya la tiene" : ""}
+                  </button>
+                );
+              })}
               {modelos.length === 0 ? <p className="text-sm text-white/40">No hay modelos activas.</p> : null}
             </div>
             <button
@@ -343,7 +459,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                 Cancelar
               </button>
               <button onClick={aprobar} disabled={cargando || !elegidas.length} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">
-                {cargando ? "Enviando..." : `Aprobar y enviar a ${elegidas.length || ""}`}
+                {cargando ? progreso || "Enviando..." : `Aprobar y enviar a ${elegidas.length || ""}`}
               </button>
             </div>
           </GlassCard>
