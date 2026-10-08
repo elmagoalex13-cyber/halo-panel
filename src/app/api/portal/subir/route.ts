@@ -4,6 +4,7 @@ import { sesionActual } from "@/lib/portalAuth";
 import { keyR2 } from "@/lib/media";
 import { columnasTipo } from "@/lib/tipoVideo";
 import { elegirFrase, registrarUsoFrase } from "@/lib/frases";
+import { encolarTelegram } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,11 @@ export async function POST(req: NextRequest) {
     .eq("activa", true);
   const cuentaId = (cuentas?.find((c) => c.tipo === "principal") ?? cuentas?.[0])?.id ?? null;
 
-  const frase = tipo === 2 ? await elegirFrase(supabase) : null;
+  // Captacion: si la modelo tiene objetivo de videos y la agencia aun no ha aprobado el lote, el video se guarda EN ESPERA (sin editar)
+  const { data: modeloCap } = await supabase.from("modelos").select("nombre, objetivo_videos, captacion_aprobada_at, umbral_avisado_at").eq("id", sesion.modeloId).maybeSingle();
+  const enCaptacion = Boolean(modeloCap?.objetivo_videos) && !modeloCap?.captacion_aprobada_at;
+
+  const frase = tipo === 2 && !enCaptacion ? await elegirFrase(supabase) : null; // en espera no se gasta ninguna frase (se asigna al editarlo)
   const ahora = new Date().toISOString();
   const { data: pieza, error } = await supabase
     .from("library_content")
@@ -80,8 +85,8 @@ export async function POST(req: NextRequest) {
       size_bytes: body.size ?? null,
       titulo: body.filename ?? "Video de la modelo",
       ...columnasTipo(`tipo${tipo}`),
-      estado: "editando",
-      estado_procesamiento: "pendiente",
+      estado: enCaptacion ? "recibido" : "editando",
+      estado_procesamiento: enCaptacion ? null : "pendiente",
       recibido_at: ahora,
       reparto_at: ahora,
       frase_quemada: frase?.frase ?? "",
@@ -96,6 +101,21 @@ export async function POST(req: NextRequest) {
 
   if (frase) await registrarUsoFrase(supabase, frase.id, pieza.id, cuentaId);
   if (body.encargo_id) await supabase.from("encargos").update({ estado: "entregado", updated_at: ahora }).eq("id", body.encargo_id);
+
+  // Avisos para el grupo de Telegram (el editor los agrupa): subida y, al llegar al objetivo, "crea su cuenta de Instagram"
+  await encolarTelegram("subida", sesion.modeloId, { n: 1 });
+  if (enCaptacion && modeloCap && !modeloCap.umbral_avisado_at) {
+    const { count } = await supabase
+      .from("library_content")
+      .select("id", { count: "exact", head: true })
+      .eq("modelo_id", sesion.modeloId)
+      .eq("origen", "upload_manual")
+      .or("tipo.is.null,tipo.neq.5");
+    if ((count ?? 0) >= Number(modeloCap.objetivo_videos)) {
+      const { data: marcado } = await supabase.from("modelos").update({ umbral_avisado_at: ahora }).eq("id", sesion.modeloId).is("umbral_avisado_at", null).select("id");
+      if (marcado?.length) await encolarTelegram("umbral", sesion.modeloId, { subidos: count, objetivo: Number(modeloCap.objetivo_videos) });
+    }
+  }
 
   return NextResponse.json({ ok: true, id: pieza.id });
 }

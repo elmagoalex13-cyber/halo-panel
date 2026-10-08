@@ -3,6 +3,8 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { urlR2 } from "@/lib/media";
 import { LoginForm } from "./LoginForm";
+import { AccesosForm } from "./AccesosForm";
+import { accesosCompletos } from "@/lib/accesosModelo";
 import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
 import { sanearDatos } from "@/lib/onboarding";
 import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
@@ -48,6 +50,9 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
 
   const sesion = await sesionActual(slug);
   if (!sesion || sesion.modeloId !== modelo.id) return <LoginForm slug={slug} nombre={modelo.nombre} />;
+
+  // Accesos de OnlyFans y Skrill: obligatorios antes de usar el portal (se guardan cifrados en el Vault de la agencia)
+  if (!(await accesosCompletos(modelo.id as string))) return <AccesosForm nombre={modelo.nombre} />;
 
   // Contenido de OnlyFans de esta modelo (si las tablas aun no existen, la pestaña no aparece)
   const [ofColRes, ofArcRes] = await Promise.all([

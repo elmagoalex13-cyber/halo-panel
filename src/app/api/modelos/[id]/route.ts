@@ -16,6 +16,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (key in body) payload[key] = body[key];
     }
 
+    // Objetivo de la fase de captacion (videos que debe subir antes de editar); vacio = sin captacion
+    if ("objetivo_videos" in body) {
+      const n = Math.round(Number(body.objetivo_videos));
+      payload.objetivo_videos = body.objetivo_videos === null || body.objetivo_videos === "" || !Number.isFinite(n) || n <= 0 ? null : Math.min(n, 500);
+    }
+
     // Solo el dueño decide que modelos comparte con su socio
     if (alcance.dueno && (body.ambito === "privado" || body.ambito === "compartido")) payload.ambito = body.ambito;
 

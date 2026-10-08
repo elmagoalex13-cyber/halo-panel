@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { borrarDeR2 } from "@/lib/r2";
 import { soloVisibles, type Alcance } from "@/lib/alcance";
@@ -121,6 +122,17 @@ export async function borrarOriginales(ids: string[], alcance: Alcance): Promise
       }
     }),
   ]);
+
+  // Vistas previas (previews/<hash>.jpg|mp4) de los originales borrados: tambien ocupan espacio
+  await Promise.all(
+    aBorrar
+      .filter((k) => !fallos.has(k))
+      .flatMap((k) => {
+        const h = createHash("sha1").update(k).digest("hex").slice(0, 20);
+        return [`previews/${h}.jpg`, `previews/${h}.mp4`];
+      })
+      .map((k) => borrarDeR2(k).catch(() => undefined)),
+  );
 
   // 6) Los grupos que fallaron se desmarcan para poder reintentar
   const idsFallidos: string[] = [];

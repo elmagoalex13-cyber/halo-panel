@@ -6,6 +6,7 @@ import { estadoLabel, formatDate, tipoVideoLabel } from "@/lib/utils";
 import { urlR2, videoBrutoAlternativas, videoEditado } from "@/lib/media";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
+import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
 
 export interface VideoRow {
   id: string;
@@ -387,6 +388,8 @@ export function MesaClient({
   const [modeloFiltro, setModeloFiltro] = useState("todos");
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [publicando, setPublicando] = useState(false);
+  const [borrandoArchivos, setBorrandoArchivos] = useState(false);
+  const [confirmarBorrado, setConfirmarBorrado] = useState<string[] | null>(null);
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [changeLoading, setChangeLoading] = useState(false);
   const [changeProgress, setChangeProgress] = useState(0);
@@ -593,6 +596,44 @@ export function MesaClient({
     }
   }
 
+  // Borra los archivos (video editado, original y vista previa) de piezas aprobadas/publicadas para liberar espacio. No se puede deshacer.
+  async function borrarArchivos(ids: string[]) {
+    if (!ids.length) return;
+    setBorrandoArchivos(true);
+    setActionMessage(null);
+    const borrados = new Set<string>();
+    try {
+      for (let i = 0; i < ids.length; i += 60) {
+        const res = await fetch("/api/aprobacion/borrar-archivos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: ids.slice(i, i + 60) }),
+        });
+        const payload = (await res.json().catch(() => null)) as { error?: string; borrados?: string[] } | null;
+        if (!res.ok) {
+          setActionMessage(payload?.error ?? "No se pudieron borrar los archivos.");
+          break;
+        }
+        for (const id of payload?.borrados ?? []) borrados.add(id);
+      }
+      if (borrados.size) {
+        setRows((previas) => previas.filter((row) => !borrados.has(row.id)));
+        setSeleccion(new Set());
+        setActionMessage(`${borrados.size} vídeo${borrados.size === 1 ? "" : "s"} eliminado${borrados.size === 1 ? "" : "s"}: archivos borrados y espacio liberado.`);
+        router.refresh();
+      }
+    } finally {
+      setBorrandoArchivos(false);
+      setConfirmarBorrado(null);
+    }
+  }
+
+  function pedirBorrado(ids: string[]) {
+    if (ids.length === 1) {
+      if (window.confirm("¿Eliminar este vídeo? Se borran sus archivos (vídeo editado, original y vista previa) y no se puede deshacer.")) void borrarArchivos(ids);
+    } else if (ids.length > 1) setConfirmarBorrado(ids);
+  }
+
   async function generarCaption() {
     if (!selected) return;
     setCaptionLoading(true);
@@ -636,6 +677,16 @@ export function MesaClient({
   }
   return (
     <div className="space-y-4">
+      <ConfirmacionDoble
+        abierto={Boolean(confirmarBorrado)}
+        titulo={`Eliminar ${confirmarBorrado?.length ?? 0} vídeos`}
+        detalle="Se borrarán los archivos de estos vídeos (el vídeo editado, el original y la vista previa) para liberar espacio. Dejarán de aparecer aquí y no se podrán recuperar. Las estadísticas se conservan."
+        nombre="ELIMINAR"
+        etiquetaFinal={`Eliminar ${confirmarBorrado?.length ?? 0} vídeos`}
+        ocupado={borrandoArchivos}
+        onConfirmar={() => void borrarArchivos(confirmarBorrado ?? [])}
+        onCancelar={() => setConfirmarBorrado(null)}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3">
         <div>
           <p className="font-display text-lg font-semibold text-white">Cola de revision</p>
@@ -718,6 +769,14 @@ export function MesaClient({
                 : currentEstado === "aprobado"
                   ? `✓ Marcar ${seleccionVisible.length || ""} como publicados`.replace("  ", " ")
                   : `↺ Volver ${seleccionVisible.length || ""} a aprobados`.replace("  ", " ")}
+            </button>
+            <button
+              type="button"
+              disabled={borrandoArchivos || seleccionVisible.length === 0}
+              onClick={() => pedirBorrado(seleccionVisible.map((row) => row.id))}
+              className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-40"
+            >
+              {borrandoArchivos ? "Eliminando…" : `🗑 Eliminar ${seleccionVisible.length || ""} vídeos`.replace("  ", " ")}
             </button>
           </div>
         ) : null}
@@ -871,6 +930,17 @@ export function MesaClient({
                       className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-40"
                     >
                       ↺ Volver a aprobado
+                    </button>
+                  ) : null}
+                  {puedeMarcar ? (
+                    <button
+                      type="button"
+                      onClick={() => pedirBorrado([row.id])}
+                      disabled={borrandoArchivos}
+                      title="Borra los archivos de este vídeo para liberar espacio"
+                      className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-semibold text-red-300/80 transition hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                    >
+                      🗑 Eliminar
                     </button>
                   ) : null}
                   <button

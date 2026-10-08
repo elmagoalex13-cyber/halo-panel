@@ -22,10 +22,11 @@ export type EstadoSistema = {
   runners: Latido[];
   limpieza: { at: string; borrados: number } | null;
   backup: { at: string; dia: string; tablas: number } | null;
+  telegram: { configurado: boolean; privado?: boolean; at: string; ultimo_envio?: string; error?: string } | null;
 };
 
 export const leerSistema = cache(async (): Promise<EstadoSistema> => {
-  const vacio: EstadoSistema = { tablaLista: false, retencionDias: RETENCION_POR_DEFECTO, retencionActiva: false, runners: [], limpieza: null, backup: null };
+  const vacio: EstadoSistema = { tablaLista: false, retencionDias: RETENCION_POR_DEFECTO, retencionActiva: false, runners: [], limpieza: null, backup: null, telegram: null };
   try {
     const { data, error } = await createAdminClient().from("panel_config").select("key, value, updated_at");
     if (error) return vacio;
@@ -41,6 +42,7 @@ export const leerSistema = cache(async (): Promise<EstadoSistema> => {
       } else if (String(f.key).startsWith("runner_latido:")) e.runners.push(v as unknown as Latido);
       else if (f.key === "limpieza_originales") e.limpieza = v as unknown as EstadoSistema["limpieza"];
       else if (f.key === "backup_db") e.backup = v as unknown as EstadoSistema["backup"];
+      else if (f.key === "telegram_estado") e.telegram = v as unknown as EstadoSistema["telegram"];
     }
     return e;
   } catch {

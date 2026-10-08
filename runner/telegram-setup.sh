@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Configura los avisos de Telegram en el VPS sin que el token pase por ningun chat:
+#   ssh -t root@94.143.143.73 'bash /opt/halo-runner/telegram-setup.sh'
+# Antes: crea el bot con @BotFather (/newbot), crea el grupo y AÑADE el bot al grupo.
+set -e
+cd /opt/halo-runner
+
+read -rsp "Pega el token del bot (no se vera al escribirlo) y pulsa Enter: " TOKEN; echo
+if ! curl -s "https://api.telegram.org/bot$TOKEN/getMe" | grep -q '"ok":true'; then echo "Ese token no es valido."; exit 1; fi
+echo "Token correcto."
+
+echo
+echo "Ahora ESCRIBE un mensaje cualquiera en el grupo (con el bot ya dentro) y pulsa Enter aqui."
+read -r _
+buscar() { # $1 = tipo de chat: group | private
+  curl -s "https://api.telegram.org/bot$TOKEN/getUpdates" | python3 -c '
+import sys, json
+tipo = sys.argv[1]
+vistos = {}
+for u in json.load(sys.stdin).get("result", []):
+    for k in ("message", "my_chat_member", "edited_message", "channel_post"):
+        c = (u.get(k) or {}).get("chat")
+        if not c: continue
+        t = c.get("type")
+        if (tipo == "group" and t in ("group", "supergroup")) or (tipo == "private" and t == "private"):
+            vistos[c["id"]] = c.get("title") or c.get("first_name") or str(c["id"])
+for i, n in vistos.items(): print(f"{i}\t{n}")
+' "$1"
+}
+GRUPOS=$(buscar group)
+if [ -z "$GRUPOS" ]; then echo "No veo ningun grupo. Comprueba que el bot esta dentro del grupo y que has escrito un mensaje, y vuelve a ejecutar."; exit 1; fi
+CHAT=$(echo "$GRUPOS" | head -n1 | cut -f1)
+echo "Grupo elegido: $(echo "$GRUPOS" | head -n1 | cut -f2) ($CHAT)"
+
+echo
+echo "OPCIONAL: para recibir en tu chat PERSONAL los avisos de tus modelos privadas (el grupo NO los recibe):"
+echo "abre el bot en Telegram, pulsa Start, escribele 'hola' y pulsa Enter aqui. (Solo Enter para saltarlo)"
+read -r _
+PRIV=$(buscar private | head -n1 | cut -f1)
+[ -n "$PRIV" ] && echo "Chat personal detectado." || echo "Sin chat personal: las modelos privadas no enviaran avisos."
+
+sed -i '/^TELEGRAM_BOT_TOKEN=/d;/^TELEGRAM_CHAT_ID=/d;/^TELEGRAM_CHAT_ID_PRIVADO=/d' .env
+{
+  echo "TELEGRAM_BOT_TOKEN=$TOKEN"
+  echo "TELEGRAM_CHAT_ID=$CHAT"
+  [ -n "$PRIV" ] && echo "TELEGRAM_CHAT_ID_PRIVADO=$PRIV"
+} >> .env
+pm2 restart halo-runner --update-env >/dev/null
+echo
+echo "Listo. En el panel: Ajustes > Sistema > Avisos por Telegram > 'Enviar mensaje de prueba'."

@@ -3,6 +3,7 @@ import { ModelosClient } from "./ModelosClient";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { alcanceActual, soloVisibles } from "@/lib/alcance";
+import { resumenCaptacion, type ResumenCaptacion } from "@/lib/captacion";
 import type { CuentaInstagram, Modelo } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ async function loadModelos() {
     onboardingByModelo: {} as Record<string, "borrador" | "enviado">,
     esDueno: false,
     papelera: [] as Modelo[],
+    captacion: [] as ResumenCaptacion[],
   };
   if (!canUseSupabase()) return vacio;
 
@@ -53,6 +55,7 @@ async function loadModelos() {
       onboardingByModelo,
       esDueno: alcance.dueno,
       papelera,
+      captacion: await resumenCaptacion(alcance),
     };
   } catch {
     return vacio;
@@ -60,7 +63,7 @@ async function loadModelos() {
 }
 
 export default async function ModelosPage() {
-  const { modelos, cuentas, pipelineByModelo, onboardingByModelo, fotoByModelo, esDueno, papelera } = await loadModelos();
+  const { modelos, cuentas, pipelineByModelo, onboardingByModelo, fotoByModelo, esDueno, papelera, captacion } = await loadModelos();
 
   return (
     <PanelLayout>
@@ -70,7 +73,7 @@ export default async function ModelosPage() {
           <h1 className="mt-2 font-display text-4xl font-semibold text-white">Modelos</h1>
         </div>
       </div>
-      <ModelosClient modelos={modelos} cuentas={cuentas} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} fotoByModelo={fotoByModelo} esDueno={esDueno} papelera={papelera} />
+      <ModelosClient modelos={modelos} cuentas={cuentas} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} fotoByModelo={fotoByModelo} esDueno={esDueno} papelera={papelera} captacion={captacion} />
     </PanelLayout>
   );
 }

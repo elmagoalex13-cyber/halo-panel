@@ -8,6 +8,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { FotoModelo } from "./FotoModelo";
 import { PortalAccesoButton } from "./PortalAccesoButton";
 import type { CuentaInstagram, MetricoolEstado, Modelo, SocialNetwork } from "@/types";
+import type { ResumenCaptacion } from "@/lib/captacion";
 import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
 
 const METRICOOL_DOT: Record<MetricoolEstado, string> = {
@@ -24,7 +25,7 @@ const METRICOOL_TITLE: Record<MetricoolEstado, string> = {
 
 type ModalState = { mode: "create" } | { mode: "edit"; modelo: Modelo } | null;
 
-const emptyForm = { nombre: "", nombre_real: "", email: "", telefono: "", notas: "", porcentaje_comision: 70 };
+const emptyForm = { nombre: "", nombre_real: "", email: "", telefono: "", notas: "", porcentaje_comision: 70, objetivo_videos: "" };
 
 const SOCIAL_LABEL: Record<SocialNetwork, string> = {
   instagram: "Instagram",
@@ -62,7 +63,9 @@ export function ModelosClient({
   fotoByModelo,
   esDueno,
   papelera = [],
+  captacion = [],
 }: {
+  captacion?: ResumenCaptacion[];
   papelera?: Modelo[];
   esDueno: boolean;
   modelos: Modelo[];
@@ -119,6 +122,7 @@ export function ModelosClient({
       telefono: modelo.telefono ?? "",
       notas: modelo.notas ?? "",
       porcentaje_comision: modelo.porcentaje_comision ?? 70,
+      objetivo_videos: modelo.objetivo_videos ? String(modelo.objetivo_videos) : "",
     });
     setModal({ mode: "edit", modelo });
   }
@@ -148,7 +152,7 @@ export function ModelosClient({
           body: JSON.stringify(form),
         });
         if (res.ok) {
-          setModelos((prev) => prev.map((m) => (m.id === modal.modelo.id ? { ...m, ...form } : m)));
+          setModelos((prev) => prev.map((m) => (m.id === modal.modelo.id ? { ...m, ...form, objetivo_videos: Number(form.objetivo_videos) > 0 ? Number(form.objetivo_videos) : null } : m)));
           setModal(null);
         } else {
           setErrorModal(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar");
@@ -200,6 +204,17 @@ export function ModelosClient({
     } finally {
       setBorrandoDef(false);
     }
+  }
+
+  async function aprobarLote(modelo: Modelo, c: ResumenCaptacion) {
+    const completo = c.enEspera >= c.objetivo;
+    const aviso = completo
+      ? `¿Aprobar el lote de ${modelo.nombre}? Sus ${c.enEspera} vídeos pasan a edición y, desde ahora, lo que suba se edita directamente.`
+      : `${modelo.nombre} lleva ${c.enEspera} de ${c.objetivo} vídeos. ¿Aprobar el lote igualmente? Sus ${c.enEspera} vídeos pasan a edición.`;
+    if (!window.confirm(aviso)) return;
+    const res = await fetch(`/api/modelos/${modelo.id}/lote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ forzar: !completo }) });
+    if (res.ok) window.location.reload();
+    else window.alert(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo aprobar el lote");
   }
 
   async function restaurarModelo(modelo: Modelo) {
@@ -424,6 +439,32 @@ export function ModelosClient({
                 </div>
               </div>
 
+              {(() => {
+                const c = captacion.find((x) => x.modelo_id === modelo.id);
+                if (!c) return null;
+                const pct = Math.min(100, Math.round((c.subidos / c.objetivo) * 100));
+                const llegado = c.subidos >= c.objetivo;
+                return (
+                  <div className={`mt-5 rounded-2xl border p-4 ${llegado ? "border-cyan-400/40 bg-cyan-400/[0.07]" : "border-white/10 bg-white/[0.03]"}`}>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold uppercase tracking-wider text-white/55">Captación</span>
+                      <span className={`font-semibold ${llegado ? "text-cyan-200" : "text-white/70"}`}>
+                        {c.subidos}/{c.objetivo} vídeos subidos
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                      <div className={`h-full rounded-full ${llegado ? "bg-cyan-400" : "bg-[#8B5CF6]"}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    {llegado && !c.tieneCuenta ? <p className="mt-2 text-xs font-semibold text-cyan-200">Ya puede empezar: crea su cuenta de Instagram abajo.</p> : null}
+                    {c.enEspera > 0 ? (
+                      <button onClick={() => aprobarLote(modelo, c)} className="btn-primary mt-3 w-full px-3 py-2 text-sm">
+                        {c.enEspera >= c.objetivo ? `Aprobar lote y editar (${c.enEspera} vídeos)` : `Aprobar ya ${c.enEspera} vídeos (aún no llega a ${c.objetivo})`}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })()}
+
               <div className="mt-6 grid grid-cols-2 gap-3">
                 <Metric label="Pipeline" value={pipelineCount.toString()} />
                 <Metric label="Redes" value={cuentasModelo.length.toString()} />
@@ -630,6 +671,19 @@ export function ModelosClient({
                     <option value="compartido">Compartida con mi socio</option>
                     <option value="privado">Solo mía (mi socio no la ve)</option>
                   </select>
+                </Field>
+              ) : null}
+              {modal?.mode === "edit" ? (
+                <Field label="Fase de captación: vídeos mínimos antes de editar (vacío = sin captación)">
+                  <input
+                    type="number"
+                    min={0}
+                    max={500}
+                    value={form.objetivo_videos}
+                    onChange={(e) => setForm({ ...form, objetivo_videos: e.target.value })}
+                    placeholder="Ej.: 30"
+                    className="input-base"
+                  />
                 </Field>
               ) : null}
               <Field label={`Comision agencia: ${form.porcentaje_comision}%`}>

@@ -17,6 +17,8 @@ import { SelectorGrupo } from "./SelectorGrupo";
 import { cargarAgregados, type ClaveAgg, type FilaAgg } from "@/lib/dashboardAgg";
 import { avisosActividad } from "@/lib/actividad";
 import { avisosSistema, leerSistema } from "@/lib/sistema";
+import { avisosCaptacion, resumenCaptacion } from "@/lib/captacion";
+import { modelosSinAccesos } from "@/lib/accesosModelo";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -118,7 +120,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema()]);
+  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo))]);
   const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
@@ -204,6 +206,10 @@ export default async function DashboardPage({
     ...(sesionPanel?.dueno ? avisosSocio : []),
     // Editor de video caido o cola atascada
     ...avisosSistema(sistema),
+    // Captacion: crear la cuenta de Instagram / aprobar el lote de una modelo
+    ...avisosCaptacion(captacion),
+    // Accesos de OnlyFans y Skrill que faltan por dar (obligatorios en el portal)
+    ...(sinAccesos.length ? [{ nivel: "amarillo" as NotifNivel, texto: `Faltan los accesos de OnlyFans y Skrill de: ${sinAccesos.map((m) => m.nombre).join(", ")}`, href: "/modelos" }] : []),
     ...(contenidoBajo.length > 0
       ? [
           {

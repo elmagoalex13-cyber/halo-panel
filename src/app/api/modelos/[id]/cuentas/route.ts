@@ -88,6 +88,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ({ data, error } = await insertar(basicPayload));
     }
     if (error) throw error;
+    // Los videos que la modelo ya subio (en captacion o antes de tener cuenta) pasan a esta cuenta para poder programarse
+    if (data?.id && redSocial === "instagram") {
+      await supabase.from("library_content").update({ cuenta_id: data.id }).eq("modelo_id", id).is("cuenta_id", null);
+    }
     return NextResponse.json({ data });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });

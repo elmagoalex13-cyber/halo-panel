@@ -10,6 +10,7 @@ import { config, faltanVariables } from "./config.mjs";
 import { iniciarTrabajadores } from "./queue.mjs";
 import { latido } from "./salud.mjs";
 import { backupDb } from "./backup_db.mjs";
+import { cicloTelegram } from "./telegram.mjs";
 import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
 import { cicloTrials } from "./trials.mjs";
@@ -33,6 +34,10 @@ iniciarTrabajadores();
 // Latido para el panel (aviso si el editor deja de responder o la cola se atasca)
 setTimeout(() => latido(supabase), 5000);
 setInterval(() => latido(supabase), 60000);
+
+// Avisos de Telegram (cola del panel, agrupados)
+setTimeout(() => cicloTelegram(supabase).catch((e) => console.error("[telegram]", e.message)), 8000);
+setInterval(() => cicloTelegram(supabase).catch((e) => console.error("[telegram]", e.message)), 20000);
 
 // Copia de seguridad nocturna de la base de datos (una vez al dia, a partir de las 03:00 UTC)
 setTimeout(() => backupDb(supabase).catch((e) => console.error("[backup]", e.message)), 60000);

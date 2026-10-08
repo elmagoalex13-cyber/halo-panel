@@ -93,7 +93,8 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
     const supabase = createAdminClient();
     const fotos = await versionesFotos();
     const alcance = await alcanceActual();
-    const primary = await soloVisibles(supabase
+    const consulta = (sinBorrados: boolean) => {
+      const q = supabase
       .from("library_content")
       .select(`
         id, modelo_id, titulo, tipo_video, tipo, estado, recibido_at, publicado_at,
@@ -105,7 +106,11 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       .eq("estado", estado)
       .or("tipo.is.null,tipo.neq.5") // los trial reels automaticos no pasan por la Mesa
       .order("recibido_at", { ascending: false })
-      .limit(300), alcance); // 300 por pestaña (a 20 modelos, 80 se quedaba corto)
+          .limit(300);
+      return soloVisibles(sinBorrados ? q.is("archivos_borrados_at", null) : q, alcance);
+    };
+    let primary = await consulta(true); // sin las piezas cuyos archivos se borraron a mano
+    if (primary.error) primary = await consulta(false); // aun sin el SQL 20261020
 
     const data = primary.data as unknown[] | null;
     const error = primary.error;

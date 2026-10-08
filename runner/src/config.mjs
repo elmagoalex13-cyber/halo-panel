@@ -60,6 +60,9 @@ export const config = {
   scraperFactor: parseFloat(process.env.SCRAPER_FACTOR ?? "1.5"),
   whisperBin: process.env.WHISPER_BIN,
   whisperModel: process.env.WHISPER_MODEL,
+  telegramToken: process.env.TELEGRAM_BOT_TOKEN?.trim() || "",
+  telegramChat: process.env.TELEGRAM_CHAT_ID?.trim() || "", // grupo (agencia + socio): modelos compartidas
+  telegramChatPrivado: process.env.TELEGRAM_CHAT_ID_PRIVADO?.trim() || "", // chat solo del dueño: modelos privadas
   openaiKey: process.env.OPENAI_API_KEY,
   openaiVisionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o-mini",
 };

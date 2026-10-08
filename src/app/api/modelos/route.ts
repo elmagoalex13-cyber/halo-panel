@@ -26,7 +26,10 @@ export async function POST(req: NextRequest) {
     // Por defecto nace COMPARTIDA. Solo el dueño puede crearla privada; lo que mete su socio es siempre compartido
     const alcance = await alcanceActual();
     const ambito = alcance.dueno && body.ambito === "privado" ? "privado" : "compartido";
-    let { data, error } = await supabase.from("modelos").insert({ ...payload, ambito }).select().single();
+    // Las modelos compartidas empiezan en fase de captacion: 30 videos antes de editar y de crearles la cuenta de Instagram
+    const conCaptacion = { ...payload, ambito, objetivo_videos: ambito === "compartido" ? 30 : null };
+    let { data, error } = await supabase.from("modelos").insert(conCaptacion).select().single();
+    if (error && /objetivo_videos/i.test(error.message)) ({ data, error } = await supabase.from("modelos").insert({ ...payload, ambito }).select().single()); // falta el SQL 20261020
     if (error && /ambito/i.test(error.message)) {
       // Falta el SQL 20261013: solo el dueño puede seguir creando modelos (como antes)
       if (!alcance.dueno) return NextResponse.json({ error: "Falta ejecutar el SQL 20261013_modelos_ambito.sql en Supabase." }, { status: 409 });

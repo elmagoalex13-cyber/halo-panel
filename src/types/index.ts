@@ -29,6 +29,8 @@ export type Modelo = {
   telegram_id?: string | null;
   ambito?: "privado" | "compartido"; // privado = solo el dueño; compartido = tambien el socio
   eliminada_at?: string | null; // en la papelera (solo la ve el dueño)
+  objetivo_videos?: number | null; // fase de captacion: videos que debe subir antes de editar (null = sin captacion)
+  captacion_aprobada_at?: string | null;
   eliminada_por?: string | null;
 };
 

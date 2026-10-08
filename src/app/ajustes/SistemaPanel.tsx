@@ -11,6 +11,7 @@ type Estado = {
   runners: Latido[];
   limpieza: { at: string; borrados: number } | null;
   backup: { at: string; dia: string; tablas: number } | null;
+  telegram: { configurado: boolean; privado?: boolean; at: string; ultimo_envio?: string; error?: string } | null;
 };
 
 const hace = (iso: string | null | undefined) => {
@@ -28,6 +29,7 @@ export function SistemaPanel() {
   const [dias, setDias] = useState("60");
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [tgMsg, setTgMsg] = useState<string | null>(null);
 
   async function cargar() {
     try {
@@ -57,6 +59,12 @@ export function SistemaPanel() {
     } finally {
       setGuardando(false);
     }
+  }
+
+  async function probarTelegram() {
+    setTgMsg(null);
+    const r = await fetch("/api/panel/sistema/telegram", { method: "POST" });
+    setTgMsg(r.ok ? "Mensaje de prueba enviado: debería llegar al grupo en unos segundos." : "No se pudo encolar la prueba (¿falta el SQL 20261020?).");
   }
 
   if (!e) return null;
@@ -110,6 +118,19 @@ export function SistemaPanel() {
         <p className="text-xs text-white/40">
           Última limpieza: {e.limpieza ? `${hace(e.limpieza.at)} · ${e.limpieza.borrados} originales borrados` : "aún no se ha ejecutado"}
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35">Avisos por Telegram</p>
+        <p className="text-sm text-white/55">
+          {e.telegram?.configurado
+            ? `Conectado${e.telegram.privado ? " (grupo + chat privado para tus modelos privadas)" : " (grupo)"}. ${e.telegram.ultimo_envio ? `Último aviso ${hace(e.telegram.ultimo_envio)}.` : "Aún no se ha enviado ningún aviso."}${e.telegram.error ? ` Último error: ${e.telegram.error}` : ""}`
+            : "Sin configurar: falta el bot y el grupo de Telegram en el servidor del editor."}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={probarTelegram} disabled={!e.telegram?.configurado} className="btn-secondary px-4 py-1.5 text-sm disabled:opacity-40">Enviar mensaje de prueba</button>
+          {tgMsg ? <span className="text-sm text-white/55">{tgMsg}</span> : null}
+        </div>
       </div>
 
       <div className="space-y-1">
