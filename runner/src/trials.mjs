@@ -141,8 +141,10 @@ const ultimaLectura = new Map(); // cuentaId -> ms
 let corriendo = false;
 
 /** Un ciclo: repone los trial reels de cada cuenta que se quede por debajo del colchon. */
+let pausadoHasta = 0; // si Instagram limita (429) se deja de insistir un buen rato: insistir solo empeora el bloqueo
+
 export async function cicloTrials(supabase) {
-  if (corriendo) return;
+  if (corriendo || Date.now() < pausadoHasta) return;
   corriendo = true;
   try {
     const { data: cuentas } = await supabase
@@ -160,6 +162,11 @@ export async function cicloTrials(supabase) {
         await generarTrialsCuenta(supabase, cuenta, reels, faltan);
       } catch (err) {
         console.error(`[trials] @${cuenta.username}: ${err.message}`);
+        if (/429|limita las peticiones/i.test(String(err.message))) {
+          pausadoHasta = Date.now() + 6 * 3600000;
+          console.error("[trials] Instagram limita las peticiones: pausa de 6 h");
+          break;
+        }
       }
     }
   } catch (err) {

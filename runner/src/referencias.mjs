@@ -10,14 +10,28 @@ import { descargarUrl } from "./descarga.mjs";
 import { publicUrl, uploadToR2 } from "./r2.mjs";
 import { infoDeUrl } from "./instagram.mjs";
 
-const intentos = new Map(); // id -> { n, ultimo }
+const intentos = new Map(); // id -> { n, ultimo }  (se guarda en panel_config para que sobreviva a los reinicios)
 const MAX_INTENTOS = 5;
 let corriendo = false;
+let cargados = false;
+const CLAVE_FALLOS = "referencias_fallos";
+
+async function cargarFallos(supabase) {
+  if (cargados) return;
+  cargados = true;
+  const { data } = await supabase.from("panel_config").select("value").eq("key", CLAVE_FALLOS).maybeSingle();
+  for (const [id, v] of Object.entries(data?.value ?? {})) intentos.set(id, v);
+}
+
+async function guardarFallos(supabase) {
+  await supabase.from("panel_config").upsert({ key: CLAVE_FALLOS, value: Object.fromEntries(intentos), updated_at: new Date().toISOString() }).then(() => undefined, () => undefined);
+}
 
 export async function descargarReferenciasPendientes(supabase) {
   if (corriendo) return;
   corriendo = true;
   try {
+    await cargarFallos(supabase);
     const { data } = await supabase
       .from("referencias")
       .select("id, url_original, thumbnail_url, descripcion")
@@ -29,6 +43,7 @@ export async function descargarReferenciasPendientes(supabase) {
       const previo = intentos.get(ref.id) ?? { n: 0, ultimo: 0 };
       if (previo.n >= MAX_INTENTOS || Date.now() - previo.ultimo < 5 * 60000) continue;
       intentos.set(ref.id, { n: previo.n + 1, ultimo: Date.now() });
+      await guardarFallos(supabase);
       const dir = path.join(config.tmpDir, "referencias");
       const mp4 = path.join(dir, `${ref.id}.mp4`);
       try {
@@ -53,9 +68,11 @@ export async function descargarReferenciasPendientes(supabase) {
           .from("referencias")
           .update({ url_r2: key, thumbnail_url: thumb, descripcion: ref.descripcion ?? info.descripcion ?? null, updated_at: new Date().toISOString() })
           .eq("id", ref.id);
+        intentos.delete(ref.id);
+        await guardarFallos(supabase);
         console.log(`[referencias] descargada ${ref.url_original} -> ${key}`);
       } catch (err) {
-        console.error(`[referencias] ${ref.url_original}: ${err.message}`);
+        console.error(`[referencias] ${ref.url_original}: ${err.message}${previo.n + 1 >= MAX_INTENTOS ? " (ya son " + MAX_INTENTOS + " fallos: no se vuelve a intentar)" : ""}`);
       } finally {
         await rm(mp4, { force: true });
       }
