@@ -7,7 +7,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { config, faltanVariables } from "./config.mjs";
-import { iniciarTrabajadores } from "./queue.mjs";
+import { iniciarTrabajadores, liberarActivas } from "./queue.mjs";
 import { latido } from "./salud.mjs";
 import { backupDb } from "./backup_db.mjs";
 import { cicloTelegram } from "./telegram.mjs";
@@ -28,6 +28,16 @@ const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { 
 
 const pieceTimeoutMinutes = Number.isFinite(config.pieceTimeoutMs) ? Math.round(config.pieceTimeoutMs / 60000) : 18;
 console.log(`HALO Runner v2 iniciado. Cola cada ${config.pollMs / 1000}s, max ${config.maxPiezas} piezas por vuelta, concurrencia ${config.runnerConcurrency}, ffmpeg ${config.ffmpegPreset}/crf${config.ffmpegCrf}/threads${config.ffmpegThreads}, timeout pieza ${pieceTimeoutMinutes}m`);
+// Al apagar o reiniciar (pm2), el video que se estaba editando vuelve a la cola al instante
+for (const senal of ["SIGINT", "SIGTERM"]) {
+  process.on(senal, () => {
+    liberarActivas()
+      .catch(() => undefined)
+      .finally(() => process.exit(0));
+    setTimeout(() => process.exit(0), 1200).unref();
+  });
+}
+
 // Trabajadores continuos (sin esperar a que acabe una "vuelta" para coger la siguiente pieza)
 iniciarTrabajadores();
 

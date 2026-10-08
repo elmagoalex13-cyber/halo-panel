@@ -50,7 +50,18 @@ function withTimeout(promise, ms, label) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+// Piezas que este proceso esta editando ahora: si el editor se reinicia, se devuelven a la cola al momento (sin esperar a que se den por atascadas)
+const activas = new Set();
+
+export async function liberarActivas() {
+  if (!activas.size) return;
+  await supabase.from("library_content").update({ estado_procesamiento: "pendiente" }).in("id", [...activas]).eq("estado_procesamiento", "procesando");
+  console.log(`[runner] ${activas.size} pieza(s) devuelta(s) a la cola antes de apagar`);
+  activas.clear();
+}
+
 export async function procesarPieza(pieza) {
+  activas.add(pieza.id);
   const tipo = tipoNumero(pieza);
   // Mientras se edita, se renueva updated_at cada minuto: asi nunca se la da por atascada (ni la coge otra maquina) aunque tarde
   const latido = setInterval(() => {
@@ -103,6 +114,7 @@ export async function procesarPieza(pieza) {
     return { ok: false, id: pieza.id, error: err.message };
   } finally {
     clearInterval(latido);
+    activas.delete(pieza.id);
   }
 }
 
