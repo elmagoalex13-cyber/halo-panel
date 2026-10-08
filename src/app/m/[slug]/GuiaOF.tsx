@@ -79,7 +79,7 @@ export function GuiaOF({ packs, posts, referencias }: { packs: string; posts: st
         <span className="font-semibold text-white">exactamente como está escrita</span>: la duración de los vídeos y la cantidad de fotos y vídeos de cada fase tienen que ser las que se piden, sin cambiar nada.
       </p>
 
-      <Bloque titulo="🎬 Guía de scripts" abierto>
+      <Bloque titulo="🎬 Guía de scripts">
         <h3 className="font-display text-xl font-semibold text-white">{g.titulo}</h3>
 
         <div className="space-y-2">
