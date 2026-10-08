@@ -48,11 +48,12 @@ export function modeloDeCodigo(codigo) {
 
 async function infoBot(sb) {
   if (Date.now() - ultimaInfoBot < 12 * 3600000) return;
-  ultimaInfoBot = Date.now();
   try {
     const me = await api("getMe");
+    ultimaInfoBot = Date.now();
     await guardar(sb, "telegram_bot", { username: me.username });
   } catch (e) {
+    ultimaInfoBot = Date.now() - 12 * 3600000 + 5 * 60000; // si falla, se reintenta en 5 minutos (no en 12 horas)
     console.error("[telegram-modelos] getMe:", e.message);
   }
 }
