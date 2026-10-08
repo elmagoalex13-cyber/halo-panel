@@ -8,10 +8,9 @@ import { createAdminClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 const BUCKET = "portal-uploads";
-const SUPABASE_MAX_BYTES = 50 * 1024 * 1024;
 const R2_PART_SIZE = 16 * 1024 * 1024;
 
-// Devuelve una URL firmada para que el movil suba el video directo a Supabase Storage.
+// Devuelve las URLs firmadas para que el movil suba el video directo a R2 (por partes).
 export async function POST(req: NextRequest) {
   const sesion = await sesionActual();
   if (!sesion) return NextResponse.json({ error: "Sesion caducada" }, { status: 401 });
@@ -20,7 +19,10 @@ export async function POST(req: NextRequest) {
   const tipo = contentType && contentType.startsWith("video/") ? contentType : "video/mp4";
   const ext = (filename?.split(".").pop() ?? "mp4").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "mp4";
 
-  if (size && size > SUPABASE_MAX_BYTES) {
+  // TODAS las subidas van a R2 (barato y sin limite de tamaño ni de descargas). Supabase Storage solo queda como último recurso
+  // si R2 no estuviera configurado o no se supiera el tamaño del archivo.
+  const r2Listo = Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+  if (r2Listo && size && size > 0) {
     const bucket = process.env.R2_BUCKET_NAME ?? "halo-videos";
     const key = `bruto/${sesion.modeloId}/${randomUUID()}.${ext}`;
     const client = r2Client();
