@@ -301,7 +301,7 @@ export function PortalClient({
   const pestanas: Array<{ id: Pestana; label: string; n: number | null }> = [
     { id: "grabar", label: "Por grabar", n: pendientes.length },
     { id: "subir", label: "Subir vídeos", n: null },
-    { id: "guia", label: "Guía", n: null },
+    { id: "guia", label: "Guía OnlyFans", n: null },
     { id: "subidos", label: "Subidos", n: entregas.length },
     ...(contenidoOF ? [{ id: "contenido" as Pestana, label: "Contenido", n: contenidoOF.colecciones.filter((c) => c.estado === "en_curso").length || null }] : []),
   ];
@@ -324,37 +324,53 @@ export function PortalClient({
           <p className="mt-1 text-sm leading-relaxed text-white/60">
             {captacion.progreso.cumplido
               ? "¡Ya cumples todo lo que necesitamos! Lo estamos revisando y pronto te contamos los siguientes pasos."
-              : "Necesitamos esto de ti antes de crearte la cuenta de Instagram. Mira la pestaña «Guía» para hacerlo exactamente como se indica."}
+              : "Antes de crearte la cuenta de Instagram necesitamos estas dos cosas de ti:"}
           </p>
-          <div className="mt-3 space-y-3">
-            {(
-              [
-                ["Reels", captacion.progreso.reels, null],
-                ["Scripts completos y aprobados", captacion.progreso.scripts, `${captacion.progreso.scriptsEntregados} entregados`],
-                ["Packs de fotos", captacion.progreso.packs, null],
-                ["Posts de OnlyFans", captacion.progreso.posts, null],
-              ] as const
-            )
-              .filter(([, m]) => m.obj !== null)
-              .map(([nombre, m, extra]) => {
-                const obj = m.obj as number;
-                const hecho = m.n >= obj;
-                return (
-                  <div key={nombre}>
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="font-semibold text-white">{hecho ? "✅ " : ""}{nombre}</span>
-                      <span className={hecho ? "font-semibold text-emerald-300" : "text-white/70"}>
-                        {Math.min(m.n, obj)}/{obj}
-                        {extra && !hecho ? <span className="ml-2 text-xs text-white/40">({extra})</span> : null}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10">
-                      <div className={`h-full rounded-full transition-all ${hecho ? "bg-emerald-400" : "bg-[#8B5CF6]"}`} style={{ width: `${Math.min(100, Math.round((m.n / obj) * 100))}%` }} />
-                    </div>
+
+          {(() => {
+            const p = captacion.progreso;
+            const Barra = ({ nombre, n, obj, extra }: { nombre: string; n: number; obj: number; extra?: string | null }) => {
+              const hecho = n >= obj;
+              return (
+                <div>
+                  <div className="flex items-center justify-between gap-2 text-sm">
+                    <span className="font-semibold text-white">{hecho ? "✅ " : ""}{nombre}</span>
+                    <span className={hecho ? "font-semibold text-emerald-300" : "text-white/70"}>
+                      {Math.min(n, obj)}/{obj}
+                      {extra && !hecho ? <span className="ml-2 text-xs text-white/40">({extra})</span> : null}
+                    </span>
                   </div>
-                );
-              })}
-          </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10">
+                    <div className={`h-full rounded-full transition-all ${hecho ? "bg-emerald-400" : "bg-[#8B5CF6]"}`} style={{ width: `${Math.min(100, Math.round((n / obj) * 100))}%` }} />
+                  </div>
+                </div>
+              );
+            };
+            const hayOF = p.scripts.obj !== null || p.packs.obj !== null || p.posts.obj !== null;
+            return (
+              <div className="mt-3 space-y-4">
+                {p.reels.obj !== null ? (
+                  <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                    <p className="text-sm font-semibold text-[#C4B5FD]">🎬 1. Reels para tu Instagram</p>
+                    <Barra nombre="Reels subidos" n={p.reels.n} obj={p.reels.obj} />
+                    <p className="text-xs text-white/45">Grábalos y súbelos en «Subir vídeos». Los revisamos y te decimos si vas bien.</p>
+                  </div>
+                ) : null}
+                {hayOF ? (
+                  <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                    <p className="text-sm font-semibold text-[#C4B5FD]">
+                      📦 2. Contenido de OnlyFans: mínimo {p.scripts.obj ?? 0} scripts completos, {p.packs.obj ?? 0} packs de fotos y {p.posts.obj ?? 0} posts
+                    </p>
+                    {p.scripts.obj !== null ? <Barra nombre="Scripts completos y aprobados" n={p.scripts.n} obj={p.scripts.obj} extra={`${p.scriptsEntregados} entregados`} /> : null}
+                    {p.packs.obj !== null ? <Barra nombre="Packs de fotos" n={p.packs.n} obj={p.packs.obj} /> : null}
+                    {p.posts.obj !== null ? <Barra nombre="Posts de OnlyFans" n={p.posts.n} obj={p.posts.obj} /> : null}
+                    <p className="text-xs text-white/45">Mira la pestaña «Guía OnlyFans»: explica cómo hacerlos y tienes que seguirla exactamente. Se suben en «Contenido».</p>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })()}
+
           {(contenidoOF?.colecciones ?? []).some((c) => c.revision === "mejorar") ? (
             <p className="mt-3 text-sm font-semibold text-amber-200">
               Tienes {(contenidoOF?.colecciones ?? []).filter((c) => c.revision === "mejorar").length} script, pack o post a mejorar: míralo en «Contenido».

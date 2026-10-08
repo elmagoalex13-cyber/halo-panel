@@ -159,22 +159,25 @@ async function pendientesDe(sb, m) {
     cuenta(sb.from("cuentas_instagram").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("activa", true)),
     cuenta(sb.from("encargos").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).not("estado", "in", "(entregado,cancelado)")),
   ]);
-  const metas = [];
+  // Dos bloques bien separados: los REELS (para su Instagram) y el contenido de ONLYFANS (scripts, packs y posts, que sigue la guia)
+  const reelsFalta = [];
+  const ofFalta = [];
   if (m.objetivo_videos && cuentas === 0) {
-    const defs = [
-      ["Reels", reels, m.objetivo_videos],
-      ["Scripts completos y aprobados", scriptsOk ?? scriptsEnt, m.objetivo_scripts],
-      ["Packs de fotos", packs, m.objetivo_packs],
-      ["Posts de OnlyFans", posts, m.objetivo_posts],
+    if (reels < m.objetivo_videos) reelsFalta.push(`• Reels: ${reels}/${m.objetivo_videos}`);
+    const objs = [
+      ["Scripts completos (aprobados)", scriptsOk ?? scriptsEnt, m.objetivo_scripts ?? 4],
+      ["Packs de fotos", packs, m.objetivo_packs ?? 5],
+      ["Posts de OnlyFans", posts, m.objetivo_posts ?? 30],
     ];
-    for (const [nombre, n, obj] of defs) if (obj && n < obj) metas.push(`• ${nombre}: ${n}/${obj}`);
+    for (const [nombre, n, obj] of objs) if (n < obj) ofFalta.push(`• ${nombre}: ${n}/${obj} (mínimo)`);
   }
+  const metas = { reelsFalta, ofFalta };
   return { metas, encargos };
 }
 
-export async function recordatorios(sb) {
+export async function recordatorios(sb, { forzar = false, soloMostrar = false } = {}) {
   const h = horaMadrid();
-  if (h < 10 || h >= 20 || Date.now() - ultimoRecordatorios < 30 * 60000) return;
+  if (!forzar && (h < 10 || h >= 20 || Date.now() - ultimoRecordatorios < 30 * 60000)) return;
   ultimoRecordatorios = Date.now();
 
   let r = await sb.from("modelos").select("id, nombre, telegram_id, portal_token, objetivo_videos, objetivo_scripts, objetivo_packs, objetivo_posts").not("telegram_id", "is", null).eq("activa", true).is("eliminada_at", null);
@@ -182,12 +185,18 @@ export async function recordatorios(sb) {
   for (const m of r.data ?? []) {
     try {
       const previo = await leer(sb, `recordatorio:${m.id}`);
-      if (previo?.at && Date.now() - new Date(previo.at).getTime() < CADA_RECORDATORIO_MS) continue;
+      if (!forzar && previo?.at && Date.now() - new Date(previo.at).getTime() < CADA_RECORDATORIO_MS) continue;
       const { metas, encargos } = await pendientesDe(sb, m);
-      if (!metas.length && !encargos) continue;
+      if (!metas.reelsFalta.length && !metas.ofFalta.length && !encargos) continue;
       const lineas = [];
-      if (metas.length) lineas.push("Esto te falta para empezar a trabajar con nosotros:", ...metas, "Hazlo exactamente como se indica en la pestaña «Guía» de tu portal.");
-      if (encargos) lineas.push(`${metas.length ? "\n" : ""}🎬 Tienes ${encargos} ${encargos === 1 ? "vídeo" : "vídeos"} por grabar.`);
+      if (metas.reelsFalta.length || metas.ofFalta.length) lineas.push("Esto te falta para empezar a trabajar con nosotros:");
+      if (metas.reelsFalta.length) lineas.push("", "🎬 <b>Reels para tu Instagram</b>", ...metas.reelsFalta, "Súbelos en la pestaña «Subir vídeos».");
+      if (metas.ofFalta.length) lineas.push("", "📦 <b>Contenido de OnlyFans</b>", ...metas.ofFalta, "Para esto, sigue la pestaña «Guía OnlyFans» de tu portal y hazlo exactamente como se indica (la guía es solo de OnlyFans, no de los reels).");
+      if (encargos) lineas.push("", `🎬 Tienes ${encargos} ${encargos === 1 ? "vídeo" : "vídeos"} por grabar.`);
+      if (soloMostrar) {
+        console.log(`📋 Hola ${m.nombre}\n${lineas.join("\n")}${enlacePortal(m)}`);
+        continue;
+      }
       await enviar(m.telegram_id, `📋 <b>Hola ${esc(m.nombre)}</b>\n${lineas.join("\n")}${enlacePortal(m)}`);
       await guardar(sb, `recordatorio:${m.id}`, { at: new Date().toISOString() });
     } catch (e) {

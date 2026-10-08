@@ -33,6 +33,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const e = errorDb(error, "No se pudo guardar la modelo");
       return NextResponse.json({ error: e.mensaje }, { status: e.estado });
     }
+    // Al poner objetivo de reels, los demas minimos (si no estaban) quedan en lo habitual: 4 scripts, 5 packs y 30 posts
+    if (payload.objetivo_videos) {
+      await supabase.from("modelos").update({ objetivo_scripts: 4 }).eq("id", id).is("objetivo_scripts", null);
+      await supabase.from("modelos").update({ objetivo_packs: 5 }).eq("id", id).is("objetivo_packs", null);
+      await supabase.from("modelos").update({ objetivo_posts: 30 }).eq("id", id).is("objetivo_posts", null);
+    }
     return NextResponse.json({ data });
   } catch (error) {
     const e = errorDb(error, "Error interno");

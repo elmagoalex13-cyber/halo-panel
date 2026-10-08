@@ -75,7 +75,8 @@ export function GuiaOF({ packs, posts, referencias }: { packs: string; posts: st
   return (
     <div className="space-y-4">
       <p className="rounded-2xl border border-[#8B5CF6]/30 bg-[#8B5CF6]/10 px-4 py-3 text-sm leading-relaxed text-white/75">
-        Sigue estas indicaciones <span className="font-semibold text-white">exactamente como están escritas</span>: la duración de los vídeos y la cantidad de fotos y vídeos de cada fase tienen que ser las que se piden, sin cambiar nada.
+        <span className="font-semibold text-white">Esta guía es solo para el contenido de OnlyFans</span> (scripts, packs de fotos y posts). Los reels de tu Instagram no siguen estas indicaciones. Síguela{" "}
+        <span className="font-semibold text-white">exactamente como está escrita</span>: la duración de los vídeos y la cantidad de fotos y vídeos de cada fase tienen que ser las que se piden, sin cambiar nada.
       </p>
 
       <Bloque titulo="🎬 Guía de scripts" abierto>
