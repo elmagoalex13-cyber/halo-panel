@@ -29,6 +29,9 @@ export async function POST(req: NextRequest) {
     if (!cuenta) return NextResponse.json({ error: "Cuenta de referencia no encontrada" }, { status: 404 });
     const categoria = cuenta.categoria ?? "general";
     const esFrases = categoria === "frases";
+    // Si dos personas analizan la misma cuenta a la vez, el reel que ya esta guardado no se duplica
+    const { data: yaEsta } = await supabase.from("referencias_videos").select("id").eq("cuenta_id", body.cuenta_id).eq("video_url", body.video_key).limit(1);
+    if (yaEsta?.length) return NextResponse.json({ ok: true, duplicado: true });
     const { error } = await supabase.from("referencias_videos").insert({
       cuenta_id: body.cuenta_id,
       video_url: body.video_key,
