@@ -118,7 +118,9 @@ export function OnboardingForm({
   estadoInicial,
   onCerrar,
   onCambio,
+  accesos,
 }: {
+  accesos?: { modo: "of" | "completo"; dado: boolean };
   slug: string;
   datosIniciales: DatosOnboarding;
   estadoInicial: Estado;
@@ -132,6 +134,12 @@ export function OnboardingForm({
   const [errores, setErrores] = useState<ErroresOnboarding>({});
   const [enviando, setEnviando] = useState(false);
   const [mensajeEnvio, setMensajeEnvio] = useState<{ ok: boolean; texto: string } | null>(null);
+  // Acceso de OnlyFans (modelos privadas): va cifrado a la agencia por su propia via, nunca dentro de las respuestas del perfil
+  const [accDado, setAccDado] = useState(accesos?.dado ?? false);
+  const [accCambiando, setAccCambiando] = useState(false);
+  const [acc, setAcc] = useState({ of_correo: "", of_password: "", sk_correo: "", sk_password_correo: "", sk_password: "" });
+  const [accVer, setAccVer] = useState(false);
+  const accCompleto = accesos?.modo === "completo";
   const sucio = useRef(false);
   const ultimo = useRef(datos);
   ultimo.current = datos;
@@ -246,6 +254,35 @@ export function OnboardingForm({
   async function enviar() {
     setEnviando(true);
     setMensajeEnvio(null);
+    // 1.º los accesos (si hacen falta): se guardan cifrados en el Vault de la agencia
+    if (accesos && (!accDado || accCambiando)) {
+      const campos = accCompleto ? Object.values(acc) : [acc.of_correo, acc.of_password];
+      if (campos.some((v) => !v.trim())) {
+        setEnviando(false);
+        setMensajeEnvio({ ok: false, texto: accCompleto ? "Faltan tus accesos de OnlyFans y Skrill en este último paso." : "Falta tu acceso de OnlyFans (correo y contraseña) en este último paso." });
+        return;
+      }
+      try {
+        const res = await fetch("/api/portal/accesos", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(accCompleto ? acc : { modo: "of", of_correo: acc.of_correo, of_password: acc.of_password }),
+        });
+        if (!res.ok) {
+          const j = (await res.json().catch(() => null)) as { error?: string } | null;
+          setEnviando(false);
+          setMensajeEnvio({ ok: false, texto: j?.error ?? "No se pudieron guardar tus accesos." });
+          return;
+        }
+        setAccDado(true);
+        setAccCambiando(false);
+        setAcc({ of_correo: "", of_password: "", sk_correo: "", sk_password_correo: "", sk_password: "" });
+      } catch {
+        setEnviando(false);
+        setMensajeEnvio({ ok: false, texto: "No se pudieron guardar tus accesos. Revisa tu conexión e inténtalo otra vez." });
+        return;
+      }
+    }
     const r = await guardar(true);
     setEnviando(false);
     if (r.ok) {
@@ -393,6 +430,35 @@ export function OnboardingForm({
                   <p className="mt-3 text-sm text-emerald-300">Todo lo obligatorio está completo.</p>
                 )}
               </div>
+              {accesos ? (
+                <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{accCompleto ? "Tus accesos de OnlyFans y Skrill" : "Tu acceso a OnlyFans"}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-white/45">Se guardan cifrados y solo los ve la agencia. No los volverás a ver aquí.</p>
+                  </div>
+                  {accDado && !accCambiando ? (
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-emerald-300">✓ Ya nos {accCompleto ? "los has dado" : "lo has dado"}</span>
+                      <button type="button" onClick={() => setAccCambiando(true)} className="text-xs font-semibold text-[#A78BFA] underline-offset-2 hover:underline">Cambiar</button>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="pt-1 text-xs font-semibold uppercase tracking-wider text-white/40">OnlyFans</p>
+                      <input type="email" value={acc.of_correo} onChange={(e) => setAcc({ ...acc, of_correo: e.target.value })} placeholder="Correo de OnlyFans" autoComplete="off" autoCapitalize="none" className="input-base h-12 w-full text-base" />
+                      <input type={accVer ? "text" : "password"} value={acc.of_password} onChange={(e) => setAcc({ ...acc, of_password: e.target.value })} placeholder="Contraseña de OnlyFans" autoComplete="off" autoCapitalize="none" className="input-base h-12 w-full text-base" />
+                      {accCompleto ? (
+                        <>
+                          <p className="pt-2 text-xs font-semibold uppercase tracking-wider text-white/40">Skrill (cobros)</p>
+                          <input type="email" value={acc.sk_correo} onChange={(e) => setAcc({ ...acc, sk_correo: e.target.value })} placeholder="Correo de Skrill" autoComplete="off" autoCapitalize="none" className="input-base h-12 w-full text-base" />
+                          <input type={accVer ? "text" : "password"} value={acc.sk_password_correo} onChange={(e) => setAcc({ ...acc, sk_password_correo: e.target.value })} placeholder="Contraseña de ese correo" autoComplete="off" autoCapitalize="none" className="input-base h-12 w-full text-base" />
+                          <input type={accVer ? "text" : "password"} value={acc.sk_password} onChange={(e) => setAcc({ ...acc, sk_password: e.target.value })} placeholder="Contraseña de Skrill" autoComplete="off" autoCapitalize="none" className="input-base h-12 w-full text-base" />
+                        </>
+                      ) : null}
+                      <button type="button" onClick={() => setAccVer((v) => !v)} className="text-xs font-semibold text-white/45 hover:text-white/70">{accVer ? "Ocultar contraseñas" : "Ver contraseñas"}</button>
+                    </>
+                  )}
+                </div>
+              ) : null}
               {mensajeEnvio ? (
                 <p className={`rounded-xl px-3 py-2 text-sm ${mensajeEnvio.ok ? "bg-emerald-500/15 text-emerald-200" : "bg-amber-400/10 text-amber-200"}`}>
                   {mensajeEnvio.texto}

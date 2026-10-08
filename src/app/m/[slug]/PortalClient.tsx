@@ -248,7 +248,9 @@ export function PortalClient({
   entregas,
   onboarding,
   contenidoOF,
+  accesos,
 }: {
+  accesos: { modo: "of" | "completo"; dado: boolean };
   nombre: string;
   slug: string;
   pendientes: Pendiente[];
@@ -311,6 +313,7 @@ export function PortalClient({
           estadoInicial={onboardingEstado}
           onCerrar={() => setOnboardingAbierto(false)}
           onCambio={alCambiarOnboarding}
+          accesos={accesos}
         />
       ) : null}
 

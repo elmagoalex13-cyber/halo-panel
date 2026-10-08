@@ -98,7 +98,7 @@ export async function cicloTelegram(supabase) {
     let chat = destino(m);
     if (e.tipo === "umbral") texto = `✅ <b>${nombre}</b> ya ha subido sus ${Number(e.datos?.objetivo) || m?.objetivo_videos || ""} vídeos.\n👉 Crea su cuenta de Instagram y aprueba el lote.${enlace("/modelos")}`;
     else if (e.tipo === "lote") texto = `🎬 Lote de <b>${nombre}</b> aprobado: ${Number(e.datos?.n) || 0} vídeos en cola de edición.`;
-    else if (e.tipo === "accesos") texto = `🔑 <b>${nombre}</b> ha ${e.datos?.actualizacion ? "actualizado" : "enviado"} sus accesos de OnlyFans y Skrill (están en el Vault${m?.ambito === "compartido" ? " compartido" : ""}).${enlace("/vault")}`;
+    else if (e.tipo === "accesos") texto = `🔑 <b>${nombre}</b> ha ${e.datos?.actualizacion ? "actualizado" : "enviado"} ${e.datos?.parcial ? "su acceso de OnlyFans" : "sus accesos de OnlyFans y Skrill"} (está en el Vault${m?.ambito === "compartido" ? " compartido" : ""}).${enlace("/vault")}`;
     else if (e.tipo === "prueba") {
       texto = "✅ Telegram conectado: los avisos del panel llegarán a este grupo.";
       chat = config.telegramChat;

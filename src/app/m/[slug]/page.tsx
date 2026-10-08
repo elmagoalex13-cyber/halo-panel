@@ -3,7 +3,6 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { urlR2 } from "@/lib/media";
 import { LoginForm } from "./LoginForm";
-import { AccesosForm } from "./AccesosForm";
 import { accesosCompletos } from "@/lib/accesosModelo";
 import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
 import { sanearDatos } from "@/lib/onboarding";
@@ -43,7 +42,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
 
   const { data: modelo } = await supabase
     .from("modelos")
-    .select("id, nombre, activa")
+    .select("id, nombre, activa, ambito")
     .eq("portal_token", slug)
     .maybeSingle();
   if (!modelo || !modelo.activa || (await modeloEliminada(modelo.id as string))) notFound();
@@ -51,8 +50,10 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
   const sesion = await sesionActual(slug);
   if (!sesion || sesion.modeloId !== modelo.id) return <LoginForm slug={slug} nombre={modelo.nombre} />;
 
-  // Accesos de OnlyFans y Skrill: obligatorios antes de usar el portal (se guardan cifrados en el Vault de la agencia)
-  if (!(await accesosCompletos(modelo.id as string))) return <AccesosForm nombre={modelo.nombre} />;
+  // El portal NUNCA se bloquea. Los accesos se piden dentro del formulario de su perfil (se guardan cifrados en el Vault):
+  // modelos PRIVADAS (del dueño) -> solo OnlyFans; modelos COMPARTIDAS (con el socio) -> OnlyFans y Skrill.
+  const modoAccesos: "of" | "completo" = modelo.ambito === "compartido" ? "completo" : "of";
+  const accesos = { modo: modoAccesos, dado: await accesosCompletos(modelo.id as string, modoAccesos) };
 
   // Contenido de OnlyFans de esta modelo (si las tablas aun no existen, la pestaña no aparece)
   const [ofColRes, ofArcRes] = await Promise.all([
@@ -117,5 +118,5 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
     estado: (onboardingRes.data?.estado === "enviado" ? "enviado" : "borrador") as "borrador" | "enviado",
   };
 
-  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} />;
+  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} />;
 }

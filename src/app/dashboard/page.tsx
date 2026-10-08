@@ -209,7 +209,12 @@ export default async function DashboardPage({
     // Captacion: crear la cuenta de Instagram / aprobar el lote de una modelo
     ...avisosCaptacion(captacion),
     // Accesos de OnlyFans y Skrill que faltan por dar (obligatorios en el portal)
-    ...(sinAccesos.length ? [{ nivel: "amarillo" as NotifNivel, texto: `Faltan los accesos de OnlyFans y Skrill de: ${sinAccesos.map((m) => m.nombre).join(", ")}`, href: "/modelos" }] : []),
+    ...(sinAccesos.some((m) => m.compartida)
+      ? [{ nivel: "amarillo" as NotifNivel, texto: `Faltan los accesos de OnlyFans y Skrill (se piden en el formulario de su perfil) de: ${sinAccesos.filter((m) => m.compartida).map((m) => m.nombre).join(", ")}`, href: "/modelos" }]
+      : []),
+    ...(sinAccesos.some((m) => !m.compartida)
+      ? [{ nivel: "amarillo" as NotifNivel, texto: `Falta el acceso de OnlyFans (en el formulario de su perfil) de: ${sinAccesos.filter((m) => !m.compartida).map((m) => m.nombre).join(", ")}`, href: "/modelos" }]
+      : []),
     ...(contenidoBajo.length > 0
       ? [
           {
