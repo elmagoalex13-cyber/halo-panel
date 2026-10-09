@@ -112,7 +112,7 @@ export function OnlyFansClient({
 
       {visibles.length === 0 ? (
         <div className="grid min-h-[30vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 text-center text-sm text-white/35">
-          {colecciones.length === 0 ? "Todavía no han subido nada. Las modelos lo hacen desde su portal, en la pestaña «Contenido»." : "Nada con esos filtros."}
+          {colecciones.length === 0 ? "Todavía no han subido nada. Las modelos lo hacen desde su portal, en la pestaña «Contenido OnlyFans»." : "Nada con esos filtros."}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

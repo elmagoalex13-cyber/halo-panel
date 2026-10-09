@@ -9,6 +9,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -97,4 +98,17 @@ export async function urlDescarga(key: string, nombre: string, bucket = bucketOF
 /** Enlace temporal para VER el archivo en el navegador (miniaturas, reproductor). */
 export async function urlVista(key: string, bucket = bucketOF()) {
   return getSignedUrl(cliente(), new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 3600 });
+}
+
+/** Objetos bajo un prefijo (clave, tamano y fecha). Para carpetas pequenas, como las historias de una modelo. */
+export async function listarObjetosOF(prefijo: string, max = 1000): Promise<Array<{ key: string; size: number; fecha: string | null }>> {
+  const c = cliente();
+  const salida: Array<{ key: string; size: number; fecha: string | null }> = [];
+  let token: string | undefined;
+  do {
+    const r = await c.send(new ListObjectsV2Command({ Bucket: bucketOF(), Prefix: prefijo, ContinuationToken: token }));
+    for (const o of r.Contents ?? []) if (o.Key) salida.push({ key: o.Key, size: o.Size ?? 0, fecha: o.LastModified?.toISOString() ?? null });
+    token = r.IsTruncated && salida.length < max ? r.NextContinuationToken : undefined;
+  } while (token);
+  return salida;
 }

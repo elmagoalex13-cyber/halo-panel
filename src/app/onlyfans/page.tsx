@@ -15,7 +15,7 @@ export default async function OnlyFansPage({ searchParams }: { searchParams: Pro
         <p className="text-sm text-[color:var(--text-secondary)]">Scripts, packs y posts de cada modelo, ordenados</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">OnlyFans</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/45">
-          Las modelos lo suben desde su portal (pestaña «Contenido») por fases, y aquí lo tienes listo para ver y descargar tal cual lo grabaron, sin perder calidad.
+          Las modelos lo suben desde su portal (pestaña «Contenido OnlyFans») por fases, y aquí lo tienes listo para ver y descargar tal cual lo grabaron, sin perder calidad.
         </p>
       </div>
       {listo ? (

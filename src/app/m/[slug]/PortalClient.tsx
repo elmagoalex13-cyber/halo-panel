@@ -9,6 +9,7 @@ import type { ColeccionOF } from "@/lib/onlyfans";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 import { GuiaOF, type ReferenciaVista } from "./GuiaOF";
 import { AvisosEquipo } from "./AvisosEquipo";
+import { HistoriasIG } from "./HistoriasIG";
 import type { ProgresoCaptacion } from "@/lib/captacion";
 
 export type Referencia = {
@@ -51,7 +52,7 @@ const TEXTO_ENCARGO: Record<number, string> = {
 };
 const POR_PAGINA = 5;
 
-type Pestana = "grabar" | "subir" | "guia" | "subidos" | "contenido";
+type Pestana = "grabar" | "subir" | "guia" | "subidos" | "contenido" | "historias";
 
 function VideoReferencia({ r }: { r: Referencia }) {
   return (
@@ -306,7 +307,8 @@ export function PortalClient({
     { id: "subir", label: "Subir vídeos", n: null },
     { id: "guia", label: "Guía OnlyFans", n: null },
     { id: "subidos", label: "Subidos", n: entregas.length },
-    ...(contenidoOF ? [{ id: "contenido" as Pestana, label: "Contenido", n: contenidoOF.colecciones.filter((c) => c.estado === "en_curso").length || null }] : []),
+    ...(contenidoOF ? [{ id: "contenido" as Pestana, label: "Contenido OnlyFans", n: contenidoOF.colecciones.filter((c) => c.estado === "en_curso").length || null }] : []),
+    { id: "historias", label: "Historias IG", n: null },
   ];
 
   return (
@@ -369,7 +371,7 @@ export function PortalClient({
                     {p.scripts.obj !== null ? <Barra nombre="Scripts completos y aprobados" n={p.scripts.n} obj={p.scripts.obj} extra={`${p.scriptsEntregados} entregados`} /> : null}
                     {p.packs.obj !== null ? <Barra nombre="Packs de fotos" n={p.packs.n} obj={p.packs.obj} /> : null}
                     {p.posts.obj !== null ? <Barra nombre="Posts de OnlyFans" n={p.posts.n} obj={p.posts.obj} /> : null}
-                    <p className="text-xs text-white/45">Mira la pestaña «Guía OnlyFans»: explica cómo hacerlos y tienes que seguirla exactamente. Se suben en «Contenido».</p>
+                    <p className="text-xs text-white/45">Mira la pestaña «Guía OnlyFans»: explica cómo hacerlos y tienes que seguirla exactamente. Se suben en «Contenido OnlyFans».</p>
                   </div>
                 ) : null}
               </div>
@@ -378,7 +380,7 @@ export function PortalClient({
 
           {(contenidoOF?.colecciones ?? []).some((c) => c.revision === "mejorar") ? (
             <p className="mt-3 text-sm font-semibold text-amber-200">
-              Tienes {(contenidoOF?.colecciones ?? []).filter((c) => c.revision === "mejorar").length} script, pack o post a mejorar: míralo en «Contenido».
+              Tienes {(contenidoOF?.colecciones ?? []).filter((c) => c.revision === "mejorar").length} script, pack o post a mejorar: míralo en «Contenido OnlyFans».
             </p>
           ) : null}
           {entregas.some((e) => e.feedback_tipo === "mejorar") ? (
@@ -433,7 +435,7 @@ export function PortalClient({
         </button>
       </div>
 
-      <div role="tablist" className={`grid gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 ${pestanas.length > 3 ? "grid-cols-4" : "grid-cols-3"}`}>
+      <div role="tablist" className={`grid gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 ${pestanas.length > 4 ? "grid-cols-3" : pestanas.length > 3 ? "grid-cols-4" : "grid-cols-3"}`}>
         {pestanas.map((t) => (
           <button
             key={t.id}
@@ -441,7 +443,7 @@ export function PortalClient({
             role="tab"
             aria-selected={pestana === t.id}
             onClick={() => setPestana(t.id)}
-            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold transition ${
+            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-center text-sm font-semibold leading-tight transition ${
               pestana === t.id ? "bg-[#8B5CF6]/30 text-white" : "text-white/50"
             }`}
           >
@@ -576,6 +578,13 @@ export function PortalClient({
 
       {pestana === "guia" ? <GuiaOF packs={guia.packs} posts={guia.posts} referencias={guia.referencias} /> : null}
 
+      {pestana === "historias" ? <HistoriasIG /> : null}
+
+      {pestana === "contenido" && contenidoOF ? (
+        <p className="rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm leading-relaxed text-sky-100">
+          🔞 <b>Contenido de OnlyFans</b>: aquí subes tus scripts, packs de fotos y posts para OnlyFans, siguiendo la pestaña «Guía OnlyFans». Las fotos de historias de Instagram van en «Historias IG» y los reels en «Subir vídeos».
+        </p>
+      ) : null}
       {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} /> : null}
 
       {reelAbierto?.preview ? (

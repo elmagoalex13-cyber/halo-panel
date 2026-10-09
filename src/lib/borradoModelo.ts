@@ -81,6 +81,7 @@ export async function inventarioDeModelo(modeloId: string): Promise<Inventario> 
     [bucketR2(), `bruto/${modeloId}/`],
     [bucketR2(), `procesadas/${modeloId}/`],
     [bucketOF(), `onlyfans/${modeloId}/`],
+    [bucketOF(), `historias/${modeloId}/`], // fotos de historias de Instagram
   ];
   const listas = await Promise.all(barridos.map(([b, p]) => listarClavesR2(p, 200000, b).then((ks) => [b, ks] as const).catch(() => [b, [] as string[]] as const)));
   for (const [b, ks] of listas) for (const k of ks) anadir(inv.r2, b, k);
