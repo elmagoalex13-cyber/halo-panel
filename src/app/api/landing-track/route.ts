@@ -17,17 +17,25 @@ type LandingTrackPayload = {
   timestamp?: unknown;
 };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+// navigator.sendBeacon siempre envia la peticion "con credenciales": con "Access-Control-Allow-Origin: *" el navegador
+// bloquea el aviso previo (preflight) y el evento no llega nunca. Por eso se responde con el origen exacto de la landing.
+// Es un endpoint publico de analitica: lo protege la clave de cada landing (slug + landing_key), no el origen.
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin");
+  return {
+    "Access-Control-Allow-Origin": origin ?? "*",
+    ...(origin ? { "Access-Control-Allow-Credentials": "true", Vary: "Origin" } : {}),
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+  };
+}
 
-function json(data: unknown, init?: ResponseInit) {
+function json(req: Request, data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, {
     ...init,
     headers: {
-      ...corsHeaders,
+      ...corsHeaders(req),
       ...(init?.headers ?? {}),
     },
   });
@@ -51,8 +59,8 @@ function parseTimestamp(value: unknown) {
   return parsed.toISOString();
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
+export async function OPTIONS(req: NextRequest) {
+  return new Response(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function POST(req: NextRequest) {
@@ -64,11 +72,11 @@ export async function POST(req: NextRequest) {
     const sessionId = asString(body.sessionId, 240);
 
     if (!landingSlug || !landingKey || !eventType || !sessionId) {
-      return json({ error: "landingSlug, landingKey, eventType y sessionId son obligatorios" }, { status: 400 });
+      return json(req, { error: "landingSlug, landingKey, eventType y sessionId son obligatorios" }, { status: 400 });
     }
 
     if (!canUseSupabase()) {
-      return json({ ok: true, skipped: true });
+      return json(req, { ok: true, skipped: true });
     }
 
     const supabase = createAdminClient();
@@ -81,7 +89,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (landingError || !landing) {
-      return json({ error: "Landing no encontrada o clave inválida" }, { status: 403 });
+      return json(req, { error: "Landing no encontrada o clave inválida" }, { status: 403 });
     }
 
     const fallbackUserAgent = req.headers.get("user-agent");
@@ -102,8 +110,8 @@ export async function POST(req: NextRequest) {
 
     if (insertError) throw insertError;
 
-    return json({ ok: true });
+    return json(req, { ok: true });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
+    return json(req, { error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
   }
 }
