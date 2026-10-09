@@ -82,7 +82,7 @@ function BotonSubida({
 }: {
   etiqueta: string;
   accept: string;
-  coleccionId: string;
+  coleccionId: string | (() => Promise<string>); // en posts la carpeta se crea al subir el primer archivo, no al entrar
   fase?: number;
   slot?: string;
   onSubido: (r: { archivo: ArchivoOF; vista: string | null }) => void;
@@ -102,13 +102,14 @@ function BotonSubida({
     setProgreso(0);
     onOcupado(true);
     try {
+      const colId = typeof coleccionId === "string" ? coleccionId : await coleccionId();
       let siguiente = 0;
       await Promise.all(
         Array.from({ length: Math.min(2, lista.length) }, async () => {
           while (siguiente < lista.length) {
             const i = siguiente++;
             setInfo(lista.length > 1 ? `Subiendo ${Math.min(hechos + 1, lista.length)}/${lista.length}` : null);
-            const r = await subirArchivoOF(lista[i], { coleccionId, fase, slot }, (l) => {
+            const r = await subirArchivoOF(lista[i], { coleccionId: colId, fase, slot }, (l) => {
               cargado[i] = l;
               setProgreso(Math.min(100, Math.round((cargado.reduce((a, b) => a + b, 0) / total) * 100)));
             });
@@ -178,24 +179,27 @@ export function OnlyFansPortal({
   const [ocupadas, setOcupadas] = useState(0);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
   const [visor, setVisor] = useState<number | null>(null);
-  const creandoCarpeta = useRef(false);
+  const creandoCarpeta = useRef<Promise<string> | null>(null);
 
-  // Los posts van todos a una sola carpeta: al entrar en «Posts» se prepara (se crea la primera vez)
+  // Los posts van todos a una sola carpeta. Se crea (la primera vez) justo al subir el primer archivo, NO al entrar en «Posts»:
+  // así entrar o pulsar sin querer no deja carpetas vacias en el panel de la agencia.
   const carpetaPosts = colecciones.find((c) => c.tipo === "post" && c.nombre === NOMBRE_CARPETA_POSTS && c.estado === "en_curso") ?? null;
-  useEffect(() => {
-    if (tipo !== "post" || carpetaPosts || creandoCarpeta.current) return;
-    creandoCarpeta.current = true;
-    fetch("/api/portal/of/coleccion", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "post" }) })
-      .then(async (r) => {
-        const j = (await r.json().catch(() => ({}))) as { coleccion?: ColeccionOF; error?: string };
-        if (!r.ok || !j.coleccion) throw new Error(j.error ?? "No se pudo preparar la carpeta de posts");
-        setColecciones((p) => (p.some((c) => c.id === j.coleccion!.id) ? p : [j.coleccion as ColeccionOF, ...p]));
-      })
-      .catch((e) => setAviso({ ok: false, texto: e instanceof Error ? e.message : "No se pudo preparar la carpeta de posts" }))
-      .finally(() => {
-        creandoCarpeta.current = false;
-      });
-  }, [tipo, carpetaPosts]);
+  const asegurarCarpetaPosts = (): Promise<string> => {
+    if (carpetaPosts) return Promise.resolve(carpetaPosts.id);
+    if (!creandoCarpeta.current) {
+      creandoCarpeta.current = fetch("/api/portal/of/coleccion", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "post" }) })
+        .then(async (r) => {
+          const j = (await r.json().catch(() => ({}))) as { coleccion?: ColeccionOF; error?: string };
+          if (!r.ok || !j.coleccion) throw new Error(j.error ?? "No se pudo preparar la carpeta de posts");
+          setColecciones((p) => (p.some((c) => c.id === j.coleccion!.id) ? p : [j.coleccion as ColeccionOF, ...p]));
+          return j.coleccion.id;
+        })
+        .finally(() => {
+          creandoCarpeta.current = null;
+        });
+    }
+    return creandoCarpeta.current;
+  };
 
   // No dejar cerrar la pagina a mitad de una subida
   useEffect(() => {
@@ -454,6 +458,7 @@ export function OnlyFansPortal({
       {tipo === "post" ? (
         <PostsCarpeta
           carpeta={carpetaPosts}
+          obtenerCarpeta={asegurarCarpetaPosts}
           colecciones={colecciones.filter((c) => c.tipo === "post")}
           archivos={archivos}
           onQuitar={quitar}
@@ -510,6 +515,7 @@ function VisorPosts({ archivos, colecciones, indice, onCambiar, onCerrar }: { ar
 // Posts: una sola carpeta con todo lo que sube la modelo (sin crear un post por cada publicacion)
 function PostsCarpeta({
   carpeta,
+  obtenerCarpeta,
   colecciones,
   archivos,
   onQuitar,
@@ -518,6 +524,7 @@ function PostsCarpeta({
   onAbrir,
 }: {
   carpeta: ColeccionOF | null;
+  obtenerCarpeta: () => Promise<string>;
   colecciones: ColeccionOF[];
   archivos: ArchivoVista[];
   onQuitar: (a: ArchivoVista) => void;
@@ -534,11 +541,7 @@ function PostsCarpeta({
     <div className="space-y-3">
       {carpeta?.revision === "mejorar" ? <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-sm text-amber-100">⚠️ La agencia te pide mejorar algo de tus posts{carpeta.revision_texto ? `: ${carpeta.revision_texto}` : "."}</p> : null}
       {carpeta?.revision === "aprobado" ? <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">✅ Tus posts están aprobados por la agencia.</p> : null}
-      {carpeta ? (
-        <BotonSubida etiqueta="Subir fotos de posts" accept="image/*,video/*,.heic,.heif,.mov" coleccionId={carpeta.id} onSubido={onSubido} onOcupado={onOcupado} />
-      ) : (
-        <p className="rounded-xl bg-white/[0.04] px-3 py-3 text-center text-sm text-white/45">Preparando tu carpeta de posts…</p>
-      )}
+      <BotonSubida etiqueta="Subir fotos de posts" accept="image/*,video/*,.heic,.heif,.mov" coleccionId={obtenerCarpeta} onSubido={onSubido} onOcupado={onOcupado} />
       <p className="text-xs font-semibold uppercase tracking-wider text-white/40">
         Tus posts subidos ({todos.length})
       </p>

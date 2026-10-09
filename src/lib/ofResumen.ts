@@ -1,7 +1,7 @@
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { alcanceActual, soloVisibles, type GrupoAmbito } from "@/lib/alcance";
-import { progresoScript, type ArchivoOF, type ColeccionOF, type TipoColeccion } from "@/lib/onlyfans";
+import { NOMBRE_CARPETA_POSTS, progresoScript, type ArchivoOF, type ColeccionOF, type TipoColeccion } from "@/lib/onlyfans";
 
 export type ResumenColeccion = {
   id: string;
@@ -49,7 +49,9 @@ export async function cargarResumenOF(modeloId?: string) {
     for (const a of (arcs.data ?? []) as ArchivoMeta[]) porColeccion.set(a.coleccion_id, [...(porColeccion.get(a.coleccion_id) ?? []), a]);
     const nombrePorId = new Map((mods.data ?? []).map((m) => [m.id as string, m.nombre as string]));
 
-    const resumen: ResumenColeccion[] = ((cols.data ?? []) as Array<ColeccionOF & { visto_at?: string | null }>).map((c) => {
+    const resumen: ResumenColeccion[] = ((cols.data ?? []) as Array<ColeccionOF & { visto_at?: string | null }>)
+      .filter((c) => c.tipo !== "post" || c.nombre !== NOMBRE_CARPETA_POSTS || (porColeccion.get(c.id)?.length ?? 0) > 0) // la carpeta de posts sin nada subido no se enseña
+      .map((c) => {
       const as = porColeccion.get(c.id) ?? [];
       const pr = c.tipo === "script" ? progresoScript(as as ArchivoOF[]) : null;
       const ultimo = as.reduce((m, a) => (a.created_at > m ? a.created_at : m), "");
