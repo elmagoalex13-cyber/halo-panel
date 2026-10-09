@@ -4,7 +4,7 @@ import { canUseSupabase } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { extensionSegura, tipoDeArchivo } from "@/lib/ofServer";
 import { borrarObjetoOF, listarObjetosOF, prepararSubida, tamanoEnR2 } from "@/lib/r2/onlyfans";
-import { MAX_HISTORIAS, TAM_MAX_HISTORIA, listarHistorias, prefijoHistorias } from "@/lib/historiasIG";
+import { MAX_HISTORIAS, TAM_MAX_HISTORIA, invalidarHistorias, listarHistorias, prefijoHistorias } from "@/lib/historiasIG";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
         await borrarObjetoOF(key).catch(() => undefined);
         return NextResponse.json({ error: "La foto llegó incompleta. Vuelve a subirla." }, { status: 409 });
       }
+      invalidarHistorias(); // que el aviso del panel salga ya
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Acción no válida" }, { status: 400 });
@@ -72,6 +73,7 @@ export async function DELETE(req: NextRequest) {
   if (!key.startsWith(prefijoHistorias(modeloId)) || key.includes("..")) return NextResponse.json({ error: "Archivo no válido" }, { status: 400 });
   try {
     await borrarObjetoOF(key);
+    invalidarHistorias();
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo borrar" }, { status: 500 });

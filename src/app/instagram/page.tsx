@@ -4,6 +4,9 @@ import { CuentasTab } from "./CuentasTab";
 import { ReferenciasTab } from "./ReferenciasTab";
 import { IdeasViralesTab } from "./IdeasViralesTab";
 import { ViralesPropiosTab, type ViralPropio } from "./ViralesPropiosTab";
+import { HistoriasTab, type ResumenModeloHistorias } from "./HistoriasTab";
+import { resumenHistorias } from "@/lib/historiasIG";
+import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
@@ -91,20 +94,44 @@ async function loadViralesPropios(): Promise<ViralPropio[]> {
   }
 }
 
+/** Historias que han subido las modelos (solo las de las modelos visibles), con cuantas son nuevas para quien mira. */
+async function loadHistorias(): Promise<ResumenModeloHistorias[]> {
+  if (!canUseSupabase()) return [];
+  try {
+    const sesion = await sesionPanelActual();
+    if (!sesion) return [];
+    const alcance = await alcanceActual();
+    const resumen = await resumenHistorias(alcance, sesion.usuario);
+    if (!resumen.length) return [];
+    const [modelos, fotos] = await Promise.all([
+      soloVisibles(createAdminClient().from("modelos").select("id, nombre, ambito"), alcance, "id"),
+      versionesFotos(),
+    ]);
+    const porId = new Map((modelos.data ?? []).map((m) => [m.id as string, m]));
+    return resumen
+      .filter((r) => porId.has(r.modeloId))
+      .map((r) => ({ ...r, nombre: porId.get(r.modeloId)!.nombre as string, ambito: (porId.get(r.modeloId)!.ambito as string | null) ?? null, foto: fotos[r.modeloId] ?? null }));
+  } catch {
+    return [];
+  }
+}
+
 export default async function InstagramPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const activeTab = tab === "referencias" ? "referencias" : tab === "ideas" ? "ideas" : tab === "propios" ? "propios" : "cuentas";
-  const [cuentasReales, referenciasCuentas, referenciasVideos, modelosActivos, viralesPropios] = await Promise.all([
+  const activeTab = tab === "referencias" ? "referencias" : tab === "ideas" ? "ideas" : tab === "propios" ? "propios" : tab === "historias" ? "historias" : "cuentas";
+  const [cuentasReales, referenciasCuentas, referenciasVideos, modelosActivos, viralesPropios, historias] = await Promise.all([
     loadCuentasInstagramReales(),
     loadReferencias(),
     loadReferenciasVideos(),
     loadModelosActivos(),
     loadViralesPropios(),
+    loadHistorias(),
   ]);
+  const historiasNuevas = historias.reduce((n, h) => n + h.nuevas, 0);
   const cuentas = loadCuentasIG(cuentasReales);
   const { esDueno, porModelo } = await ambitosModelos();
 
@@ -148,12 +175,23 @@ export default async function InstagramPage({
         >
           Virales propios
         </Link>
+        <Link
+          href="/instagram?tab=historias"
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition ${
+            activeTab === "historias" ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"
+          }`}
+        >
+          Historias
+          {historiasNuevas ? <span className="rounded-full bg-pink-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{historiasNuevas}</span> : null}
+        </Link>
       </div>
 
       {activeTab === "cuentas" ? (
         <CuentasTab cuentas={cuentas} esDueno={esDueno} ambitos={porModelo} />
       ) : activeTab === "referencias" ? (
         <ReferenciasTab cuentas={referenciasCuentas} />
+      ) : activeTab === "historias" ? (
+        <HistoriasTab resumen={historias} esDueno={esDueno} />
       ) : activeTab === "propios" ? (
         <ViralesPropiosTab virales={viralesPropios} esDueno={esDueno} ambitos={porModelo} />
       ) : (

@@ -15,7 +15,6 @@ import type { SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 import { alcanceActual, veModelo } from "@/lib/alcance";
 import { CaptacionRevision } from "./CaptacionRevision";
-import { HistoriasModelo } from "./HistoriasModelo";
 import { piezasEnEspera } from "@/lib/captacionPiezas";
 import { progresoCaptacion } from "@/lib/captacion";
 
@@ -381,7 +380,6 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
       : []),
     { id: "videos", label: "Vídeos", icono: "🎞", aviso: pendientes.length ? String(pendientes.length) : null, contenido: videos },
     { id: "redes", label: "Redes", icono: "◎", aviso: cuentas.length ? String(cuentas.length) : null, contenido: redes },
-    { id: "historias", label: "Historias IG", icono: "📸", contenido: <HistoriasModelo modeloId={modelo.id} nombre={modelo.nombre} /> },
     {
       id: "contenido",
       label: "Contenido",
