@@ -11,7 +11,7 @@ const cuando = (iso: string) => {
 };
 
 /** Acciones sensibles de los últimos 7 días (borrados, cambios de contraseña, accesos de portal...), agrupadas. */
-export const avisosActividad = cache(async (): Promise<Array<{ nivel: "rojo"; texto: string; href: string }>> => {
+export const avisosActividad = cache(async (): Promise<Array<{ id: string; nivel: "rojo"; texto: string; href: string }>> => {
   try {
     const desde = new Date(Date.now() - 7 * 86400000).toISOString();
     const { data } = await createAdminClient()
@@ -31,7 +31,7 @@ export const avisosActividad = cache(async (): Promise<Array<{ nivel: "rojo"; te
     }
     return [...grupos.values()]
       .slice(0, 5)
-      .map((g) => ({ nivel: "rojo" as const, texto: `${g.usuario}: ${g.accion}${g.n > 1 ? ` (${g.n} veces)` : ""} · ${cuando(g.ultima)}`, href: "/logs?origen=usuarios" }));
+      .map((g) => ({ id: `act|${g.usuario}|${g.accion}|${g.ultima.slice(0, 10)}`, nivel: "rojo" as const, texto: `${g.usuario}: ${g.accion}${g.n > 1 ? ` (${g.n} veces)` : ""} · ${cuando(g.ultima)}`, href: "/logs?origen=usuarios" }));
   } catch {
     return [];
   }

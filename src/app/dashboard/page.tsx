@@ -202,7 +202,7 @@ export default async function DashboardPage({
   });
   const onboardingPendientes = modelos.filter((m) => m.activa && onboardingPorModelo.get(m.id)?.estado !== "enviado");
   type NotifNivel = "rojo" | "amarillo" | "verde";
-  const notificaciones: { nivel: NotifNivel; texto: string; href?: string }[] = [
+  const notificaciones: { id?: string; nivel: NotifNivel; texto: string; href?: string }[] = [
     // Lo sensible que ha hecho tu socio (solo lo ve el dueño)
     ...(sesionPanel?.dueno ? avisosSocio : []),
     // Editor de video caido o cola atascada
@@ -211,14 +211,15 @@ export default async function DashboardPage({
     ...avisosCaptacion(captacion),
     // Accesos de OnlyFans y Skrill que faltan por dar (obligatorios en el portal)
     ...(sinAccesos.some((m) => m.compartida)
-      ? [{ nivel: "amarillo" as NotifNivel, texto: `Faltan los accesos de OnlyFans y Skrill (se piden en el formulario de su perfil) de: ${sinAccesos.filter((m) => m.compartida).map((m) => m.nombre).join(", ")}`, href: "/modelos" }]
+      ? [{ id: `acc|compartidas|${sinAccesos.filter((m) => m.compartida).map((m) => m.nombre).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Faltan los accesos de OnlyFans y Skrill (se piden en el formulario de su perfil) de: ${sinAccesos.filter((m) => m.compartida).map((m) => m.nombre).join(", ")}`, href: "/modelos" }]
       : []),
     ...(sinAccesos.some((m) => !m.compartida)
-      ? [{ nivel: "amarillo" as NotifNivel, texto: `Falta el acceso de OnlyFans (en el formulario de su perfil) de: ${sinAccesos.filter((m) => !m.compartida).map((m) => m.nombre).join(", ")}`, href: "/modelos" }]
+      ? [{ id: `acc|privadas|${sinAccesos.filter((m) => !m.compartida).map((m) => m.nombre).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Falta el acceso de OnlyFans (en el formulario de su perfil) de: ${sinAccesos.filter((m) => !m.compartida).map((m) => m.nombre).join(", ")}`, href: "/modelos" }]
       : []),
     ...(contenidoBajo.length > 0
       ? [
           {
+            id: `bajo|${contenidoBajo.map((c) => c.modelo.nombre).sort().join(",")}`,
             nivel: "rojo" as NotifNivel,
             texto: `Contenido para solo ${fmtDias(contenidoBajo[0].dias)} día${contenidoBajo[0].dias === 1 ? "" : "s"}: ${contenidoBajo
               .map((c) => `${c.modelo.nombre} (${fmtDias(c.dias)} d · ${c.stock} reels para ${c.cuentasIG} cuenta${c.cuentasIG === 1 ? "" : "s"})`)
@@ -228,31 +229,31 @@ export default async function DashboardPage({
         ]
       : []),
     ...(aprobacionUrgente.length > 0
-      ? [{ nivel: "rojo" as NotifNivel, texto: `${aprobacionUrgente.length} vídeo${aprobacionUrgente.length > 1 ? "s" : ""} llevan más de 24h esperando aprobación`, href: "/aprobacion" }]
+      ? [{ id: "aprobacion-urgente", nivel: "rojo" as NotifNivel, texto: `${aprobacionUrgente.length} vídeo${aprobacionUrgente.length > 1 ? "s" : ""} llevan más de 24h esperando aprobación`, href: "/aprobacion" }]
       : []),
     ...(rehacerPendientes.length > 0
-      ? [{ nivel: "amarillo" as NotifNivel, texto: `${rehacerPendientes.length} vídeo${rehacerPendientes.length > 1 ? "s" : ""} en edición pendientes de procesar`, href: "/aprobacion" }]
+      ? [{ id: "rehacer-pendientes", nivel: "amarillo" as NotifNivel, texto: `${rehacerPendientes.length} vídeo${rehacerPendientes.length > 1 ? "s" : ""} en edición pendientes de procesar`, href: "/aprobacion" }]
       : []),
     ...(modelosSinMaterial.length > 0
-      ? [{ nivel: "amarillo" as NotifNivel, texto: `Sin material nuevo en 7+ días: ${modelosSinMaterial.map((m) => m.nombre).join(", ")}` }]
+      ? [{ id: `sin-material|${modelosSinMaterial.map((m) => m.nombre).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Sin material nuevo en 7+ días: ${modelosSinMaterial.map((m) => m.nombre).join(", ")}` }]
       : []),
     ...(sinProgramar > 0
-      ? [{ nivel: "amarillo" as NotifNivel, texto: publerActivo() ? `${sinProgramar} vídeo${sinProgramar > 1 ? "s" : ""} aprobado${sinProgramar > 1 ? "s" : ""} pendiente${sinProgramar > 1 ? "s" : ""} de programar en Publer` : `${sinProgramar} vídeo${sinProgramar > 1 ? "s" : ""} aprobado${sinProgramar > 1 ? "s" : ""} sin programar: Publer no está activo, descárgalo${sinProgramar > 1 ? "s" : ""} y súbelo${sinProgramar > 1 ? "s" : ""} tú`, href: "/aprobacion?estado=aprobado" }]
+      ? [{ id: "sin-programar", nivel: "amarillo" as NotifNivel, texto: publerActivo() ? `${sinProgramar} vídeo${sinProgramar > 1 ? "s" : ""} aprobado${sinProgramar > 1 ? "s" : ""} pendiente${sinProgramar > 1 ? "s" : ""} de programar en Publer` : `${sinProgramar} vídeo${sinProgramar > 1 ? "s" : ""} aprobado${sinProgramar > 1 ? "s" : ""} sin programar: Publer no está activo, descárgalo${sinProgramar > 1 ? "s" : ""} y súbelo${sinProgramar > 1 ? "s" : ""} tú`, href: "/aprobacion?estado=aprobado" }]
       : []),
     ...(runnerError > 0
-      ? [{ nivel: "rojo" as NotifNivel, texto: `${runnerError} vídeo${runnerError > 1 ? "s" : ""} con error en el runner de edición`, href: "/aprobacion" }]
+      ? [{ id: "runner-error", nivel: "rojo" as NotifNivel, texto: `${runnerError} vídeo${runnerError > 1 ? "s" : ""} con error en el runner de edición`, href: "/aprobacion" }]
       : []),
     ...(onboardingNuevos.length > 0
-      ? [{ nivel: "verde" as NotifNivel, texto: `Onboarding recibido: ${onboardingNuevos.map((m) => m.nombre).join(", ")}`, href: `/modelos/${onboardingNuevos[0].id}#onboarding` }]
+      ? [{ id: `onb-recibido|${onboardingNuevos.map((m) => m.nombre).sort().join(",")}`, nivel: "verde" as NotifNivel, texto: `Onboarding recibido: ${onboardingNuevos.map((m) => m.nombre).join(", ")}`, href: `/modelos/${onboardingNuevos[0].id}#onboarding` }]
       : []),
     ...(onboardingPendientes.length > 0
-      ? [{ nivel: "amarillo" as NotifNivel, texto: `Onboarding sin enviar: ${onboardingPendientes.map((m) => m.nombre).join(", ")}` }]
+      ? [{ id: `onb-pendiente|${onboardingPendientes.map((m) => m.nombre).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Onboarding sin enviar: ${onboardingPendientes.map((m) => m.nombre).join(", ")}` }]
       : []),
     ...(enAprobacion > 0 && aprobacionUrgente.length === 0
-      ? [{ nivel: "verde" as NotifNivel, texto: `${enAprobacion} vídeo${enAprobacion > 1 ? "s" : ""} listo${enAprobacion > 1 ? "s" : ""} para revisar`, href: "/aprobacion" }]
+      ? [{ id: "listos-revisar", nivel: "verde" as NotifNivel, texto: `${enAprobacion} vídeo${enAprobacion > 1 ? "s" : ""} listo${enAprobacion > 1 ? "s" : ""} para revisar`, href: "/aprobacion" }]
       : []),
     ...(veOnlyFans && ofNuevo.count > 0
-      ? [{ nivel: "verde" as NotifNivel, texto: `Contenido de OnlyFans nuevo${ofNuevo.modelos.length ? ` de ${ofNuevo.modelos.join(", ")}` : ""} (${ofNuevo.count} ${ofNuevo.count === 1 ? "entrega" : "entregas"})`, href: "/onlyfans" }]
+      ? [{ id: `of-nuevo|${[...ofNuevo.modelos].sort().join(",")}`, nivel: "verde" as NotifNivel, texto: `Contenido de OnlyFans nuevo${ofNuevo.modelos.length ? ` de ${ofNuevo.modelos.join(", ")}` : ""} (${ofNuevo.count} ${ofNuevo.count === 1 ? "entrega" : "entregas"})`, href: "/onlyfans" }]
       : []),
   ];
 

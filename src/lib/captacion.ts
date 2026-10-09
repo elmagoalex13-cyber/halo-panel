@@ -130,15 +130,15 @@ export async function resumenCaptacion(alcance: Alcance): Promise<ResumenCaptaci
 }
 
 /** Avisos del dashboard derivados de la captacion. */
-export function avisosCaptacion(lista: ResumenCaptacion[]): Array<{ nivel: "rojo" | "amarillo"; texto: string; href: string }> {
-  const avisos: Array<{ nivel: "rojo" | "amarillo"; texto: string; href: string }> = [];
+export function avisosCaptacion(lista: ResumenCaptacion[]): Array<{ id: string; nivel: "rojo" | "amarillo"; texto: string; href: string }> {
+  const avisos: Array<{ id: string; nivel: "rojo" | "amarillo"; texto: string; href: string }> = [];
   const crearCuenta = lista.filter((c) => c.progreso.cumplido && !c.tieneCuenta);
   if (crearCuenta.length) {
-    avisos.push({ nivel: "rojo", texto: `Ya cumplen todos los mínimos: crea la cuenta de Instagram de ${crearCuenta.map((c) => c.nombre).join(", ")}`, href: "/modelos" });
+    avisos.push({ id: `cap|cuenta|${crearCuenta.map((c) => c.nombre).sort().join(",")}`, nivel: "rojo", texto: `Ya cumplen todos los mínimos: crea la cuenta de Instagram de ${crearCuenta.map((c) => c.nombre).join(", ")}`, href: "/modelos" });
   }
   const loteListo = lista.filter((c) => !c.aprobada && c.enEspera >= c.objetivo);
   if (loteListo.length) {
-    avisos.push({ nivel: "amarillo", texto: `Reels para revisar y mandar a editar: ${loteListo.map((c) => `${c.nombre} (${c.enEspera})`).join(", ")}`, href: "/modelos" });
+    avisos.push({ id: `cap|lote|${loteListo.map((c) => c.nombre).sort().join(",")}`, nivel: "amarillo", texto: `Reels para revisar y mandar a editar: ${loteListo.map((c) => `${c.nombre} (${c.enEspera})`).join(", ")}`, href: "/modelos" });
   }
   return avisos;
 }

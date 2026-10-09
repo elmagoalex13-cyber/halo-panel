@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
-export type Aviso = { nivel: "rojo" | "amarillo" | "verde"; texto: string; href?: string };
+export type Aviso = { id?: string; nivel: "rojo" | "amarillo" | "verde"; texto: string; href?: string };
 
 const CLAVE = "halo:avisos-ocultos";
 
@@ -23,25 +23,55 @@ function leerOcultos(): string[] {
   }
 }
 
-// Los avisos se calculan solos a partir de los datos; aqui se pueden ocultar a mano. Se recuerda en este
-// navegador. Si el aviso cambia (otro numero, otra cuenta) vuelve a salir porque es un aviso distinto.
+const DIAS_OCULTO = 7; // un aviso quitado no vuelve en 7 dias; si el problema sigue pasado ese tiempo, se vuelve a avisar
+
+// Los avisos se calculan solos a partir de los datos; aqui se pueden ocultar a mano. Cada aviso tiene una identidad estable
+// (que es, y de que modelos) que NO depende de numeros ni de "ayer/hoy": asi quitarlo lo quita de verdad. Solo vuelve a salir
+// si es otro aviso (otra modelo, otro dia de actividad) o pasan 7 dias. Se guarda en el servidor (vale en todos tus dispositivos).
 export function AvisosDashboard({ avisos }: { avisos: Aviso[] }) {
-  const [ocultos, setOcultos] = useState<string[] | null>(null);
+  const [ocultos, setOcultos] = useState<Record<string, string> | null>(null); // id -> cuando se quito
+  const [antiguos, setAntiguos] = useState<string[]>([]); // claves de la version anterior (texto), solo en este navegador
 
-  useEffect(() => setOcultos(leerOcultos()), []);
+  useEffect(() => {
+    setAntiguos(leerOcultos());
+    let vivo = true;
+    fetch("/api/panel/avisos-ocultos", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { ocultos: {} }))
+      .then((j: { ocultos?: Record<string, string> }) => vivo && setOcultos(j.ocultos ?? {}))
+      .catch(() => vivo && setOcultos({}));
+    return () => {
+      vivo = false;
+    };
+  }, []);
 
-  function guardar(siguiente: string[]) {
-    setOcultos(siguiente);
+  const clave = (a: Aviso) => a.id ?? `${a.nivel}|${a.texto}`;
+  const limite = Date.now() - DIAS_OCULTO * 86400000;
+  const estaOculto = (a: Aviso) => {
+    const cuando = ocultos?.[clave(a)];
+    return (cuando && new Date(cuando).getTime() >= limite) || antiguos.includes(`${a.nivel}|${a.texto}`);
+  };
+
+  async function cambiar(ids: string[], ocultar: boolean) {
+    const ahora = new Date().toISOString();
+    setOcultos((p) => {
+      const n = { ...(p ?? {}) };
+      for (const id of ids) {
+        if (ocultar) n[id] = ahora;
+        else delete n[id];
+      }
+      return n;
+    });
+    if (!ocultar) setAntiguos([]); // al mostrar todo se olvida tambien lo que se habia quitado con el sistema antiguo
     try {
-      localStorage.setItem(CLAVE, JSON.stringify(siguiente.slice(-200)));
+      if (!ocultar) localStorage.removeItem(CLAVE);
+      await fetch("/api/panel/avisos-ocultos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ocultar ? { ocultar: ids } : { mostrar: ids }) });
     } catch {
-      /* sin almacenamiento: se oculta solo hasta recargar */
+      /* si falla el guardado, queda oculto hasta recargar */
     }
   }
 
   if (ocultos === null) return null;
-  const clave = (a: Aviso) => `${a.nivel}|${a.texto}`;
-  const visibles = avisos.filter((a) => !ocultos.includes(clave(a)));
+  const visibles = avisos.filter((a) => !estaOculto(a));
   const escondidos = avisos.length - visibles.length;
   if (!avisos.length) return null;
 
@@ -65,7 +95,7 @@ export function AvisosDashboard({ avisos }: { avisos: Aviso[] }) {
               <div className="flex flex-1 items-center gap-3 px-4 py-2.5">{contenido}</div>
             )}
             <button
-              onClick={() => guardar([...ocultos, clave(a)])}
+              onClick={() => void cambiar([clave(a)], true)}
               title="Quitar este aviso"
               aria-label="Quitar este aviso"
               className="mr-2 grid h-7 w-7 shrink-0 place-items-center rounded-lg opacity-60 transition hover:bg-white/10 hover:opacity-100"
@@ -77,7 +107,7 @@ export function AvisosDashboard({ avisos }: { avisos: Aviso[] }) {
       })}
       {escondidos > 0 ? (
         <button
-          onClick={() => guardar(ocultos.filter((o) => !avisos.some((a) => clave(a) === o)))}
+          onClick={() => void cambiar(avisos.filter(estaOculto).map(clave), false)}
           className="w-fit text-xs text-white/40 hover:text-white/70 hover:underline"
         >
           Mostrar {escondidos} aviso{escondidos === 1 ? "" : "s"} oculto{escondidos === 1 ? "" : "s"}

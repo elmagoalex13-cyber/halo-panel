@@ -66,18 +66,18 @@ const minutosDesde = (iso: string | null | undefined) => (iso ? (Date.now() - ne
 /** El editor responde si dejo su latido hace menos de 4 minutos. */
 export const runnerEnLinea = (l: Latido) => (minutosDesde(l.at) ?? Infinity) < 4;
 
-export function avisosSistema(s: EstadoSistema): Array<{ nivel: "rojo" | "amarillo"; texto: string; href?: string }> {
+export function avisosSistema(s: EstadoSistema): Array<{ id: string; nivel: "rojo" | "amarillo"; texto: string; href?: string }> {
   if (!s.tablaLista || !s.runners.length) return [];
-  const avisos: Array<{ nivel: "rojo" | "amarillo"; texto: string; href?: string }> = [];
+  const avisos: Array<{ id: string; nivel: "rojo" | "amarillo"; texto: string; href?: string }> = [];
   const enLinea = s.runners.filter(runnerEnLinea);
   if (!enLinea.length) {
-    avisos.push({ nivel: "rojo", texto: "El editor de vídeo no responde: los vídeos subidos no se están editando. Avisa para revisar el servidor.", href: "/ajustes" });
+    avisos.push({ id: "sis|editor-caido", nivel: "rojo", texto: "El editor de vídeo no responde: los vídeos subidos no se están editando. Avisa para revisar el servidor.", href: "/ajustes" });
     return avisos;
   }
   const pendientes = Math.max(...enLinea.map((r) => r.pendientes));
   const horas = Math.max(0, ...enLinea.map((r) => (minutosDesde(r.espera_mas_antigua) ?? 0) / 60));
   if (pendientes > 0 && horas >= 3) {
-    avisos.push({ nivel: "amarillo", texto: `${pendientes} vídeo${pendientes > 1 ? "s" : ""} en cola de edición, el más antiguo lleva ${Math.round(horas)} h esperando. Si pasa a menudo, hay que añadir otro servidor de edición.`, href: "/ajustes" });
+    avisos.push({ id: "sis|cola-edicion", nivel: "amarillo", texto: `${pendientes} vídeo${pendientes > 1 ? "s" : ""} en cola de edición, el más antiguo lleva ${Math.round(horas)} h esperando. Si pasa a menudo, hay que añadir otro servidor de edición.`, href: "/ajustes" });
   }
   return avisos;
 }
