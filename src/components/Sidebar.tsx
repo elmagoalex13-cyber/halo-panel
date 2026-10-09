@@ -256,10 +256,10 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                               </Link>
                               {m.portal_token ? (
                                 <a
-                                  href={`/m/${m.portal_token}`}
+                                  href={`/api/modelos/${m.id}/entrar-portal`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  title={`Abrir el portal de ${m.nombre}`}
+                                  title={`Abrir el portal de ${m.nombre} (sin contraseña)`}
                                   aria-label={`Abrir el portal de ${m.nombre}`}
                                   className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs text-white/35 transition hover:bg-white/[0.08] hover:text-[#C4B5FD]"
                                 >

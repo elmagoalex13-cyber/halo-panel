@@ -87,10 +87,10 @@ function firmar(payload: string) {
   return crypto.createHmac("sha256", secreto()).update(payload).digest("base64url");
 }
 
-export function crearSesion(modeloId: string, slug: string) {
-  const exp = Date.now() + SESION_HORAS * 3600000;
+export function crearSesion(modeloId: string, slug: string, horas = SESION_HORAS) {
+  const exp = Date.now() + horas * 3600000;
   const payload = Buffer.from(JSON.stringify({ m: modeloId, s: slug, e: exp })).toString("base64url");
-  return { valor: `${payload}.${firmar(payload)}`, maxAge: SESION_HORAS * 3600 };
+  return { valor: `${payload}.${firmar(payload)}`, maxAge: horas * 3600 };
 }
 
 export type SesionPortal = { modeloId: string; slug: string };

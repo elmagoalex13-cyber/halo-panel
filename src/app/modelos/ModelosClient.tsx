@@ -576,7 +576,7 @@ export function ModelosClient({
                 {modelo.portal_token ? (
                   <div className="flex items-center gap-1.5">
                     <a
-                      href={`/m/${modelo.portal_token}`}
+                      href={`/api/modelos/${modelo.id}/entrar-portal`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="min-w-0 flex-1 truncate rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5 font-code text-[10px] text-[#A78BFA] hover:text-[#C4B5FD]"
