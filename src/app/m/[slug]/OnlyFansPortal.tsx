@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Film, Image as ImageIcon, Plus, Upload, X } from "lucide-react";
 import {
   ETIQUETA_TIPO,
+  NOMBRE_CARPETA_POSTS,
   FASES,
   archivosDeSlot,
   formatoTamano,
@@ -14,19 +15,20 @@ import {
   type TipoColeccion,
 } from "@/lib/onlyfans";
 import { subirArchivoOF } from "./subidaOF";
+import { VisorFotos } from "@/components/VisorFotos";
 
 export type ArchivoVista = ArchivoOF & { vista?: string | null };
 
 const BTN_SUBIR = "relative flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[#8B5CF6]/25 px-3 text-sm font-semibold text-white transition hover:bg-[#8B5CF6]/35 disabled:opacity-70";
 
-function Miniatura({ a, onQuitar, bloqueado }: { a: ArchivoVista; onQuitar: (a: ArchivoVista) => void; bloqueado: boolean }) {
+function Miniatura({ a, onQuitar, bloqueado, onAbrir }: { a: ArchivoVista; onQuitar: (a: ArchivoVista) => void; bloqueado: boolean; onAbrir?: () => void }) {
   const [fallo, setFallo] = useState(false);
   return (
     <div className="relative">
       <div className="aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/40">
         {a.vista && !fallo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={a.vista} alt="" loading="lazy" onError={() => setFallo(true)} className="h-full w-full object-cover" />
+          <img src={a.vista} alt="" loading="lazy" onError={() => setFallo(true)} onClick={onAbrir} className={`h-full w-full object-cover ${onAbrir ? "cursor-zoom-in" : ""}`} />
         ) : (
           <div className="grid h-full place-items-center px-1 text-center text-[10px] text-white/40">
             <ImageIcon className="mx-auto mb-1 h-5 w-5" />
@@ -175,6 +177,25 @@ export function OnlyFansPortal({
   const [creando, setCreando] = useState(false);
   const [ocupadas, setOcupadas] = useState(0);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [visor, setVisor] = useState<number | null>(null);
+  const creandoCarpeta = useRef(false);
+
+  // Los posts van todos a una sola carpeta: al entrar en «Posts» se prepara (se crea la primera vez)
+  const carpetaPosts = colecciones.find((c) => c.tipo === "post" && c.nombre === NOMBRE_CARPETA_POSTS && c.estado === "en_curso") ?? null;
+  useEffect(() => {
+    if (tipo !== "post" || carpetaPosts || creandoCarpeta.current) return;
+    creandoCarpeta.current = true;
+    fetch("/api/portal/of/coleccion", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "post" }) })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as { coleccion?: ColeccionOF; error?: string };
+        if (!r.ok || !j.coleccion) throw new Error(j.error ?? "No se pudo preparar la carpeta de posts");
+        setColecciones((p) => (p.some((c) => c.id === j.coleccion!.id) ? p : [j.coleccion as ColeccionOF, ...p]));
+      })
+      .catch((e) => setAviso({ ok: false, texto: e instanceof Error ? e.message : "No se pudo preparar la carpeta de posts" }))
+      .finally(() => {
+        creandoCarpeta.current = false;
+      });
+  }, [tipo, carpetaPosts]);
 
   // No dejar cerrar la pagina a mitad de una subida
   useEffect(() => {
@@ -391,16 +412,16 @@ export function OnlyFansPortal({
           ? "Cada script tiene 8 fases. Sube el vídeo y las fotos de cada fase en su sitio, tal como pide la guía."
           : tipo === "pack"
             ? "Un pack es un conjunto de fotos y vídeos de una misma cosa. Dale un nombre y sube lo que lleve."
-            : "Un post es una publicación suelta: ponle un título y sube sus fotos o vídeos."}
+            : "Todos tus posts van juntos, en una misma carpeta: sube aquí las fotos (o vídeos) de tus posts, sin crear nada. Cada foto cuenta como un post."}
       </p>
       {aviso ? <p className={`rounded-xl px-3 py-2 text-sm ${aviso.ok ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300"}`}>{aviso.texto}</p> : null}
 
-      {nuevo ? (
+      {tipo === "post" ? null : nuevo ? (
         <div className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
           <input
             value={nuevo.nombre}
             onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
-            placeholder={tipo === "pack" ? "Nombre del pack (ej. Ducha)" : "Título del post"}
+            placeholder="Nombre del pack (ej. Ducha)"
             maxLength={80}
             className="input-base w-full"
             autoFocus
@@ -408,7 +429,7 @@ export function OnlyFansPortal({
           <textarea
             value={nuevo.descripcion}
             onChange={(e) => setNuevo({ ...nuevo, descripcion: e.target.value })}
-            placeholder={tipo === "pack" ? "De qué va (opcional)" : "Texto o idea del post (opcional)"}
+            placeholder="De qué va (opcional)"
             rows={2}
             className="input-base w-full resize-none"
           />
@@ -426,11 +447,21 @@ export function OnlyFansPortal({
           onClick={() => (tipo === "script" ? crear() : setNuevo({ nombre: "", descripcion: "" }))}
           className="btn-primary flex h-12 w-full items-center justify-center gap-2 text-base disabled:opacity-50"
         >
-          <Plus className="h-5 w-5" /> {tipo === "script" ? "Empezar un script nuevo" : tipo === "pack" ? "Nuevo pack" : "Nuevo post"}
+          <Plus className="h-5 w-5" /> {tipo === "script" ? "Empezar un script nuevo" : "Nuevo pack"}
         </button>
       )}
 
-      {lista.length ? (
+      {tipo === "post" ? (
+        <PostsCarpeta
+          carpeta={carpetaPosts}
+          colecciones={colecciones.filter((c) => c.tipo === "post")}
+          archivos={archivos}
+          onQuitar={quitar}
+          onSubido={alSubir}
+          onOcupado={alOcupar}
+          onAbrir={setVisor}
+        />
+      ) : lista.length ? (
         <ul className="space-y-2">
           {lista.map((c) => {
             const mios = delCol(c.id);
@@ -458,6 +489,74 @@ export function OnlyFansPortal({
       ) : (
         <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center text-sm text-white/40">Todavía no tienes {ETIQUETA_TIPO[tipo].toLowerCase()}.</p>
       )}
+
+      {visor !== null ? <VisorPosts archivos={archivos} colecciones={colecciones} indice={visor} onCambiar={setVisor} onCerrar={() => setVisor(null)} /> : null}
     </section>
+  );
+}
+
+/** Fotos de los posts de la modelo (de la carpeta unica y de los posts sueltos de antes), de la mas reciente a la mas antigua. */
+function fotosDePosts(archivos: ArchivoVista[], colecciones: ColeccionOF[]) {
+  const ids = new Set(colecciones.filter((c) => c.tipo === "post").map((c) => c.id));
+  return archivos.filter((a) => ids.has(a.coleccion_id)).sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+function VisorPosts({ archivos, colecciones, indice, onCambiar, onCerrar }: { archivos: ArchivoVista[]; colecciones: ColeccionOF[]; indice: number; onCambiar: (i: number) => void; onCerrar: () => void }) {
+  const fotos = fotosDePosts(archivos, colecciones).filter((a) => a.tipo_archivo === "foto" && a.vista);
+  if (!fotos.length) return null;
+  return <VisorFotos fotos={fotos.map((a) => ({ src: a.vista as string }))} indice={Math.min(indice, fotos.length - 1)} onCambiar={onCambiar} onCerrar={onCerrar} />;
+}
+
+// Posts: una sola carpeta con todo lo que sube la modelo (sin crear un post por cada publicacion)
+function PostsCarpeta({
+  carpeta,
+  colecciones,
+  archivos,
+  onQuitar,
+  onSubido,
+  onOcupado,
+  onAbrir,
+}: {
+  carpeta: ColeccionOF | null;
+  colecciones: ColeccionOF[];
+  archivos: ArchivoVista[];
+  onQuitar: (a: ArchivoVista) => void;
+  onSubido: (r: { archivo: ArchivoOF; vista: string | null }) => void;
+  onOcupado: (o: boolean) => void;
+  onAbrir: (i: number) => void;
+}) {
+  const todos = fotosDePosts(archivos, colecciones);
+  const cerradas = new Set(colecciones.filter((c) => c.estado === "entregado").map((c) => c.id)); // posts sueltos de antes, ya entregados
+  const fotos = todos.filter((a) => a.tipo_archivo === "foto");
+  const videos = todos.filter((a) => a.tipo_archivo === "video");
+  const verFotos = fotos.filter((a) => a.vista);
+  return (
+    <div className="space-y-3">
+      {carpeta?.revision === "mejorar" ? <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-sm text-amber-100">⚠️ La agencia te pide mejorar algo de tus posts{carpeta.revision_texto ? `: ${carpeta.revision_texto}` : "."}</p> : null}
+      {carpeta?.revision === "aprobado" ? <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">✅ Tus posts están aprobados por la agencia.</p> : null}
+      {carpeta ? (
+        <BotonSubida etiqueta="Subir fotos de posts" accept="image/*,video/*,.heic,.heif,.mov" coleccionId={carpeta.id} onSubido={onSubido} onOcupado={onOcupado} />
+      ) : (
+        <p className="rounded-xl bg-white/[0.04] px-3 py-3 text-center text-sm text-white/45">Preparando tu carpeta de posts…</p>
+      )}
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/40">
+        Tus posts subidos ({todos.length})
+      </p>
+      {videos.length ? (
+        <div className="space-y-2">
+          {videos.map((a) => (
+            <FilaVideo key={a.id} a={a} onQuitar={onQuitar} bloqueado={cerradas.has(a.coleccion_id)} />
+          ))}
+        </div>
+      ) : null}
+      {fotos.length ? (
+        <div className="grid grid-cols-4 gap-2">
+          {fotos.map((a) => (
+            <Miniatura key={a.id} a={a} onQuitar={onQuitar} bloqueado={cerradas.has(a.coleccion_id)} onAbrir={a.vista ? () => onAbrir(verFotos.findIndex((x) => x.id === a.id)) : undefined} />
+          ))}
+        </div>
+      ) : null}
+      {!todos.length ? <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center text-sm text-white/40">Todavía no has subido ningún post.</p> : null}
+    </div>
   );
 }

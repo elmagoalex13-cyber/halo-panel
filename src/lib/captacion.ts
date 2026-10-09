@@ -6,7 +6,7 @@ import { encolarTelegram } from "@/lib/telegramCola";
 //   - reels (objetivo_videos, p. ej. 30): se quedan EN ESPERA (estado "recibido") hasta que la agencia los manda a editar
 //   - scripts completos y APROBADOS por la agencia (objetivo_scripts, p. ej. 4)
 //   - packs de fotos entregados (objetivo_packs, p. ej. 5)
-//   - posts de OnlyFans entregados (objetivo_posts, p. ej. 30)
+//   - posts de OnlyFans subidos (objetivo_posts, p. ej. 30): todos van a una misma carpeta y cada foto/vídeo cuenta como un post
 // Un objetivo en blanco (null) significa que no se exige. Cuando se cumplen todos, se avisa de que hay que crearle la cuenta.
 
 export const OBJETIVO_POR_DEFECTO = 30;
@@ -25,6 +25,15 @@ export type ProgresoCaptacion = {
 const cumple = (m: Meta) => m.obj === null || m.n >= m.obj;
 const num = (v: unknown) => (typeof v === "number" && v > 0 ? v : null);
 
+/** Posts de OnlyFans de una modelo: cada archivo subido a sus carpetas de posts (la carpeta unica y, si los tiene, los posts sueltos de antes). */
+export async function contarPosts(db: ReturnType<typeof createAdminClient>, modeloId: string): Promise<number> {
+  const { data } = await db.from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post");
+  const ids = (data ?? []).map((c) => c.id as string);
+  if (!ids.length) return 0;
+  const { count } = await db.from("of_archivos").select("id", { count: "exact", head: true }).in("coleccion_id", ids);
+  return count ?? 0;
+}
+
 /** Progreso de una modelo en todos sus objetivos. null si no tiene captacion. Tolerante a que falten SQL por ejecutar. */
 export async function progresoCaptacion(modeloId: string): Promise<ProgresoCaptacion | null> {
   try {
@@ -39,7 +48,7 @@ export async function progresoCaptacion(modeloId: string): Promise<ProgresoCapta
       db.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", modeloId).eq("origen", "upload_manual").or("tipo.is.null,tipo.neq.5"),
       entregadas("script"),
       entregadas("pack"),
-      entregadas("post"),
+      contarPosts(db, modeloId),
     ]);
     // Scripts aprobados (si aun no existe la columna de revision, se cuentan los entregados)
     const aprobados = await db.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", modeloId).eq("tipo", "script").eq("estado", "entregado").eq("revision", "aprobado");
@@ -50,7 +59,7 @@ export async function progresoCaptacion(modeloId: string): Promise<ProgresoCapta
       scripts: { n: scriptsN, obj: num(f.objetivo_scripts) },
       scriptsEntregados: scriptsEnt.count ?? 0,
       packs: { n: packs.count ?? 0, obj: num(f.objetivo_packs) },
-      posts: { n: posts.count ?? 0, obj: num(f.objetivo_posts) },
+      posts: { n: posts, obj: num(f.objetivo_posts) },
       cumplido: false,
     };
     p.cumplido = cumple(p.reels) && cumple(p.scripts) && cumple(p.packs) && cumple(p.posts);

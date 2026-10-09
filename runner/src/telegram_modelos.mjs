@@ -171,6 +171,18 @@ export async function avisosModelos(sb) {
 }
 
 // ------------------------------------------------------------------------------------------------ recordatorio cada 3 dias
+async function postsSubidos(sb, modeloId) {
+  try {
+    const { data } = await sb.from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post");
+    const ids = (data ?? []).map((c) => c.id);
+    if (!ids.length) return 0;
+    const { count } = await sb.from("of_archivos").select("id", { count: "exact", head: true }).in("coleccion_id", ids);
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 async function pendientesDe(sb, m) {
   const cuenta = (q) => q.then((r) => r.count ?? 0, () => 0);
   const entregadas = (tipo) => sb.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("tipo", tipo).eq("estado", "entregado");
@@ -179,7 +191,7 @@ async function pendientesDe(sb, m) {
     cuenta(entregadas("script")),
     sb.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("tipo", "script").eq("estado", "entregado").eq("revision", "aprobado").then((r) => (r.error ? null : (r.count ?? 0))),
     cuenta(entregadas("pack")),
-    cuenta(entregadas("post")),
+    postsSubidos(sb, m.id), // los posts van a una sola carpeta: cada archivo subido cuenta como un post
     cuenta(sb.from("cuentas_instagram").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("activa", true)),
     cuenta(sb.from("encargos").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).not("estado", "in", "(entregado,cancelado)")),
     cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("estado", "aprobado").or(`publicado_at.is.null,publicado_at.gt.${new Date().toISOString()}`).or("tipo.is.null,tipo.neq.5")),

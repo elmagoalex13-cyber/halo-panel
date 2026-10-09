@@ -4,6 +4,7 @@ import { sesionActual } from "@/lib/portalAuth";
 import { slotDe, type ArchivoOF } from "@/lib/onlyfans";
 import { UUID, coleccionDeModelo, tipoDeArchivo } from "@/lib/ofServer";
 import { bucketOF, tamanoEnR2, urlVista } from "@/lib/r2/onlyfans";
+import { evaluarUmbral } from "@/lib/captacion";
 
 export const dynamic = "force-dynamic";
 
@@ -68,5 +69,6 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const archivo = data as ArchivoOF;
+  if (col.tipo === "post") await evaluarUmbral(sesion.modeloId); // los posts se cuentan al subirlos (no hay «entregar»)
   return NextResponse.json({ ok: true, archivo, vista: tipo === "foto" ? await urlVista(body.key) : null });
 }

@@ -118,6 +118,9 @@ export const slotDe = (fase: number, slot: string) => faseDe(fase)?.slots.find((
 export const totalFase = (f: FaseScript) => f.slots.reduce((s, x) => s + x.n, 0);
 export const TOTAL_SCRIPT = FASES.reduce((s, f) => s + totalFase(f), 0);
 
+/** Nombre de la carpeta unica donde van TODOS los posts de una modelo (no se crea un post por cada publicacion). */
+export const NOMBRE_CARPETA_POSTS = "Posts";
+
 export type TipoColeccion = "script" | "pack" | "post";
 export const ETIQUETA_TIPO: Record<TipoColeccion, string> = { script: "Scripts", pack: "Packs", post: "Posts" };
 
