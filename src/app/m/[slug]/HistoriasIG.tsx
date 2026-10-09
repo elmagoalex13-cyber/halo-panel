@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { VisorFotos } from "@/components/VisorFotos";
 import type { Historia } from "@/lib/historiasIG";
 
 type Estado = { nombre: string; fase: "subiendo" | "ok" | "error"; error?: string };
@@ -17,6 +18,7 @@ export function HistoriasIG() {
   const [cola, setCola] = useState<Estado[]>([]);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const [visor, setVisor] = useState<number | null>(null);
   const subiendo = cola.some((c) => c.fase === "subiendo");
 
   const recargar = useCallback(async () => {
@@ -124,16 +126,18 @@ export function HistoriasIG() {
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {historias.map((h) => (
               <div key={h.key} className="relative aspect-[9/16] overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={h.vista}
-                  alt="Foto de historia"
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.opacity = "0.15";
-                  }}
-                />
+                <button type="button" onClick={() => setVisor(historias.indexOf(h))} aria-label="Ver la foto grande" className="block h-full w-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={h.vista}
+                    alt="Foto de historia"
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.opacity = "0.15";
+                    }}
+                  />
+                </button>
                 <button
                   type="button"
                   onClick={() => borrar(h)}
@@ -154,6 +158,14 @@ export function HistoriasIG() {
       ) : (
         <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center text-sm text-white/40">Todavía no has subido ninguna foto de historias.</p>
       )}
+      {visor !== null && historias?.length ? (
+        <VisorFotos
+          fotos={historias.map((h) => ({ src: h.vista, pie: h.fecha ? new Date(h.fecha).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : undefined }))}
+          indice={Math.min(visor, historias.length - 1)}
+          onCambiar={setVisor}
+          onCerrar={() => setVisor(null)}
+        />
+      ) : null}
     </section>
   );
 }

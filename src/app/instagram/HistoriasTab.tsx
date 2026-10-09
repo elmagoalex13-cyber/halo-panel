@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
+import { VisorFotos } from "@/components/VisorFotos";
 import type { Historia } from "@/lib/historiasIG";
 
 export type ResumenModeloHistorias = {
@@ -27,6 +28,7 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
   const [borrando, setBorrando] = useState(false);
   // Cuantas fotos eran nuevas al abrir (las primeras de la lista, que va de la mas reciente a la mas antigua): se resaltan aunque ya cuenten como vistas
   const [nuevasMarca, setNuevasMarca] = useState(0);
+  const [visor, setVisor] = useState<number | null>(null);
 
   const lista = useMemo(
     () =>
@@ -162,10 +164,10 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
               const esNueva = i < nuevasMarca;
               return (
                 <div key={h.key} className={`relative overflow-hidden rounded-xl bg-black ring-2 ${elegidas.includes(h.key) ? "ring-emerald-500" : esNueva ? "ring-pink-500/70" : "ring-white/10"}`}>
-                  <a href={h.vista} target="_blank" rel="noopener noreferrer" className="block aspect-[9/16]">
+                  <button type="button" onClick={() => setVisor(i)} aria-label="Ver la foto grande" className="block aspect-[9/16] w-full cursor-zoom-in">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={h.vista} alt={`Historia ${i + 1} de ${modelo.nombre}`} loading="lazy" className="h-full w-full object-cover" />
-                  </a>
+                  </button>
                   <button
                     type="button"
                     onClick={() => alternar(h.key)}
@@ -189,6 +191,15 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
       ) : (
         <p className="text-sm text-white/40">Elige una modelo para ver sus fotos.</p>
       )}
+
+      {visor !== null && fotos?.length ? (
+        <VisorFotos
+          fotos={fotos.map((h) => ({ src: h.vista, pie: fechaCorta(h.fecha), descarga: h.descarga }))}
+          indice={Math.min(visor, fotos.length - 1)}
+          onCambiar={setVisor}
+          onCerrar={() => setVisor(null)}
+        />
+      ) : null}
     </div>
   );
 }
