@@ -219,7 +219,7 @@ export async function resumenDiario(supabase, { forzar = false, soloMostrar = fa
     for (const m of lista.slice(0, 25)) {
       let cap = "";
       if (m.objetivo_videos && !m.captacion_aprobada_at) {
-        const { count } = await supabase.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("origen", "upload_manual").or("tipo.is.null,tipo.neq.5");
+        const { count } = await supabase.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("origen", "upload_manual").or("tipo.is.null,tipo.not.in.(3,5)");
         cap = ` · captación ${count ?? "?"}/${m.objetivo_videos}`;
       }
       const n = porModelo.get(m.id) ?? 0;

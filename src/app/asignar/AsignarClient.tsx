@@ -59,7 +59,7 @@ export function AsignarClient({
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const lista = urls.split(/[\s,]+/).filter(Boolean);
-  const exigeReferencia = tipo === 4;
+  const exigeReferencia = false; // los tipos que se piden ya no obligan a pegar un video (la URL/archivo es opcional)
   const totalFuentes = lista.length + files.length;
   const alternar = (id: string) => setElegidas((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 

@@ -2,8 +2,8 @@
  * Handlers por tipo de video. Devuelven { outKey, rawKey }; NO tocan la BD (lo hace index.mjs).
  *  tipo 1 = hablando (subtitulos Whisper)
  *  tipo 2 = caption/gesto (frase del banco quemada + audio de referencia opcional)
- *  tipo 3 = reto (subtitulos + freeze final)
- *  tipo 4 = con referencia (mismo recorte/duracion que la referencia)
+ *  tipo 3 = TikTok: SIN edicion (solo se pasa a mp4 y queda listo en la Mesa)
+ *  tipo 4 = con referencia (antiguo, ya no se ofrece; se mantiene por si queda alguna pieza)
  */
 import path from "path";
 import { createWriteStream } from "fs";
@@ -28,7 +28,7 @@ import {
   transcribeWithWhisper,
   wordTimedFromSegments,
 } from "./whisper.mjs";
-import { getDuration, renderTipo1, renderTipo2, renderTipo3, renderTipo4 } from "./ffmpeg.mjs";
+import { copiarSinEditar, getDuration, renderTipo1, renderTipo2, renderTipo4 } from "./ffmpeg.mjs";
 import { DURACION_TIPO2, dividirEnFragmentos, planificarFragmentos } from "./fragmentos.mjs";
 import { createClient } from "@supabase/supabase-js";
 
@@ -164,11 +164,10 @@ export async function procesarTipo(tipo, pieza) {
       fraseQuemada = pieza.frase_quemada ?? "";
       trimUsado = { start: inicio, end: inicio + DURACION_TIPO2 };
     } else if (tipo === 3) {
-      const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
-      await renderTipo3(rawPath, subs?.assPath, outPath, 2, { trim: subs?.trim });
-      fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
-      trimUsado = subs?.trim ?? null;
-      trimManual = Boolean(subs?.manual);
+      // TikTok: sin subtitulos, sin recorte, sin frase. Llega a la Mesa tal cual la grabo la modelo.
+      await copiarSinEditar(rawPath, outPath);
+      fraseQuemada = "";
+      trimUsado = null;
     } else {
       const refKey = keyDesdeUrl(pieza.r2_key_referencia);
       if (!refKey) throw new Error("Tipo 4 sin video de referencia (r2_key_referencia)");

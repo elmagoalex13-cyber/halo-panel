@@ -187,7 +187,7 @@ async function pendientesDe(sb, m) {
   const cuenta = (q) => q.then((r) => r.count ?? 0, () => 0);
   const entregadas = (tipo) => sb.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("tipo", tipo).eq("estado", "entregado");
   const [reels, scriptsEnt, scriptsOk, packs, posts, cuentas, encargos, aprobadosSinSalir, enCamino] = await Promise.all([
-    cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("origen", "upload_manual").or("tipo.is.null,tipo.neq.5")),
+    cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("origen", "upload_manual").or("tipo.is.null,tipo.not.in.(3,5)")),
     cuenta(entregadas("script")),
     sb.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("tipo", "script").eq("estado", "entregado").eq("revision", "aprobado").then((r) => (r.error ? null : (r.count ?? 0))),
     cuenta(entregadas("pack")),

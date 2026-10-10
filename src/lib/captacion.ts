@@ -45,7 +45,7 @@ export async function progresoCaptacion(modeloId: string): Promise<ProgresoCapta
 
     const entregadas = (tipo: string) => db.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", modeloId).eq("tipo", tipo).eq("estado", "entregado");
     const [reels, scriptsEnt, packs, posts] = await Promise.all([
-      db.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", modeloId).eq("origen", "upload_manual").or("tipo.is.null,tipo.neq.5"),
+      db.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", modeloId).eq("origen", "upload_manual").or("tipo.is.null,tipo.not.in.(3,5)"), // los TikTok no son reels
       entregadas("script"),
       entregadas("pack"),
       contarPosts(db, modeloId),

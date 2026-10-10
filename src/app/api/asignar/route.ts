@@ -35,8 +35,7 @@ export async function POST(req: NextRequest) {
   const tipo = Number(body.tipo);
   const modelos = Array.from(new Set(body.modelo_ids ?? []));
 
-  if (![1, 2, 3, 4].includes(tipo)) return NextResponse.json({ error: "Elige el tipo de video (1-4)" }, { status: 400 });
-  if (tipo === 4 && !urls.length && !archivos.length) return NextResponse.json({ error: "Pega una URL o sube al menos un video de referencia" }, { status: 400 });
+  if (![1, 2, 3].includes(tipo)) return NextResponse.json({ error: "Elige el tipo de video" }, { status: 400 });
   if (invalidas.length) return NextResponse.json({ error: `URL no valida: ${invalidas[0]}` }, { status: 400 });
   if (!modelos.length) return NextResponse.json({ error: "Elige al menos una modelo" }, { status: 400 });
   { const a = await alcanceActual(); if (!modelos.every((m) => veModelo(a, m))) return modeloProhibido(); }
@@ -50,7 +49,7 @@ export async function POST(req: NextRequest) {
     let yaAsignados = 0;
     const nuevosPorModelo = new Map<string, number>(); // para avisar a cada modelo de lo que se le ha asignado
 
-    if (tipo !== 4 && urls.length === 0 && archivos.length === 0) {
+    if (urls.length === 0 && archivos.length === 0) {
       const instrucciones = body.instrucciones?.trim() || null;
       for (const modeloId of modelos) {
         const query = supabase

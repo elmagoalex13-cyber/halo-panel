@@ -45,8 +45,7 @@ const TIPO_FILTROS = [
   { value: "todos", label: "Todos los tipos" },
   { value: "tipo1", label: "Hablando" },
   { value: "tipo2", label: "Frases + musica" },
-  { value: "tipo3", label: "Parar imagen" },
-  { value: "tipo4", label: "Referencias" },
+  { value: "tipo3", label: "TikToks" },
 ] as const;
 
 type Programacion =
@@ -1201,7 +1200,7 @@ export function MesaClient({
                   </div>
                 </div>
 
-                {["tipo1", "tipo3", "tipo4"].includes(selected.tipo_video ?? "") ? (
+                {["tipo1", "tipo4"].includes(selected.tipo_video ?? "") ? (
                   <div className="mt-3">
                     <RecorteManualEditor
                       row={selected}

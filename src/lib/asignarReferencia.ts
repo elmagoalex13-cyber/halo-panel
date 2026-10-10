@@ -29,8 +29,7 @@ export async function asignarVideoAModelos(
   if (vErr || !video) return { ok: false, status: 404, error: "Video no encontrado" };
 
   const tipo = opts.tipo ?? (Number(String(video.formato_confirmado ?? "").replace(/\D/g, "")) || 0);
-  if (![1, 2, 3, 4].includes(tipo)) return { ok: false, status: 400, error: "Elige un tipo de video (1-4)" };
-  if (tipo === 4 && !video.video_url) return { ok: false, status: 409, error: "El video no tiene archivo descargado" };
+  if (![1, 2, 3].includes(tipo)) return { ok: false, status: 400, error: "Elige un tipo de video (1-4)" };
 
   const username = (video.referencias_cuentas as unknown as { username?: string } | null)?.username ?? null;
   const codigo = video.video_url ? String(video.video_url).match(/([^/]+)\.mp4$/)?.[1] : null;

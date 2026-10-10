@@ -37,18 +37,16 @@ export type Entrega = {
   preview?: { poster: string; video: string } | null; // vista previa para que ella pueda ver el reel
 };
 
-const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "Parar imagen", 4: "Con referencia" };
+const NOMBRE_TIPO: Record<number, string> = { 1: "Hablando", 2: "Caption / Gesto", 3: "TikTok", 4: "Con referencia" };
 const TIPOS = [
   { tipo: 1, corto: "Hablado", desc: "Videos hablando a cámara. Nosotros ponemos los subtítulos.", icono: "🎙", etiquetaSubida: "Subir hablado" },
   { tipo: 2, corto: "Frases + música", desc: "Gestos o escenas cortas. Nosotros añadimos la frase y la música.", icono: "🎵", etiquetaSubida: "Subir gesto" },
-  { tipo: 3, corto: "Parar imagen", desc: "Videos para la edición de parar imagen.", icono: "⏸", etiquetaSubida: "Subir video" },
-  { tipo: 4, corto: "Referencias", desc: "Videos concretos que debes imitar.", icono: "🎯", etiquetaSubida: "Subir imitación" },
+  { tipo: 3, corto: "TikToks", desc: "Vídeos para TikTok. No se editan: los subes y llegan tal cual.", icono: "📱", etiquetaSubida: "Subir TikTok" },
 ] as const;
 const TEXTO_ENCARGO: Record<number, string> = {
   1: "Grábate hablando a cámara.",
   2: "Graba un gesto o escena corta.",
-  3: "Graba un video para parar imagen.",
-  4: "Mira la referencia y sube tu versión.",
+  3: "Graba tu TikTok y súbelo tal cual (no se edita).",
 };
 const POR_PAGINA = 5;
 
@@ -510,7 +508,7 @@ export function PortalClient({
       {pestana === "subir" ? (
         <section className="space-y-3">
           <p className="text-sm text-white/45">Sube aquí tus videos libres. Para imitar una referencia, hazlo desde «Por grabar».</p>
-          {TIPOS.filter((t) => t.tipo !== 4).map((t) => (
+          {TIPOS.map((t) => (
             <article key={t.tipo} className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
               <div className="flex items-center gap-3">
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/[0.06] text-xl" aria-hidden="true">

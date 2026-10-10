@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const tipo = Number(body.tipo);
   if (!modelos.length) return NextResponse.json({ error: "Elige al menos una modelo" }, { status: 400 });
   { const a = await alcanceActual(); if (!modelos.every((m) => veModelo(a, m))) return modeloProhibido(); }
-  if (![1, 2, 3, 4].includes(tipo)) return NextResponse.json({ error: "Elige un tipo de video (1-4)" }, { status: 400 });
+  if (![1, 2, 3].includes(tipo)) return NextResponse.json({ error: "Elige un tipo de video" }, { status: 400 });
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
 
   try {

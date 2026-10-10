@@ -17,7 +17,7 @@ function urlVideo(url: string | null | undefined) {
 
 function tipoDe(v: ReferenciaVideo) {
   const n = Number(String(v.formato_confirmado ?? "").replace(/\D/g, ""));
-  return n >= 1 && n <= 4 ? n : null;
+  return n >= 1 && n <= 3 ? n : null;
 }
 
 type Vista = "pendiente" | "aprobado" | "descartado";
@@ -87,7 +87,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
     void cargarAsignados(idsAprobadosVisibles);
   }, [idsAprobadosVisibles, cargarAsignados]);
 
-  const seleccionables = visibles.filter((v) => tipoDe(v) && (tipoDe(v) !== 4 || v.video_url));
+  const seleccionables = visibles.filter((v) => tipoDe(v));
   const alternarSeleccion = (id: string) => setSeleccion((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const cambiarVista = (x: Vista) => {
     setVista(x);
@@ -267,7 +267,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
             const tipo = tipoDe(v);
             return (
               <article key={v.id} className={`relative flex flex-col gap-3 rounded-2xl border p-3 ${seleccion.includes(v.id) ? "border-emerald-500/50 bg-emerald-500/[0.06]" : "border-white/[0.08] bg-white/[0.03]"}`}>
-                {vista !== "descartado" && tipo && (tipo !== 4 || v.video_url) ? (
+                {vista !== "descartado" && tipo ? (
                   <button
                     type="button"
                     onClick={() => alternarSeleccion(v.id)}
@@ -378,7 +378,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                         </p>
                         <button
                           onClick={() => abrirEnvio([v])}
-                          disabled={!tipo || (tipo === 4 && !v.video_url)}
+                          disabled={!tipo}
                           className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
                         >
                           ＋ Asignar a más modelos
@@ -416,7 +416,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
               </h3>
               <p className="text-xs text-white/40">
                 {enviando.length === 1
-                  ? `Tipo ${tipoDe(enviando[0])} · ${nombreTipo(tipoDe(enviando[0]) ?? 4)}. `
+                  ? `Tipo ${tipoDe(enviando[0])} · ${nombreTipo(tipoDe(enviando[0]) ?? 1)}. `
                   : "Cada vídeo se envía con el tipo de edición que ya tiene. "}
                 Les aparecerá en su portal como vídeo pendiente. A quien ya lo tenga no se le repite.
               </p>

@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { mkdir, writeFile } from "fs/promises";
+import { copyFile, mkdir, writeFile } from "fs/promises";
 import path from "path";
 
 const execFileAsync = promisify(execFile);
@@ -315,6 +315,19 @@ export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {})
   };
 
   await runWithHdrFallback(buildArgs, { hdr, label: "tipo1" });
+}
+
+/**
+ * Tipo 3 (TikTok): SIN edicion. Solo se pasa a mp4 copiando las pistas tal cual (sin recomprimir, sin recortar, sin subtitulos).
+ * Si el contenedor no admite la copia directa, se copia el archivo como esta.
+ */
+export async function copiarSinEditar(inputPath, outputPath) {
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  try {
+    await runFfmpeg(["-y", "-i", inputPath, "-map", "0", "-c", "copy", "-movflags", "+faststart", outputPath]);
+  } catch {
+    await copyFile(inputPath, outputPath);
+  }
 }
 
 /**

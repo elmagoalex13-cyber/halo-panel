@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
-import { keyR2 } from "@/lib/media";
 import { columnasTipo } from "@/lib/tipoVideo";
 import { elegirFrase, registrarUsoFrase } from "@/lib/frases";
 import { evaluarUmbral } from "@/lib/captacion";
@@ -43,20 +42,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Video pendiente no encontrado" }, { status: 404 });
     }
     if (encargo.estado === "entregado") return NextResponse.json({ error: "Este video ya esta entregado" }, { status: 409 });
-    const m = String(encargo.tipo_video ?? "").match(/[1-4]/);
+    const m = String(encargo.tipo_video ?? "").match(/[1-3]/);
     tipo = m ? Number(m[0]) : tipo;
     referenciaId = encargo.referencia_id ?? referenciaId;
     instrucciones = encargo.instrucciones ?? null;
   }
-  if (![1, 2, 3, 4].includes(tipo)) return NextResponse.json({ error: "Tipo de video no valido" }, { status: 400 });
-
-  let refKey: string | null = null;
-  if (tipo === 4) {
-    if (!referenciaId) return NextResponse.json({ error: "Falta el video de referencia" }, { status: 400 });
-    const { data: ref } = await supabase.from("referencias").select("url_r2, url_original").eq("id", referenciaId).single();
-    refKey = keyR2(ref?.url_r2);
-    if (!refKey) return NextResponse.json({ error: "La referencia todavia no esta disponible" }, { status: 409 });
-  }
+  if (![1, 2, 3].includes(tipo)) return NextResponse.json({ error: "Tipo de video no valido" }, { status: 400 });
+  const refKey: string | null = null; // ya no hay tipo con edicion "igual que la referencia"
+  void referenciaId;
 
   const { data: cuentas } = await supabase
     .from("cuentas_instagram")
@@ -67,7 +60,8 @@ export async function POST(req: NextRequest) {
 
   // Captacion: si la modelo tiene objetivo de videos y la agencia aun no ha aprobado el lote, el video se guarda EN ESPERA (sin editar)
   const { data: modeloCap } = await supabase.from("modelos").select("nombre, objetivo_videos, captacion_aprobada_at, umbral_avisado_at").eq("id", sesion.modeloId).maybeSingle();
-  const enCaptacion = Boolean(modeloCap?.objetivo_videos) && !modeloCap?.captacion_aprobada_at;
+  // Los TikTok no son reels de Instagram: no se retienen ni cuentan para la captacion
+  const enCaptacion = Boolean(modeloCap?.objetivo_videos) && !modeloCap?.captacion_aprobada_at && tipo !== 3;
 
   const frase = tipo === 2 && !enCaptacion ? await elegirFrase(supabase) : null; // en espera no se gasta ninguna frase (se asigna al editarlo)
   const ahora = new Date().toISOString();
