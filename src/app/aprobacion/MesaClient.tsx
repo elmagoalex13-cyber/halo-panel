@@ -58,6 +58,7 @@ function mensajeAprobado(p?: Programacion) {
     const cuando = new Date(p.programado_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid", weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     return `Aprobado y programado en Publer: @${p.cuenta}, ${cuando}${p.trial ? " (trial reel)" : " (reel)"}.`;
   }
+  if (p.motivo === "tiktok") return "TikTok aprobado: descárgalo desde la pestaña Aprobados y súbelo a TikTok (no se programa en Instagram).";
   return p.motivo === "publer_inactivo"
     ? "Aprobado. Publer no esta activo: descargalo desde la pestana Aprobados y subelo tu; se programara solo cuando actives Publer."
     : `Aprobado, pero no se pudo programar: ${p.mensaje}`;

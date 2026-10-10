@@ -194,8 +194,8 @@ async function pendientesDe(sb, m) {
     postsSubidos(sb, m.id), // los posts van a una sola carpeta: cada archivo subido cuenta como un post
     cuenta(sb.from("cuentas_instagram").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("activa", true)),
     cuenta(sb.from("encargos").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).not("estado", "in", "(entregado,cancelado)")),
-    cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("estado", "aprobado").or(`publicado_at.is.null,publicado_at.gt.${new Date().toISOString()}`).or("tipo.is.null,tipo.neq.5")),
-    cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).in("estado", ["en_aprobacion", "editando"]).or("tipo.is.null,tipo.neq.5")),
+    cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("estado", "aprobado").or(`publicado_at.is.null,publicado_at.gt.${new Date().toISOString()}`).or("tipo.is.null,tipo.not.in.(3,5)")),
+    cuenta(sb.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).in("estado", ["en_aprobacion", "editando"]).or("tipo.is.null,tipo.not.in.(3,5)")),
   ]);
   // Dos bloques bien separados: los REELS (para su Instagram) y el contenido de ONLYFANS (scripts, packs y posts, que sigue la guia)
   const reelsFalta = [];

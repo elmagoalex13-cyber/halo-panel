@@ -42,6 +42,7 @@ export function agregarFilas(piezas: PiezaMin[], ahora: Date, mesInicio: Date, m
     const f = por.get(p.modelo_id) ?? vacia(p.modelo_id);
     por.set(p.modelo_id, f);
     const futuro = t(p.publicado_at) > now;
+    if (p.tipo === 3) continue; // TikTok: no son reels de Instagram (ni stock ni pendientes de programar)
     if (p.tipo === 5) {
       if (p.estado === "aprobado") f[futuro ? "trial_aprob_futuro" : "trial_aprob_sin"]++;
       if (p.estado === "publicado") f.trial_publicados++;

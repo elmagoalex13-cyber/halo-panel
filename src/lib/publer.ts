@@ -12,6 +12,7 @@ export const ZONA = "Europe/Madrid";
 export const HORAS_REEL = ["09:00", "18:30"];
 export const HORAS_TRIAL = ["09:00", "14:00", "19:00"];
 export const TIPO_TRIAL = 5; // library_content.tipo de los trial reels (los crea el runner)
+export const TIPO_TIKTOK = 3; // library_content.tipo de los TikTok (sin edicion, no van a Instagram)
 export const SLOTS: Array<{ hora: string; trial: boolean }> = [
   ...HORAS_REEL.map((hora) => ({ hora, trial: false })),
   ...HORAS_TRIAL.map((hora) => ({ hora, trial: true })),
@@ -156,7 +157,7 @@ async function subirVideo(url: string, nombre: string) {
 
 export type ResultadoProgramar =
   | { ok: true; programado_at: string; trial: boolean; cuenta: string }
-  | { ok: false; motivo: "publer_inactivo" | "sin_cuentas" | "sin_video" | "error"; mensaje: string };
+  | { ok: false; motivo: "publer_inactivo" | "sin_cuentas" | "sin_video" | "error" | "tiktok"; mensaje: string };
 
 /** Programa una pieza aprobada en el siguiente hueco libre de las cuentas de su modelo. */
 export async function programarPieza(supabase: SupabaseClient, piezaId: string): Promise<ResultadoProgramar> {
@@ -170,6 +171,7 @@ export async function programarPieza(supabase: SupabaseClient, piezaId: string):
       .eq("id", piezaId)
       .single();
     if (!pieza) return { ok: false, motivo: "error", mensaje: "Pieza no encontrada" };
+    if (pieza.tipo === TIPO_TIKTOK) return { ok: false, motivo: "tiktok", mensaje: "Es un TikTok: no se programa en Instagram. Descárgalo y súbelo a TikTok." };
     const videoUrl = urlR2(pieza.video_procesado_url);
     if (!videoUrl) return { ok: false, motivo: "sin_video", mensaje: "La pieza no tiene video editado" };
 
@@ -257,6 +259,7 @@ export async function programarPendientes(supabase: SupabaseClient, limite = 6) 
       .select("id, modelo_id")
       .eq("estado", "aprobado")
       .is("publicado_at", null)
+      .or("tipo.is.null,tipo.neq.3") // los TikTok no se programan
       .not("video_procesado_url", "is", null)
       .order("aprobado_at", { ascending: true })
       .limit(limite);
