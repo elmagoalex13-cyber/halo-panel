@@ -575,6 +575,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, responder) => {
   } else if (msg?.type === "refresh") {
     refrescarMetricas(msg).catch((e) => log(e.message, "error"));
     responder({ ok: true });
+  } else if (msg?.type === "reload") {
+    // El panel acaba de dejar los archivos nuevos (boton «Actualizar extensión»): se recarga sola para usarlos
+    responder({ ok: true });
+    setTimeout(() => chrome.runtime.reload(), 400);
   } else if (msg?.type === "cancel") {
     detener().then(() => responder({ ok: true }));
     return true;

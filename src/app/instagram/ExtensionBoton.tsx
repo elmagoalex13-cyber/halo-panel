@@ -20,7 +20,8 @@ const CATEGORIAS = [
 ];
 
 // Version minima de la extension que entiende el panel (lee todos los reels paginando, cuentas elegidas...).
-const VERSION_MINIMA = "1.6.0"; // 1.6.0: las cuentas de referencia se reparten entre quienes analizan a la vez + ronda automatica del lunes
+const VERSION_MINIMA = "1.6.0";
+const VERSION_CON_RECARGA = "1.7.0"; // desde esta version la extension se recarga sola al actualizarla desde el panel // 1.6.0: las cuentas de referencia se reparten entre quienes analizan a la vez + ronda automatica del lunes
 const comparar = (a: string, b: string) => {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
@@ -29,6 +30,11 @@ const comparar = (a: string, b: string) => {
 };
 
 type CuentaLista = { id: string; username: string; categoria: string | null; etiqueta: string };
+
+// Minimo de la API "File System Access" de Chrome que se usa para dejar los archivos nuevos en la carpeta de la extension
+type CarpetaChrome = {
+  getFileHandle: (nombre: string, opciones?: { create?: boolean }) => Promise<{ getFile: () => Promise<{ text: () => Promise<string> }>; createWritable: () => Promise<{ write: (d: string) => Promise<void>; close: () => Promise<void> }> }>;
+};
 
 // Boton que lanza la extension de Chrome "HALO Virales" desde el propio panel (la extension tiene
 // que estar instalada en este Chrome). Habla con ella por window.postMessage.
@@ -47,6 +53,57 @@ export function ExtensionBoton({
   const [categoria, setCategoria] = useState("todas");
   const [version, setVersion] = useState<string | null>(null);
   const antes = useRef(false);
+  const [ultima, setUltima] = useState<string | null>(null); // ultima version de la extension que ofrece el panel
+  const [actualizando, setActualizando] = useState(false);
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/extension/archivos?solo=version")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { version?: string } | null) => vivo && setUltima(j?.version ?? null))
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  // Deja los archivos de la ultima version en la carpeta de la extension (el navegador pide elegirla una vez) y la recarga.
+  async function actualizarExtension() {
+    setAviso(null);
+    const selector = (window as unknown as { showDirectoryPicker?: (o: { mode: "readwrite" }) => Promise<CarpetaChrome> }).showDirectoryPicker;
+    if (!selector) return setAviso({ ok: false, texto: "Este navegador no permite actualizarla desde aquí: usa Chrome o sustituye los archivos de la carpeta a mano." });
+    setActualizando(true);
+    try {
+      const carpeta = await selector.call(window, { mode: "readwrite" });
+      try {
+        const manifiesto = JSON.parse(await (await (await carpeta.getFileHandle("manifest.json")).getFile()).text()) as { name?: string };
+        if (manifiesto.name !== "HALO Virales") throw new Error("otra");
+      } catch {
+        throw new Error("Esa no es la carpeta de la extensión «HALO Virales» (es la que tiene dentro manifest.json y background.js). Elige esa carpeta.");
+      }
+      const res = await fetch("/api/extension/archivos");
+      const j = (await res.json().catch(() => ({}))) as { version?: string; archivos?: Record<string, string>; error?: string };
+      if (!res.ok || !j.archivos) throw new Error(j.error ?? "No se pudieron descargar los archivos nuevos");
+      for (const [nombre, contenido] of Object.entries(j.archivos)) {
+        const escritor = await (await carpeta.getFileHandle(nombre, { create: true })).createWritable();
+        await escritor.write(contenido);
+        await escritor.close();
+      }
+      if (version && comparar(version, VERSION_CON_RECARGA) >= 0) {
+        setAviso({ ok: true, texto: `Extensión actualizada a la ${j.version}. Se recarga sola; la página se refresca en un momento.` });
+        window.postMessage({ source: "halo-panel", type: "reload" }, window.location.origin);
+        setTimeout(() => window.location.reload(), 2500);
+      } else {
+        setAviso({ ok: true, texto: `Archivos de la ${j.version} guardados. Falta un paso (solo esta vez): en chrome://extensions pulsa el icono de recargar ⟳ en «HALO Virales» y vuelve a abrir esta página. Desde la próxima, se recarga sola.` });
+      }
+    } catch (e) {
+      const cancelado = e instanceof DOMException && e.name === "AbortError";
+      if (!cancelado) setAviso({ ok: false, texto: e instanceof Error ? e.message : "No se pudo actualizar" });
+    } finally {
+      setActualizando(false);
+    }
+  }
 
   // Selector de cuentas: se puede analizar todas, una, tres, diez... las que se elijan.
   const [lista, setLista] = useState<CuentaLista[]>([]);
@@ -122,6 +179,7 @@ export function ExtensionBoton({
   }
 
   const desactualizada = version !== null && comparar(version, VERSION_MINIMA) < 0;
+  const hayNueva = version !== null && ultima !== null && comparar(version, ultima) < 0;
 
   if (detectada === false) {
     return (
@@ -133,6 +191,18 @@ export function ExtensionBoton({
 
   return (
     <div className="space-y-2">
+      {hayNueva || aviso ? (
+        <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 text-xs ${aviso && !aviso.ok ? "border-red-500/25 bg-red-500/10 text-red-300" : "border-[#8B5CF6]/30 bg-[#8B5CF6]/10 text-[#ddd6fe]"}`}>
+          <span className="min-w-0 flex-1">
+            {aviso ? aviso.texto : `Hay una versión nueva de la extensión (${ultima}; tú tienes la ${version}).`}
+          </span>
+          {hayNueva ? (
+            <button onClick={actualizarExtension} disabled={actualizando} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-50">
+              {actualizando ? "Actualizando…" : "Actualizar extensión"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {desactualizada ? (
         <p className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
           Tu extensión es la versión {version} y hace falta la {VERSION_MINIMA} o superior: en <code>chrome://extensions</code> pulsa el icono de recargar en «HALO Virales», recarga las pestañas de Instagram y esta página.
