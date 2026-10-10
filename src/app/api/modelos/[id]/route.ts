@@ -13,7 +13,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const allowed = ["nombre", "nombre_real", "email", "telefono", "notas", "porcentaje_comision", "activa"] as const;
     const payload: Record<string, unknown> = {};
     for (const key of allowed) {
-      if (key in body) payload[key] = body[key];
+      if (!(key in body)) continue;
+      const v = body[key];
+      // Los textos vacios se guardan como "sin dato" (null): asi dos modelos sin email no chocan con el email unico
+      payload[key] = typeof v === "string" && ["nombre_real", "email", "telefono", "notas"].includes(key) ? v.trim() || null : v;
     }
 
     // Objetivo de la fase de captacion (videos que debe subir antes de editar); vacio = sin captacion

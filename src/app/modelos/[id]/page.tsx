@@ -15,6 +15,7 @@ import type { SocialNetwork } from "@/types";
 import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 import { alcanceActual, veModelo } from "@/lib/alcance";
 import { CaptacionRevision } from "./CaptacionRevision";
+import { FichaEditable } from "./FichaEditable";
 import { piezasEnEspera } from "@/lib/captacionPiezas";
 import { progresoCaptacion } from "@/lib/captacion";
 
@@ -185,22 +186,18 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   const resumen = (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="card !p-4 lg:col-span-2">
-        <h2 className="mb-3 font-display text-xs font-semibold uppercase tracking-wider text-halo-subtle">Ficha</h2>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-2.5 text-sm sm:grid-cols-2">
-          {[
-            ["Nombre real", modelo.nombre_real],
-            ["Email", modelo.email],
-            ["Teléfono", modelo.telefono],
-            ["Comisión agencia", modelo.porcentaje_comision != null ? `${modelo.porcentaje_comision}%` : null],
-            ["Portal", modelo.portal_token ? `/m/${modelo.portal_token}` : "Sin acceso creado"],
-            ["Notas", modelo.notas],
-          ].map(([k, v]) => (
-            <div key={k as string}>
-              <dt className="text-[11px] uppercase tracking-wider text-halo-subtle">{k}</dt>
-              <dd className="mt-0.5 break-words text-halo-text">{v || "—"}</dd>
-            </div>
-          ))}
-        </dl>
+        <FichaEditable
+          modeloId={modelo.id}
+          datos={{
+            nombre: modelo.nombre,
+            nombre_real: modelo.nombre_real ?? null,
+            email: modelo.email ?? null,
+            telefono: modelo.telefono ?? null,
+            porcentaje_comision: modelo.porcentaje_comision ?? null,
+            notas: modelo.notas ?? null,
+            portal_token: modelo.portal_token ?? null,
+          }}
+        />
         <div className="mt-4 flex flex-wrap gap-1.5 border-t border-halo-border pt-3">
           <span className="badge">{totalVideos} vídeos en total</span>
           {Object.entries(porEstado).map(([estado, n]) => (
