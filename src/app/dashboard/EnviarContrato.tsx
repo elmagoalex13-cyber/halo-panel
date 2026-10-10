@@ -120,7 +120,7 @@ export function EnviarContrato() {
           {sinTabla ? <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Falta ejecutar el SQL <code>20261024_contratos.sql</code> en Supabase.</p> : null}
           {!resend ? (
             <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-              Resend aún no está configurado (faltan <code>RESEND_API_KEY</code> y <code>RESEND_FROM</code> en Vercel): puedes crear contratos y copiar su enlace para mandarlo tú, pero el email no saldrá solo.
+              El email aún no está configurado (faltan <code>SMTP_USER</code> y <code>SMTP_APP_PASSWORD</code> del Gmail de la agencia, en Vercel): puedes crear contratos y copiar su enlace para mandarlo tú por WhatsApp, pero el email no saldrá solo.
             </p>
           ) : null}
 

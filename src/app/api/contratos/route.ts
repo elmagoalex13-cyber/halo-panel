@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
-import { resendConfigurado } from "@/lib/resend";
+import { emailConfigurado } from "@/lib/resend";
 import { CAMPOS_LISTA, emailValido, enlaceContrato, enviarEmailContrato, nuevoToken, type ContratoFila } from "@/lib/contratos";
 import { CLAVE_FIRMA_AGENCIA } from "@/lib/contratoFirma";
 
@@ -18,11 +18,11 @@ export async function GET(req: NextRequest) {
   const { data, error } = await db.from("contratos").select(CAMPOS_LISTA).order("created_at", { ascending: false }).limit(100);
   if (error) {
     const falta = /contratos|relation|schema cache/i.test(error.message);
-    return NextResponse.json({ error: falta ? SIN_TABLA : error.message, sinTabla: falta, resend: resendConfigurado() }, { status: falta ? 409 : 500 });
+    return NextResponse.json({ error: falta ? SIN_TABLA : error.message, sinTabla: falta, resend: emailConfigurado() }, { status: falta ? 409 : 500 });
   }
   const origen = req.nextUrl.origin;
   return NextResponse.json({
-    resend: resendConfigurado(),
+    resend: emailConfigurado(),
     contratos: ((data ?? []) as unknown as ContratoFila[]).map((c) => ({ ...c, enlace: enlaceContrato(origen, c.token) })),
   });
 }
