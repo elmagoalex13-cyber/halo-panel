@@ -33,6 +33,13 @@ const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 /** Email con el enlace al contrato y lo esencial explicado en dos minutos de lectura. */
 export async function enviarEmailContrato(c: { nombre: string; email: string; fecha_inicio: string }, enlace: string) {
   const nombre = primerNombre(c.nombre) || "";
+  const logo = (() => {
+    try {
+      return `${new URL(enlace).origin}/halo-logo.png`;
+    } catch {
+      return "";
+    }
+  })();
   const saludo = nombre ? `Hola, ${esc(nombre)}` : "Hola";
   const puntos = RESUMEN_ESENCIAL.map(
     (r) => `<tr><td style="padding:10px 0;vertical-align:top;width:34px;font-size:20px">${r.icono}</td><td style="padding:10px 0;vertical-align:top"><div style="font-weight:700;color:#1b1530;font-size:15px">${esc(r.titulo)}</div><div style="color:#4a4560;font-size:14px;line-height:1.5;margin-top:2px">${esc(r.texto)}</div></td></tr>`,
@@ -40,17 +47,17 @@ export async function enviarEmailContrato(c: { nombre: string; email: string; fe
   const html = `<!doctype html><html><body style="margin:0;background:#f4f2fa;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
 <div style="max-width:560px;margin:0 auto;padding:24px 16px">
  <div style="background:#ffffff;border-radius:16px;padding:28px 24px;border:1px solid #e6e1f5">
-  <div style="font-size:13px;font-weight:700;letter-spacing:.08em;color:#7c4dff;text-transform:uppercase">Halo Models</div>
+  ${logo ? `<img src="${esc(logo)}" width="72" height="72" alt="Halo Models Agency" style="display:block;border-radius:14px">` : `<div style="font-size:13px;font-weight:700;letter-spacing:.08em;color:#7c4dff;text-transform:uppercase">Halo Models</div>`}
   <h1 style="margin:8px 0 12px;font-size:22px;line-height:1.3;color:#1b1530">${saludo}, este es tu contrato</h1>
-  <p style="margin:0 0 14px;color:#4a4560;font-size:15px;line-height:1.6">Hemos recibido tu solicitud para aplicar como modelo y nos gustaría empezar a trabajar contigo. Te dejamos el contrato para que lo leas con calma. <b>Lo hemos explicado en lenguaje sencillo, cláusula por cláusula</b>, para que sepas exactamente qué firmas y por qué es así. Leerlo y firmarlo te lleva unos 5 minutos.</p>
-  <p style="margin:0 0 6px;color:#1b1530;font-size:15px;font-weight:700">Lo esencial, en 30 segundos:</p>
+  <p style="margin:0 0 14px;color:#4a4560;font-size:15px;line-height:1.6">Hemos recibido tu solicitud para aplicar como modelo y nos gustaría empezar a trabajar contigo. Te dejamos el contrato para que lo leas con calma. <b>Te dejamos lo esencial resumido</b> y el contrato completo debajo, para que sepas exactamente qué firmas. Leerlo y firmarlo te lleva unos minutos.</p>
+  <p style="margin:0 0 6px;color:#1b1530;font-size:15px;font-weight:700">Lo esencial:</p>
   <table role="presentation" style="width:100%;border-collapse:collapse">${puntos}</table>
   <div style="text-align:center;margin:26px 0 8px"><a href="${esc(enlace)}" style="display:inline-block;background:#7c4dff;color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:14px 28px;border-radius:12px">Leer y firmar mi contrato</a></div>
   <p style="margin:10px 0 0;color:#7a7592;font-size:13px;text-align:center">Fecha de inicio: ${esc(fechaLarga(c.fecha_inicio))}. Si el botón no funciona, copia este enlace:<br><span style="word-break:break-all">${esc(enlace)}</span></p>
  </div>
  <p style="color:#7a7592;font-size:13px;line-height:1.5;text-align:center;margin:16px 8px 0">¿Dudas? Respóndenos a este email antes de firmar y te contestamos encantados. Es importante que lo entiendas todo.</p>
 </div></body></html>`;
-  const text = `${saludo}, este es tu contrato con Halo Models.\n\nLéelo con calma (lo hemos explicado en lenguaje sencillo) y fírmalo aquí:\n${enlace}\n\nLo esencial:\n${RESUMEN_ESENCIAL.map((r) => `- ${r.titulo}: ${r.texto}`).join("\n")}\n\n¿Dudas? Responde a este email antes de firmar.`;
+  const text = `${saludo}, este es tu contrato con Halo Models.\n\nLéelo con calma y fírmalo aquí:\n${enlace}\n\nLo esencial:\n${RESUMEN_ESENCIAL.map((r) => `- ${r.titulo}: ${r.texto}`).join("\n")}\n\n¿Dudas? Responde a este email antes de firmar.`;
   return enviarEmail({ to: c.email, subject: `${nombre ? `${nombre}, t` : "T"}u contrato con Halo Models`, html, text });
 }
 

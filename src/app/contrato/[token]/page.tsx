@@ -3,7 +3,19 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { ContratoPublico } from "./ContratoPublico";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Tu contrato · Halo Models", robots: { index: false, follow: false } };
+export const metadata = {
+  title: "Tu contrato · Halo Models",
+  description: "Léelo con calma y fírmalo desde el móvil.",
+  robots: { index: false, follow: false },
+  openGraph: {
+    title: "Tu contrato con Halo Models",
+    description: "Léelo con calma y fírmalo desde el móvil.",
+    siteName: "Halo Models",
+    images: [{ url: "/halo-logo.png", width: 800, height: 800, alt: "Halo Models Agency" }],
+    type: "website",
+  },
+  twitter: { card: "summary", title: "Tu contrato con Halo Models", description: "Léelo con calma y fírmalo desde el móvil.", images: ["/halo-logo.png"] },
+};
 
 // PUBLICO: la modelo llega desde el email. Lee la explicacion, ve el contrato con sus datos y lo firma.
 export default async function ContratoPage({ params }: { params: Promise<{ token: string }> }) {
