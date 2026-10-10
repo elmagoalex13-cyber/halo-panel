@@ -33,7 +33,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       firmanteIp: c.firmante_ip,
     });
   }
+  // ?ver=1 -> se abre en el navegador (leer). ?descargar=1 -> se descarga SIEMPRE (octet-stream: ni el visor del navegador ni el de WhatsApp lo abren).
+  const ver = Boolean(req.nextUrl.searchParams.get("ver"));
   return new NextResponse(Buffer.from(bytes), {
-    headers: { "Content-Type": "application/pdf", "Content-Disposition": `${req.nextUrl.searchParams.get("ver") ? "inline" : "attachment"}; filename="Contrato-Halo-Models.pdf"`, "Cache-Control": "private, no-store" },
+    headers: {
+      "Content-Type": ver ? "application/pdf" : "application/octet-stream",
+      "Content-Disposition": `${ver ? "inline" : "attachment"}; filename="Contrato-Halo-Models.pdf"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }

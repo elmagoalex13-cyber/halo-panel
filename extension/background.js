@@ -617,7 +617,8 @@ async function comprobarRondaSemanal() {
     return; // sin panel o sin sesion: no se molesta
   }
   if (!s?.debeCorrer) return;
-  await ejecutar({ modo: "referencias", categoria: "todas", dias: 7, origen: "lunes" });
+  // Que cuentas y cuantos dias lo decide el panel (hoy: solo contenido hablado, ultimos 7 dias)
+  await ejecutar({ modo: "referencias", categoria: s.categoria ?? "todas", dias: s.dias ?? 7, origen: "lunes" });
   // Si no llego a terminar por Instagram (login, limite...), no se insiste en 2 horas
   const e = await estado();
   if ((e.resumen?.errores ?? 0) > 0 && (e.resumen?.cuentas ?? 0) === 0) await chrome.storage.local.set({ ultimoFallo: Date.now() });

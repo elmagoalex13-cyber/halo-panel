@@ -211,9 +211,9 @@ export default async function DashboardPage({
     ...avisosContrato,
     // Ronda semanal de cuentas de referencia (la lanza sola la extension de Chrome cada lunes)
     ...(semanal?.hecha
-      ? [{ id: `ronda-hecha|${semanal.semana}`, nivel: "verde" as NotifNivel, texto: `Ronda semanal hecha: ${semanal.cuentas ?? "todas las"} cuentas analizadas, ${semanal.nuevos ?? 0} virales nuevos. Ya puedes revisarlos y asignarlos`, href: "/instagram?tab=ideas" }]
+      ? [{ id: `ronda-hecha|${semanal.semana}`, nivel: "verde" as NotifNivel, texto: `Ronda semanal hecha: ${semanal.cuentas ?? "todas las"} cuentas de contenido hablado analizadas, ${semanal.nuevos ?? 0} virales nuevos. Ya puedes revisarlos y asignarlos`, href: "/instagram?tab=ideas" }]
       : semanal && (ahoraMadrid().dia > 1 || ahoraMadrid().hora >= 12)
-        ? [{ id: `ronda-pendiente|${semanal.semana}`, nivel: "amarillo" as NotifNivel, texto: `La ronda semanal de cuentas no se ha completado${semanal.ronda ? ` (${semanal.ronda.hechas}/${semanal.ronda.total})` : " (no ha empezado)"}: se hace sola cuando hay un Chrome abierto con la extensión «HALO Virales», con Instagram y el panel con la sesión iniciada`, href: "/instagram?tab=ideas" }]
+        ? [{ id: `ronda-pendiente|${semanal.semana}`, nivel: "amarillo" as NotifNivel, texto: `La ronda semanal de cuentas de contenido hablado no se ha completado${semanal.ronda ? ` (${semanal.ronda.hechas}/${semanal.ronda.total})` : " (no ha empezado)"}: se hace sola cuando hay un Chrome abierto con la extensión «HALO Virales», con Instagram y el panel con la sesión iniciada`, href: "/instagram?tab=ideas" }]
         : []),
     // Editor de video caido o cola atascada
     ...avisosSistema(sistema),

@@ -11,6 +11,8 @@ const CLAVE_SEMANAL = "ronda_semanal";
 const CADUCA_CUENTA_MS = 8 * 60000; // una cuenta tomada que no se termina en 8 min (Chrome cerrado...) vuelve a quedar libre
 const RONDA_VIVA_MS = 20 * 60000; // una ronda sin actividad en 20 min se da por abandonada: la siguiente persona empieza otra
 export const HORA_RONDA_SEMANAL = 8; // lunes a las 8:00 (hora de Madrid)
+export const CATEGORIA_RONDA_SEMANAL = "hablado"; // la ronda del lunes solo analiza las cuentas de contenido hablado
+export const DIAS_RONDA_SEMANAL = 7;
 
 export type CuentaRonda = { id: string; username: string; categoria: string | null; etiqueta: string };
 export type Ronda = {
@@ -81,9 +83,9 @@ export type VistaRonda = ReturnType<typeof vista>;
 /** Entra en la ronda en marcha (misma busqueda) o abre una nueva con las cuentas dadas. */
 export async function unirseARonda(p: { usuario: string; categoria: string; dias: number; origen: "manual" | "lunes"; semana: string | null; cuentas: CuentaRonda[] }) {
   return mutar<{ unida: boolean; ronda: VistaRonda }>((actual) => {
-    if (viva(actual) && actual.categoria === p.categoria) {
-      // Si ya hay una ronda manual de TODAS las cuentas en marcha, la del lunes se apunta a esa (ya cubre lo mismo) en vez de repetirla
-      if (p.origen === "lunes" && actual.origen !== "lunes" && actual.categoria === "todas") {
+    // La del lunes tambien se apunta a una ronda manual en marcha de las mismas cuentas, o de TODAS (que ya las incluye)
+    if (viva(actual) && (actual.categoria === p.categoria || (p.origen === "lunes" && actual.categoria === "todas"))) {
+      if (p.origen === "lunes" && actual.origen !== "lunes") {
         const adoptada: Ronda = { ...actual, origen: "lunes", semana: p.semana };
         return { ronda: adoptada, respuesta: { unida: true, ronda: vista(adoptada) } };
       }
@@ -181,7 +183,7 @@ export function ahoraMadrid(fecha = new Date()) {
   return { dia, hora, semana: `${jueves.getUTCFullYear()}-W${String(semana).padStart(2, "0")}` };
 }
 
-export type EstadoSemanal = { semana: string; debeCorrer: boolean; hecha: boolean; completada_at: string | null; cuentas: number | null; nuevos: number | null; ronda: { hechas: number; total: number } | null };
+export type EstadoSemanal = { semana: string; categoria: string; dias: number; debeCorrer: boolean; hecha: boolean; completada_at: string | null; cuentas: number | null; nuevos: number | null; ronda: { hechas: number; total: number } | null };
 
 /**
  * ¿Toca la ronda de esta semana? Desde el lunes a las 8:00 (hora de Madrid) y hasta que se complete: si el lunes no habia ningun
@@ -198,6 +200,8 @@ export async function estadoSemanal(): Promise<EstadoSemanal> {
   const llegoLaHora = dia > 1 || hora >= HORA_RONDA_SEMANAL;
   return {
     semana,
+    categoria: CATEGORIA_RONDA_SEMANAL,
+    dias: DIAS_RONDA_SEMANAL,
     hecha,
     debeCorrer: !hecha && llegoLaHora,
     completada_at: hecha ? (s?.completada_at ?? null) : null,

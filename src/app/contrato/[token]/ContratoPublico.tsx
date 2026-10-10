@@ -19,6 +19,26 @@ export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firm
   const zonaFirma = useRef<HTMLElement>(null);
   const nombrePila = primerNombre(nombre);
 
+  // Descarga de verdad (sin abrir el PDF): se baja el archivo y se guarda; si algo falla, el enlace normal tambien fuerza la descarga
+  async function descargar(e: React.MouseEvent<HTMLAnchorElement>) {
+    e.preventDefault();
+    const url = `/api/contrato/${token}/pdf?descargar=1`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("no");
+      const objeto = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = objeto;
+      a.download = "Contrato-Halo-Models.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objeto), 5000);
+    } catch {
+      window.location.href = url;
+    }
+  }
+
   async function firmar() {
     setError(null);
     setEnviando(true);
@@ -48,8 +68,8 @@ export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firm
           <p className="mt-3 text-white/70">
             Hemos recibido tu firma{firmadoAt ? ` el ${new Date(firmadoAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Madrid" })}` : ""}. En breve nos pondremos en contacto contigo para los siguientes pasos.
           </p>
-          <a href={`/api/contrato/${token}/pdf`} className="btn-primary mt-6 inline-flex min-h-12 items-center justify-center px-6 text-base">
-            Descargar mi copia (PDF)
+          <a href={`/api/contrato/${token}/pdf?descargar=1`} download="Contrato-Halo-Models.pdf" onClick={descargar} className="btn-primary mt-6 inline-flex min-h-12 items-center justify-center px-6 text-base">
+            ⬇ Descargar mi contrato firmado (PDF)
           </a>
         </div>
       </main>
@@ -95,7 +115,7 @@ export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firm
           <a href={`/api/contrato/${token}/pdf?ver=1`} target="_blank" rel="noopener noreferrer" className="btn-primary inline-flex min-h-12 items-center justify-center gap-2 px-4 text-base">
             📖 Leer el contrato
           </a>
-          <a href={`/api/contrato/${token}/pdf`} className="btn-secondary inline-flex min-h-12 items-center justify-center px-4 text-base">
+          <a href={`/api/contrato/${token}/pdf?descargar=1`} download="Contrato-Halo-Models.pdf" onClick={descargar} className="btn-secondary inline-flex min-h-12 items-center justify-center px-4 text-base">
             ⬇ Descargar PDF
           </a>
         </div>
