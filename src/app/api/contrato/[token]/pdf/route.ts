@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Servicio no disponible" }, { status: 503 });
   const { token } = await params;
-  const { data: c } = await createAdminClient().from("contratos").select("*").eq("token", token).maybeSingle();
+  const { data: c } = await createAdminClient().from("contratos_modelos").select("*").eq("token", token).maybeSingle();
   if (!c || c.estado === "cancelado") return NextResponse.json({ error: "Enlace no disponible" }, { status: 404 });
 
   let bytes: Uint8Array | null = null;

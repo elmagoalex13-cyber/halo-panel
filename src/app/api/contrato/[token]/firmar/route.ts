@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!firma.startsWith("data:image/png;base64,") || firma.length < 1200 || firma.length > 400_000) return NextResponse.json({ error: "Dibuja tu firma en el recuadro" }, { status: 400 });
 
   const db = createAdminClient();
-  const { data: c } = await db.from("contratos").select("*").eq("token", token).maybeSingle();
+  const { data: c } = await db.from("contratos_modelos").select("*").eq("token", token).maybeSingle();
   if (!c || c.estado === "cancelado") return NextResponse.json({ error: "Este enlace ya no está disponible. Pídenos uno nuevo." }, { status: 404 });
   if (c.estado === "firmado") return NextResponse.json({ error: "Este contrato ya está firmado." }, { status: 409 });
 
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   // "Solo la primera firma gana": si dos peticiones llegan a la vez, la segunda no actualiza nada
   const { data: marcado, error } = await db
-    .from("contratos")
+    .from("contratos_modelos")
     .update({ estado: "firmado", firmado_at: ahora, firma_creadora: firma, nombre_firmante: nombreFirmante, dni, firmante_ip: ip, firmante_ua: ua })
     .eq("id", c.id)
     .in("estado", ["enviado", "visto"])
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     pdf = await generarPdfContrato({ nombre: c.nombre, fechaInicio: c.fecha_inicio, firmaAgencia: c.firma_agencia, firmaCreadora: firma, nombreFirmante, dni, firmadoAt: ahora, firmanteIp: ip });
     const key = `contratos/${token}.pdf`;
     await uploadToR2(key, pdf, "application/pdf");
-    await db.from("contratos").update({ pdf_key: key }).eq("id", c.id);
+    await db.from("contratos_modelos").update({ pdf_key: key }).eq("id", c.id);
   } catch (e) {
     console.error("[contratos] pdf firmado:", e instanceof Error ? e.message : e);
   }

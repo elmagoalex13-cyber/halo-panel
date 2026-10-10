@@ -7,7 +7,7 @@ import { CLAVE_FIRMA_AGENCIA } from "@/lib/contratoFirma";
 
 export const dynamic = "force-dynamic";
 
-const SIN_TABLA = "Falta ejecutar el SQL 20261024_contratos.sql en Supabase.";
+const SIN_TABLA = "Falta ejecutar el SQL 20261024_contratos_modelos.sql en Supabase.";
 const esFirmaPng = (v: unknown): v is string => typeof v === "string" && v.startsWith("data:image/png;base64,") && v.length < 400_000;
 
 // GET  -> contratos enviados (con su estado) y si Resend esta configurado
@@ -15,7 +15,7 @@ const esFirmaPng = (v: unknown): v is string => typeof v === "string" && v.start
 export async function GET(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const db = createAdminClient();
-  const { data, error } = await db.from("contratos").select(CAMPOS_LISTA).order("created_at", { ascending: false }).limit(100);
+  const { data, error } = await db.from("contratos_modelos").select(CAMPOS_LISTA).order("created_at", { ascending: false }).limit(100);
   if (error) {
     const falta = /contratos|relation|schema cache/i.test(error.message);
     return NextResponse.json({ error: falta ? SIN_TABLA : error.message, sinTabla: falta, resend: emailConfigurado() }, { status: falta ? 409 : 500 });
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase().slice(0, 200) : "";
   const fecha = typeof body.fecha_inicio === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha_inicio) ? body.fecha_inicio : "";
   if (nombre.length < 2) return NextResponse.json({ error: "Escribe el nombre de la modelo" }, { status: 400 });
-  if (!emailValido(email)) return NextResponse.json({ error: "El email no es válido" }, { status: 400 });
+  if (email && !emailValido(email)) return NextResponse.json({ error: "El email no es válido (o déjalo vacío para mandarlo por enlace)" }, { status: 400 });
   if (!fecha) return NextResponse.json({ error: "Elige la fecha de inicio" }, { status: 400 });
 
   const db = createAdminClient();
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const token = nuevoToken();
   const { data: creado, error } = await db
-    .from("contratos")
+    .from("contratos_modelos")
     .insert({ token, nombre, email, fecha_inicio: fecha, firma_agencia: firma, enviado_por: sesion.usuario })
     .select(CAMPOS_LISTA)
     .single();
@@ -60,9 +60,11 @@ export async function POST(req: NextRequest) {
   }
 
   const enlace = enlaceContrato(req.nextUrl.origin, token);
+  // Con email y el envio configurado, sale por email; si no, queda el enlace para mandarlo por WhatsApp
+  if (!email) return NextResponse.json({ ok: true, enlace, email: { enviado: false, omitido: true } });
   const envio = await enviarEmailContrato({ nombre, email, fecha_inicio: fecha }, enlace);
   const ahora = new Date().toISOString();
-  await db.from("contratos").update(envio.ok ? { enviado_at: ahora, email_error: null } : { email_error: envio.error.slice(0, 300) }).eq("id", creado.id);
+  await db.from("contratos_modelos").update(envio.ok ? { enviado_at: ahora, email_error: null } : { email_error: envio.error.slice(0, 300) }).eq("id", creado.id);
 
   return NextResponse.json({ ok: true, enlace, email: envio.ok ? { enviado: true } : { enviado: false, error: envio.error, sinConfigurar: Boolean(envio.sinConfigurar) } });
 }

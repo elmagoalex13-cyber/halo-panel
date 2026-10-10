@@ -69,7 +69,7 @@ export async function enviarCopiaFirmada(c: { nombre: string; email: string }, p
 export async function avisosContratos(): Promise<Array<{ id: string; nivel: "verde" | "amarillo"; texto: string; href: string }>> {
   try {
     const { createAdminClient } = await import("@/lib/supabase/server");
-    const { data } = await createAdminClient().from("contratos").select("nombre, estado, created_at, firmado_at").in("estado", ["enviado", "visto", "firmado"]).order("created_at", { ascending: false }).limit(200);
+    const { data } = await createAdminClient().from("contratos_modelos").select("nombre, estado, created_at, firmado_at").in("estado", ["enviado", "visto", "firmado"]).order("created_at", { ascending: false }).limit(200);
     const ahora = Date.now();
     const filas = (data ?? []) as Array<{ nombre: string; estado: EstadoContrato; created_at: string; firmado_at: string | null }>;
     const firmados = filas.filter((c) => c.estado === "firmado" && c.firmado_at && ahora - new Date(c.firmado_at).getTime() < 7 * 86400000);

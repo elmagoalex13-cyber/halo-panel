@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
-  const { data: c } = await createAdminClient().from("contratos").select("*").eq("id", id).maybeSingle();
+  const { data: c } = await createAdminClient().from("contratos_modelos").select("*").eq("id", id).maybeSingle();
   if (!c) return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
 
   let bytes: Uint8Array | null = null;

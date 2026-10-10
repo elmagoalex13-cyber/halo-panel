@@ -10,11 +10,11 @@ export default async function ContratoPage({ params }: { params: Promise<{ token
   const { token } = await params;
   if (!canUseSupabase()) notFound();
   const db = createAdminClient();
-  const { data: c } = await db.from("contratos").select("id, nombre, email, fecha_inicio, firma_agencia, estado, firmado_at").eq("token", token).maybeSingle();
+  const { data: c } = await db.from("contratos_modelos").select("id, nombre, email, fecha_inicio, firma_agencia, estado, firmado_at").eq("token", token).maybeSingle();
   if (!c || c.estado === "cancelado") notFound();
 
   // Primera vez que abre el enlace: queda marcado como visto (para saber si lo ha leido)
-  if (c.estado === "enviado") await db.from("contratos").update({ estado: "visto", visto_at: new Date().toISOString() }).eq("id", c.id).eq("estado", "enviado");
+  if (c.estado === "enviado") await db.from("contratos_modelos").update({ estado: "visto", visto_at: new Date().toISOString() }).eq("id", c.id).eq("estado", "enviado");
 
   return (
     <ContratoPublico

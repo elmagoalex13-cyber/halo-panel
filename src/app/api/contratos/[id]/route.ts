@@ -10,18 +10,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const { accion } = (await req.json().catch(() => ({}))) as { accion?: string };
   const db = createAdminClient();
-  const { data: c } = await db.from("contratos").select("id, token, nombre, email, fecha_inicio, estado").eq("id", id).maybeSingle();
+  const { data: c } = await db.from("contratos_modelos").select("id, token, nombre, email, fecha_inicio, estado").eq("id", id).maybeSingle();
   if (!c) return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
 
   if (accion === "cancelar") {
     if (c.estado === "firmado") return NextResponse.json({ error: "Ya está firmado: no se puede cancelar" }, { status: 409 });
-    await db.from("contratos").update({ estado: "cancelado" }).eq("id", id);
+    await db.from("contratos_modelos").update({ estado: "cancelado" }).eq("id", id);
     return NextResponse.json({ ok: true });
   }
   if (accion === "reenviar") {
     if (c.estado === "firmado" || c.estado === "cancelado") return NextResponse.json({ error: c.estado === "firmado" ? "Ya está firmado" : "Está cancelado" }, { status: 409 });
     const envio = await enviarEmailContrato({ nombre: c.nombre as string, email: c.email as string, fecha_inicio: c.fecha_inicio as string }, enlaceContrato(req.nextUrl.origin, c.token as string));
-    await db.from("contratos").update(envio.ok ? { enviado_at: new Date().toISOString(), email_error: null } : { email_error: envio.error.slice(0, 300) }).eq("id", id);
+    await db.from("contratos_modelos").update(envio.ok ? { enviado_at: new Date().toISOString(), email_error: null } : { email_error: envio.error.slice(0, 300) }).eq("id", id);
     return envio.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: envio.error }, { status: envio.sinConfigurar ? 409 : 502 });
   }
   return NextResponse.json({ error: "Acción no válida" }, { status: 400 });

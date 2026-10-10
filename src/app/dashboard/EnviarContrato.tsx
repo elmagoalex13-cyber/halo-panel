@@ -26,6 +26,13 @@ const ESTADO: Record<Contrato["estado"], { texto: string; clase: string }> = {
   cancelado: { texto: "Cancelado", clase: "bg-white/10 text-white/40" },
 };
 
+/** Mensaje para mandar el enlace por WhatsApp (se puede copiar o abrir directamente si se puso el telefono). */
+const mensajeWhatsApp = (nombre: string, enlace: string) => {
+  const n = nombre.trim().split(/\s+/)[0] ?? "";
+  const pila = n ? n.charAt(0).toLocaleUpperCase("es-ES") + n.slice(1) : "";
+  return `Hola${pila ? `, ${pila}` : ""}. Te enviamos tu contrato con Halo Models. Léelo con calma (está explicado en sencillo, cláusula por cláusula) y fírmalo desde el móvil en este enlace:\n\n${enlace}\n\nSi tienes cualquier duda, escríbenos antes de firmar.`;
+};
+
 const hoy = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }); // YYYY-MM-DD
 const cuando = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" }) : "");
 
@@ -40,9 +47,10 @@ export function EnviarContrato() {
   const [firmaNueva, setFirmaNueva] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [fecha, setFecha] = useState(hoy());
   const [enviando, setEnviando] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; texto: string; enlace?: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string; enlace?: string; nombre?: string; telefono?: string } | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
@@ -60,14 +68,14 @@ export function EnviarContrato() {
   }, [abierto, cargar]);
 
   const firmaLista = firmaNueva ?? firmaGuardada;
-  const puede = nombre.trim().length >= 2 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim()) && Boolean(fecha) && Boolean(firmaLista) && !enviando;
+  const puede = nombre.trim().length >= 2 && (!email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) && Boolean(fecha) && Boolean(firmaLista) && !enviando;
 
   async function enviar() {
     setEnviando(true);
     setMsg(null);
     try {
       const res = await fetch("/api/contratos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre, email, fecha_inicio: fecha, firma_agencia: firmaNueva ?? undefined }) });
-      const j = (await res.json().catch(() => ({}))) as { error?: string; enlace?: string; email?: { enviado: boolean; error?: string; sinConfigurar?: boolean } };
+      const j = (await res.json().catch(() => ({}))) as { error?: string; enlace?: string; email?: { enviado: boolean; error?: string; sinConfigurar?: boolean; omitido?: boolean } };
       if (!res.ok) throw new Error(j.error ?? "No se pudo crear el contrato");
       if (firmaNueva) {
         await fetch("/api/contratos/firma", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ firma: firmaNueva }) }).catch(() => undefined);
@@ -75,10 +83,13 @@ export function EnviarContrato() {
         setFirmaNueva(null);
         setCambiandoFirma(false);
       }
-      if (j.email?.enviado) setMsg({ ok: true, texto: `Contrato enviado a ${email.trim()}.`, enlace: j.enlace });
-      else setMsg({ ok: false, texto: `El contrato está creado pero el email NO ha salido: ${j.email?.error ?? "error desconocido"}. Copia el enlace y mándaselo tú.`, enlace: j.enlace });
+      const datosMsg = { enlace: j.enlace, nombre: nombre.trim(), telefono: telefono.replace(/\D/g, "") };
+      if (j.email?.enviado) setMsg({ ok: true, texto: `Contrato creado y enviado por email a ${email.trim()}. Aquí tienes también el enlace por si quieres mandarlo por WhatsApp.`, ...datosMsg });
+      else if (j.email?.omitido || j.email?.sinConfigurar) setMsg({ ok: true, texto: "Contrato creado. Mándale el enlace por WhatsApp (copia el mensaje de abajo).", ...datosMsg });
+      else setMsg({ ok: false, texto: `Contrato creado, pero el email NO ha salido: ${j.email?.error ?? "error desconocido"}. Mándale el enlace por WhatsApp.`, ...datosMsg });
       setNombre("");
       setEmail("");
+      setTelefono("");
       await cargar();
     } catch (e) {
       setMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
@@ -96,7 +107,7 @@ export function EnviarContrato() {
   }
 
   function copiar(c: Contrato) {
-    void navigator.clipboard.writeText(c.enlace);
+    void navigator.clipboard.writeText(mensajeWhatsApp(c.nombre, c.enlace));
     setCopiado(c.id);
     setTimeout(() => setCopiado(null), 1800);
   }
@@ -117,10 +128,10 @@ export function EnviarContrato() {
 
       {abierto ? (
         <div className="mt-5 space-y-5">
-          {sinTabla ? <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Falta ejecutar el SQL <code>20261024_contratos.sql</code> en Supabase.</p> : null}
+          {sinTabla ? <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Falta ejecutar el SQL <code>20261024_contratos_modelos.sql</code> en Supabase.</p> : null}
           {!resend ? (
-            <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-              El email aún no está configurado (faltan <code>SMTP_USER</code> y <code>SMTP_APP_PASSWORD</code> del Gmail de la agencia, en Vercel): puedes crear contratos y copiar su enlace para mandarlo tú por WhatsApp, pero el email no saldrá solo.
+            <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/60">
+              Se envían por <b className="text-white/80">enlace</b>: al crear el contrato te damos el enlace y un mensaje listo para mandarlo por WhatsApp. (El email automático se puede activar más adelante.)
             </p>
           ) : null}
 
@@ -130,7 +141,7 @@ export function EnviarContrato() {
               <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre y apellidos" className="input-base w-full" />
             </label>
             <label className="block space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/40">Email</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-white/40">{resend ? "Email" : "Email (opcional)"}</span>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ella@email.com" className="input-base w-full" />
             </label>
             <label className="block space-y-1.5">
@@ -138,6 +149,12 @@ export function EnviarContrato() {
               <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="input-base w-full" />
             </label>
           </div>
+
+          <label className="block max-w-xs space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-white/40">WhatsApp de la modelo (opcional)</span>
+            <input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="34600123456 (con prefijo)" className="input-base w-full" />
+            <span className="block text-[11px] text-white/30">Solo sirve para abrir el chat con el mensaje ya escrito; no se guarda.</span>
+          </label>
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Firma de la agencia</p>
@@ -166,15 +183,30 @@ export function EnviarContrato() {
 
           <div className="flex flex-wrap items-center gap-3">
             <button onClick={enviar} disabled={!puede} className="btn-primary px-5 py-2.5 text-sm disabled:opacity-40">
-              {enviando ? "Enviando…" : "Enviar contrato"}
+              {enviando ? "Creando…" : resend && email.trim() ? "Crear y enviar contrato" : "Crear contrato"}
             </button>
-            {msg ? <span className={`text-sm ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>{msg.texto}</span> : null}
-            {msg?.enlace ? (
-              <button type="button" onClick={() => { void navigator.clipboard.writeText(msg.enlace!); setCopiado("nuevo"); setTimeout(() => setCopiado(null), 1800); }} className="btn-secondary px-3 py-1.5 text-xs">
-                {copiado === "nuevo" ? "✓ Copiado" : "Copiar enlace"}
-              </button>
-            ) : null}
+            {msg && !msg.enlace ? <span className={`text-sm ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>{msg.texto}</span> : null}
           </div>
+
+          {msg?.enlace ? (
+            <div className={`space-y-3 rounded-xl border p-4 ${msg.ok ? "border-emerald-400/30 bg-emerald-400/[0.06]" : "border-amber-400/30 bg-amber-400/[0.06]"}`}>
+              <p className={`text-sm font-semibold ${msg.ok ? "text-emerald-200" : "text-amber-100"}`}>{msg.texto}</p>
+              <p className="whitespace-pre-line rounded-lg bg-black/25 px-3 py-2 text-xs leading-relaxed text-white/70">{mensajeWhatsApp(msg.nombre ?? "", msg.enlace)}</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => { void navigator.clipboard.writeText(mensajeWhatsApp(msg.nombre ?? "", msg.enlace!)); setCopiado("nuevo"); setTimeout(() => setCopiado(null), 1800); }} className="btn-primary px-4 py-2 text-xs">
+                  {copiado === "nuevo" ? "✓ Mensaje copiado" : "Copiar mensaje con el enlace"}
+                </button>
+                {msg.telefono ? (
+                  <a href={`https://wa.me/${msg.telefono}?text=${encodeURIComponent(mensajeWhatsApp(msg.nombre ?? "", msg.enlace))}`} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400">
+                    Abrir WhatsApp
+                  </a>
+                ) : null}
+                <button type="button" onClick={() => { void navigator.clipboard.writeText(msg.enlace!); setCopiado("solo"); setTimeout(() => setCopiado(null), 1800); }} className="btn-secondary px-3 py-2 text-xs">
+                  {copiado === "solo" ? "✓ Copiado" : "Solo el enlace"}
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {lista.length ? (
             <div className="border-t border-white/[0.08] pt-4">
@@ -183,10 +215,10 @@ export function EnviarContrato() {
                 {lista.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-sm">
                     <span className="font-semibold text-white">{c.nombre}</span>
-                    <span className="text-xs text-white/40">{c.email}</span>
+                    <span className="text-xs text-white/40">{c.email || "sin email (por enlace)"}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${ESTADO[c.estado].clase}`}>{ESTADO[c.estado].texto}</span>
                     <span className="text-xs text-white/35">
-                      {c.firmado_at ? `firmado ${cuando(c.firmado_at)}` : c.visto_at ? `abierto ${cuando(c.visto_at)}` : c.enviado_at ? `enviado ${cuando(c.enviado_at)}` : "sin enviar por email"}
+                      {c.firmado_at ? `firmado ${cuando(c.firmado_at)}` : c.visto_at ? `abierto ${cuando(c.visto_at)}` : c.enviado_at ? `enviado ${cuando(c.enviado_at)}` : "enlace creado"}
                       {c.enviado_por ? ` · ${c.enviado_por}` : ""}
                     </span>
                     {c.email_error && c.estado !== "firmado" ? <span className="w-full text-[11px] text-red-300/80">Email: {c.email_error}</span> : null}
@@ -197,11 +229,13 @@ export function EnviarContrato() {
                       {c.estado !== "firmado" && c.estado !== "cancelado" ? (
                         <>
                           <button onClick={() => copiar(c)} className="font-semibold text-white/60 hover:text-white hover:underline">
-                            {copiado === c.id ? "✓ Copiado" : "Copiar enlace"}
+                            {copiado === c.id ? "✓ Copiado" : "Copiar mensaje"}
                           </button>
-                          <button onClick={() => void accion(c, "reenviar")} className="font-semibold text-white/60 hover:text-white hover:underline">
-                            Reenviar
-                          </button>
+                          {c.email && resend ? (
+                            <button onClick={() => void accion(c, "reenviar")} className="font-semibold text-white/60 hover:text-white hover:underline">
+                              Reenviar email
+                            </button>
+                          ) : null}
                           <button onClick={() => void accion(c, "cancelar")} className="font-semibold text-red-300/70 hover:text-red-300 hover:underline">
                             Cancelar
                           </button>

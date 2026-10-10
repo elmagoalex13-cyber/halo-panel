@@ -423,11 +423,11 @@ CREATE INDEX IF NOT EXISTS avisos_modelos_modelo_idx ON avisos_modelos (modelo_i
 ALTER TABLE avisos_modelos ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
--- 20261024_contratos.sql
+-- 20261024_contratos_modelos.sql
 -- ============================================================
--- CONTRATOS para modelos nuevas (sin crearles el portal antes): se envian por email con un enlace donde la modelo lee una explicacion
+-- CONTRATOS para modelos nuevas (tabla contratos_modelos; ya existia otra tabla 'contratos' sin relacion con esto) (sin crearles el portal antes): se envian por email con un enlace donde la modelo lee una explicacion
 -- sencilla, ve el contrato con su nombre y la fecha, y lo firma. Solo las toca el servidor (service role).
-CREATE TABLE IF NOT EXISTS contratos (
+CREATE TABLE IF NOT EXISTS contratos_modelos (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   token            text NOT NULL UNIQUE,                 -- el enlace que recibe la modelo (/contrato/<token>)
   nombre           text NOT NULL,                        -- nombre de la modelo tal como va en el contrato
@@ -448,5 +448,5 @@ CREATE TABLE IF NOT EXISTS contratos (
   pdf_key          text,                                 -- PDF firmado guardado en R2 (contratos/<id>.pdf)
   created_at       timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS contratos_estado_idx ON contratos (estado, created_at DESC);
-ALTER TABLE contratos ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS contratos_modelos_estado_idx ON contratos_modelos (estado, created_at DESC);
+ALTER TABLE contratos_modelos ENABLE ROW LEVEL SECURITY;
