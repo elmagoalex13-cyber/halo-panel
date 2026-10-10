@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "HALO Virales",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Abre las cuentas de Instagram de referencia y las de tus modelos, saca los reels más virales de las últimas semanas y los manda al panel HALO.",
   "permissions": [
     "storage",
     "scripting",
-    "tabs"
+    "tabs",
+    "alarms"
   ],
   "host_permissions": [
     "https://www.instagram.com/*",

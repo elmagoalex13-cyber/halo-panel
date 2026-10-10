@@ -16,6 +16,7 @@ import { alcanceActual, ambitosModelos, cuentasVenuzVisibles, soloEn, soloVisibl
 import { SelectorGrupo } from "./SelectorGrupo";
 import { cargarAgregados, type ClaveAgg, type FilaAgg } from "@/lib/dashboardAgg";
 import { avisosActividad } from "@/lib/actividad";
+import { ahoraMadrid, estadoSemanal } from "@/lib/rondaVirales";
 import { avisosSistema, leerSistema } from "@/lib/sistema";
 import { avisosCaptacion, resumenCaptacion } from "@/lib/captacion";
 import { modelosSinAccesos } from "@/lib/accesosModelo";
@@ -121,7 +122,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo))]);
+  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null)]);
   const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
@@ -205,6 +206,12 @@ export default async function DashboardPage({
   const notificaciones: { id?: string; nivel: NotifNivel; texto: string; href?: string }[] = [
     // Lo sensible que ha hecho tu socio (solo lo ve el dueño)
     ...(sesionPanel?.dueno ? avisosSocio : []),
+    // Ronda semanal de cuentas de referencia (la lanza sola la extension de Chrome cada lunes)
+    ...(semanal?.hecha
+      ? [{ id: `ronda-hecha|${semanal.semana}`, nivel: "verde" as NotifNivel, texto: `Ronda semanal hecha: ${semanal.cuentas ?? "todas las"} cuentas analizadas, ${semanal.nuevos ?? 0} virales nuevos. Ya puedes revisarlos y asignarlos`, href: "/instagram?tab=ideas" }]
+      : semanal && (ahoraMadrid().dia > 1 || ahoraMadrid().hora >= 12)
+        ? [{ id: `ronda-pendiente|${semanal.semana}`, nivel: "amarillo" as NotifNivel, texto: `La ronda semanal de cuentas no se ha completado${semanal.ronda ? ` (${semanal.ronda.hechas}/${semanal.ronda.total})` : " (no ha empezado)"}: se hace sola cuando hay un Chrome abierto con la extensión «HALO Virales», con Instagram y el panel con la sesión iniciada`, href: "/instagram?tab=ideas" }]
+        : []),
     // Editor de video caido o cola atascada
     ...avisosSistema(sistema),
     // Captacion: crear la cuenta de Instagram / aprobar el lote de una modelo

@@ -26,6 +26,16 @@ repiten.
 - Cuentas de referencia → pestaña **Ideas virales** (aprobar y asignar a modelos).
 - Cuentas de modelos → pestaña **Virales propios** (aprobar, descargar, marcar como subido a trial).
 
+## Reparto entre varias personas y ronda del lunes (v1.6)
+
+- **Si tu socio y tú analizáis las cuentas de referencia a la vez**, no hay cola: el panel reparte las cuentas, cada una la coge
+  una sola persona y la otra pasa a la siguiente. Se acaba en la mitad de tiempo y no se analiza nada dos veces. La lista de
+  cuentas muestra «con <usuario>…» en las que está haciendo el otro.
+- **Cada lunes a las 8:00 (Madrid)** la extensión lanza sola una ronda de TODAS las cuentas de referencia con los últimos 7 días.
+  Hace falta un Chrome abierto con la extensión, Instagram y el panel con la sesión iniciada (basta con uno de los dos). Si el
+  lunes no había ninguno abierto, la hace el primero que se abra después. En el dashboard sale si está hecha o si falta.
+- Las cuentas de tus modelos y las cuentas elegidas a mano no se reparten: se analizan tal cual.
+
 ## Notas
 
 - No guarda contraseñas: usa las sesiones que ya tienes abiertas.

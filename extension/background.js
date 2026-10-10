@@ -1,4 +1,7 @@
 // HALO Virales — service worker.
+// v1.6: las cuentas de REFERENCIA se reparten con el panel: si tu socio y tu analizais a la vez, cada cuenta la coge uno solo y
+// el otro pasa a la siguiente (nadie espera en cola ni se repite). Ademas, cada lunes (8:00, hora de Madrid) la extension lanza
+// sola una ronda de todas las cuentas con los ultimos 7 dias; si ese dia no habia Chrome abierto, la hace en cuanto se abra.
 // Para cada cuenta: lee sus ultimos reels DESDE UNA PESTANA DE INSTAGRAM (con tu sesion, tu IP y el
 // origen correcto), manda las metricas al panel (que decide cuales son virales), y sube a R2 solo el
 // video y la miniatura de los que el panel pide. Nada de contrasenas: usa tu sesion de Instagram y
@@ -264,7 +267,20 @@ async function subirReel(modo, cuenta, reel, mediana) {
   });
 }
 
-async function ejecutar({ modo, categoria, dias, ids }) {
+// Pinta en la lista lo que han hecho / llevan los demas en la ronda compartida.
+async function sincronizarRonda(ronda) {
+  const e = await estado();
+  const lista = (e.cuentas ?? []).map((c) => {
+    const h = ronda.hechas?.[c.id];
+    const t = ronda.tomadas?.[c.id];
+    if (h && !["hecho", "error"].includes(c.estado)) return { ...c, estado: h.ok ? "hecho" : "error", nuevos: h.nuevos, detalle: `con ${h.por}` };
+    if (t && c.estado === "pendiente") return { ...c, estado: `con ${t.por}…` };
+    return c;
+  });
+  await guardarEstado({ cuentas: lista });
+}
+
+async function ejecutar({ modo, categoria, dias, ids, origen }) {
   if (corriendo) throw new Error("Ya hay un análisis en marcha");
   corriendo = true;
   cancelar = false;
@@ -277,32 +293,83 @@ async function ejecutar({ modo, categoria, dias, ids }) {
   let tabInfo = null;
   const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
 
-  await guardarEstado({ corriendo: true, modo, categoria: categoria ?? null, inicio: Date.now(), fin: null, log: [], cuentas: [], resumen: null });
+  await guardarEstado({ corriendo: true, modo, categoria: categoria ?? null, origen: origen ?? "manual", inicio: Date.now(), fin: null, log: [], cuentas: [], resumen: null });
+  // Cuenta tomada de la ronda que aun no se ha terminado ni devuelto (si algo falla, se devuelve para que la haga otro)
+  let actual = null;
+  let ronda = null;
   try {
-    const q = new URLSearchParams({ modo });
-    if (categoria && categoria !== "todas") q.set("categoria", categoria);
-    if (Array.isArray(ids) && ids.length) q.set("ids", ids.join(","));
-    const config = await panel(`/api/extension/cuentas?${q}`);
-    const cuentas = config.cuentas ?? [];
-    await guardarEstado({ cuentas: cuentas.map((c) => ({ username: c.username, etiqueta: c.etiqueta, estado: "pendiente" })) });
+    // Cuentas de referencia sin elegir ninguna a mano = ronda COMPARTIDA con el panel (se reparten entre quienes analizan a la vez).
+    const compartido = modo === "referencias" && !(Array.isArray(ids) && ids.length);
+    let cuentas;
+    if (compartido) {
+      const r = await panel("/api/extension/ronda", { method: "POST", body: JSON.stringify({ accion: "unirse", categoria: categoria ?? "todas", dias: diasUsados, origen: origen ?? "manual" }) });
+      ronda = r.ronda;
+      cuentas = ronda.cuentas;
+      await guardarEstado({ cuentas: cuentas.map((c) => ({ id: c.id, username: c.username, etiqueta: c.etiqueta, estado: "pendiente" })) });
+      await sincronizarRonda(ronda);
+      const otros = Object.values(ronda.tomadas ?? {}).filter((t) => t.por !== "").length;
+      await log(r.unida ? `Te unes a la ronda de ${ronda.creada_por}${otros ? " que está en marcha" : ""}: las ${cuentas.length} cuentas se reparten entre los que analizáis (no se repite ninguna).` : `Ronda nueva: ${cuentas.length} cuenta(s). Si alguien más analiza a la vez, os las repartís.`);
+    } else {
+      const q = new URLSearchParams({ modo });
+      if (categoria && categoria !== "todas") q.set("categoria", categoria);
+      if (Array.isArray(ids) && ids.length) q.set("ids", ids.join(","));
+      const config = await panel(`/api/extension/cuentas?${q}`);
+      cuentas = config.cuentas ?? [];
+      await guardarEstado({ cuentas: cuentas.map((c) => ({ username: c.username, etiqueta: c.etiqueta, estado: "pendiente" })) });
+    }
     if (!cuentas.length) {
       await log(modo === "propias" ? "No hay cuentas de modelos activas en el panel." : "No hay cuentas de referencia activas con ese tipo.", "aviso");
       return;
     }
     await log(`${cuentas.length} cuenta(s) · hasta ${maximoReels} reels por cuenta · de los últimos ${diasUsados} días`);
 
+    // Siguiente cuenta que me toca: en la ronda compartida la reparte el panel; si no, la lista tal cual.
+    let siguiente = 0;
+    const siguienteCuenta = async () => {
+      if (!compartido) return siguiente < cuentas.length ? { cuenta: cuentas[siguiente], i: siguiente++ } : null;
+      const r = await panel("/api/extension/ronda", { method: "POST", body: JSON.stringify({ accion: "siguiente", ronda_id: ronda.id }) });
+      if (r.ronda) await sincronizarRonda(r.ronda);
+      if (!r.cuenta) {
+        if (r.otros) await log(`Tu parte está hecha: las ${r.otros} cuenta(s) que quedan las están analizando los demás.`, "ok");
+        return null;
+      }
+      return { cuenta: r.cuenta, i: cuentas.findIndex((c) => c.id === r.cuenta.id) };
+    };
+    const avisarRonda = (accion, extra = {}) => (compartido && ronda && actual ? panel("/api/extension/ronda", { method: "POST", body: JSON.stringify({ accion, ronda_id: ronda.id, cuenta_id: actual, ...extra }) }).catch(() => null) : Promise.resolve(null));
+
     tabInfo = await pestanaInstagram();
-    for (let i = 0; i < cuentas.length; i++) {
+    for (let primera = true; ; primera = false) {
       if (cancelar) {
         await log("Cancelado.", "aviso");
         break;
       }
-      const cuenta = cuentas[i];
+      if (!primera) await pausaCancelable(...PAUSA_ENTRE_CUENTAS_MS);
+      if (cancelar) {
+        await log("Cancelado.", "aviso");
+        break;
+      }
+      const sig = await siguienteCuenta();
+      if (!sig) break;
+      const { cuenta, i } = sig;
+      if (compartido) actual = cuenta.id;
+      let resuelta = false;
       const marcar = async (cambios) => {
         const e = await estado();
         const lista = [...e.cuentas];
         lista[i] = { ...lista[i], ...cambios };
         await guardarEstado({ cuentas: lista });
+        // Ronda compartida: avisar al panel de como acaba cada cuenta (hecha, o devuelta si no se pudo por culpa de Instagram / cancelar)
+        if (compartido && !resuelta) {
+          if (cambios.estado === "hecho" || (cambios.estado === "error" && !cambios.fatal)) {
+            resuelta = true;
+            await avisarRonda("hecha", { nuevos: cambios.nuevos ?? 0, ok: cambios.estado === "hecho" });
+            actual = null;
+          } else if (cambios.estado === "cancelado" || (cambios.estado === "error" && cambios.fatal)) {
+            resuelta = true;
+            await avisarRonda("devolver");
+            actual = null;
+          }
+        }
       };
       await marcar({ estado: "leyendo" });
       try {
@@ -315,7 +382,7 @@ async function ejecutar({ modo, categoria, dias, ids }) {
         const fallo = async (detalle, motivo) => {
           const fatal = motivo === "login" || motivo === "limite";
           await log(`@${cuenta.username}: ${detalle}`, "error");
-          await marcar({ estado: "error", detalle });
+          await marcar({ estado: "error", detalle, fatal });
           resumen.errores++;
           if (fatal) await log(motivo === "login" ? "Abre instagram.com en este Chrome, inicia sesión y vuelve a ejecutar." : "Instagram pide ir más despacio: espera unos minutos antes de repetir.", "aviso");
           return fatal;
@@ -400,13 +467,13 @@ async function ejecutar({ modo, categoria, dias, ids }) {
         await marcar({ estado: "error", detalle: e.message });
         resumen.errores++;
       }
-      if (i < cuentas.length - 1) await pausaCancelable(...PAUSA_ENTRE_CUENTAS_MS);
     }
   } catch (e) {
     await log(e.message, "error");
     resumen.errores++;
   } finally {
     clearInterval(keepAlive);
+    if (actual && ronda) await panel("/api/extension/ronda", { method: "POST", body: JSON.stringify({ accion: "devolver", ronda_id: ronda.id, cuenta_id: actual }) }).catch(() => null);
     if (tabInfo?.creada) chrome.tabs.remove(tabInfo.tab.id).catch(() => {});
     corriendo = false;
     await log(`Terminado: ${resumen.nuevos} viral(es) nuevo(s) en ${resumen.cuentas} cuenta(s)${resumen.errores ? `, ${resumen.errores} error(es)` : ""}.`, resumen.errores ? "aviso" : "ok");
@@ -521,3 +588,39 @@ chrome.runtime.onMessage.addListener((msg, _sender, responder) => {
 // Si el navegador cerro el service worker a medias, no dejar el estado "corriendo" colgado.
 chrome.runtime.onStartup.addListener(() => guardarEstado({ corriendo: false }));
 chrome.runtime.onInstalled.addListener(() => guardarEstado({ corriendo: false }));
+
+
+/* ---------------------------- ronda semanal (lunes) ---------------------------- */
+
+// Cada 30 min se pregunta al panel si toca la ronda de esta semana (lunes 8:00 de Madrid en adelante, hasta que se complete).
+// Si toca y esta extension esta libre, analiza todas las cuentas de referencia con los ultimos 7 dias, repartiendo el trabajo con
+// quien mas lo haga a la vez. Necesita Chrome abierto con Instagram y el panel con la sesion iniciada.
+const ALARMA_RONDA = "ronda-semanal";
+const ESPERA_TRAS_FALLO_MS = 2 * 3600000;
+
+function programarAlarma() {
+  chrome.alarms.create(ALARMA_RONDA, { delayInMinutes: 2, periodInMinutes: 30 });
+}
+
+async function comprobarRondaSemanal() {
+  if (corriendo) return;
+  const { ultimoFallo } = await chrome.storage.local.get("ultimoFallo");
+  if (ultimoFallo && Date.now() - ultimoFallo < ESPERA_TRAS_FALLO_MS) return;
+  let s;
+  try {
+    s = await panel("/api/extension/ronda");
+  } catch {
+    return; // sin panel o sin sesion: no se molesta
+  }
+  if (!s?.debeCorrer) return;
+  await ejecutar({ modo: "referencias", categoria: "todas", dias: 7, origen: "lunes" });
+  // Si no llego a terminar por Instagram (login, limite...), no se insiste en 2 horas
+  const e = await estado();
+  if ((e.resumen?.errores ?? 0) > 0 && (e.resumen?.cuentas ?? 0) === 0) await chrome.storage.local.set({ ultimoFallo: Date.now() });
+}
+
+chrome.alarms.onAlarm.addListener((alarma) => {
+  if (alarma.name === ALARMA_RONDA) comprobarRondaSemanal().catch(() => {});
+});
+chrome.runtime.onStartup.addListener(programarAlarma);
+chrome.runtime.onInstalled.addListener(programarAlarma);
