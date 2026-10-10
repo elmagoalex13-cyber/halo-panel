@@ -6,7 +6,7 @@ import { generarPdfContrato } from "@/lib/contratoPdf";
 export const dynamic = "force-dynamic";
 
 // PUBLICO: la modelo descarga su contrato (en blanco con sus datos antes de firmar, o el firmado despues). El token es el secreto.
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Servicio no disponible" }, { status: 503 });
   const { token } = await params;
   const { data: c } = await createAdminClient().from("contratos_modelos").select("*").eq("token", token).maybeSingle();
@@ -34,6 +34,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     });
   }
   return new NextResponse(Buffer.from(bytes), {
-    headers: { "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="Contrato-Halo-Models.pdf"', "Cache-Control": "private, no-store" },
+    headers: { "Content-Type": "application/pdf", "Content-Disposition": `${req.nextUrl.searchParams.get("ver") ? "inline" : "attachment"}; filename="Contrato-Halo-Models.pdf"`, "Cache-Control": "private, no-store" },
   });
 }
