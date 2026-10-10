@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Archive, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, ImageIcon, Mail, MessageCircle, Phone, Save, Trash2, UserRound, Video, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Lead, LeadAdjunto, LeadEstado } from "@/types";
+import { rellenarMensaje, type PlantillasLeads } from "@/lib/leadsMensajes";
 
 const TABS: Array<{ estado: LeadEstado; label: string; hint: string; icon: LucideIcon; tone: "violet" | "cyan" | "emerald" | "amber" | "red" }> = [
   { estado: "nuevo", label: "Nuevos", hint: "Sin tocar", icon: Clock3, tone: "violet" },
@@ -91,8 +92,9 @@ function iconTone(tone: "violet" | "cyan" | "emerald" | "amber" | "red") {
   }[tone];
 }
 
-export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
+export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLeads: Lead[]; plantillasIniciales: PlantillasLeads }) {
   const [leads, setLeads] = useState(initialLeads);
+  const [plantillas, setPlantillas] = useState(plantillasIniciales);
   const [active, setActive] = useState<LeadEstado>("nuevo");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ title: string; items: LeadAdjunto[]; index: number } | null>(null);
@@ -176,6 +178,8 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
           })}
         </div>
       </div>
+
+      <PlantillasMensajes plantillas={plantillas} onGuardado={setPlantillas} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         {TABS.map((tab) => {
@@ -279,7 +283,8 @@ export function LeadsClient({ initialLeads }: { initialLeads: Lead[] }) {
                 </div>
 
                 <aside className="border-t border-white/[0.08] bg-white/[0.02] p-5 xl:border-l xl:border-t-0">
-                  <div className="space-y-2">
+                  <ContactarLead lead={lead} plantillas={plantillas} onEnviado={() => lead.estado === "nuevo" && updateLead(lead.id, { estado: "contactado", notas: notes })} />
+                  <div className="mt-4 space-y-2">
                     <ActionButton icon={Save} label="Guardar nota" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { notas: notes })} />
                     <ActionButton icon={MessageCircle} label="Marcar contactado" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "contactado", notas: notes })} />
                     <ActionButton icon={CheckCircle2} label="Captar / guardar" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "captado", notas: notes })} tone="success" />
@@ -493,5 +498,115 @@ function ActionButton({
       <Icon className="h-4 w-4" />
       {label}
     </button>
+  );
+}
+
+// Mensaje predeterminado segun si el lead subio fotos en el formulario o no: solo cambia el nombre. Se abre en WhatsApp ya escrito.
+function ContactarLead({ lead, plantillas, onEnviado }: { lead: Lead; plantillas: PlantillasLeads; onEnviado: () => void }) {
+  const [copiado, setCopiado] = useState(false);
+  const conFotos = (lead.adjuntos?.length ?? 0) > 0;
+  const mensaje = rellenarMensaje(conFotos ? plantillas.con_fotos : plantillas.sin_fotos, lead.nombre);
+  const digitos = lead.whatsapp?.replace(/\D/g, "");
+  const wa = digitos ? `https://wa.me/${digitos}?text=${encodeURIComponent(mensaje)}` : null;
+  const mail = lead.email ? `mailto:${lead.email}?subject=${encodeURIComponent("Halo Models")}&body=${encodeURIComponent(mensaje)}` : null;
+  if (lead.estado === "eliminado") return null;
+
+  return (
+    <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.05] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-emerald-200/80">Contactar</p>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${conFotos ? "bg-emerald-400/20 text-emerald-200" : "bg-amber-300/20 text-amber-100"}`}>{conFotos ? "Subió fotos" : "Sin fotos: pedírselas"}</span>
+      </div>
+      <p className="mt-2 max-h-28 overflow-y-auto whitespace-pre-line rounded-lg bg-black/25 px-3 py-2 text-xs leading-relaxed text-white/70">{mensaje}</p>
+      <div className="mt-2 grid gap-2">
+        {wa ? (
+          <a href={wa} target="_blank" rel="noreferrer" onClick={onEnviado} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 text-sm font-semibold text-white transition hover:bg-emerald-400">
+            <MessageCircle className="h-4 w-4" />
+            Enviar por WhatsApp
+          </a>
+        ) : (
+          <p className="rounded-lg bg-black/20 px-3 py-2 text-xs text-white/40">Este lead no dejó WhatsApp.</p>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(mensaje);
+              setCopiado(true);
+              setTimeout(() => setCopiado(false), 1800);
+            }}
+            className="btn-secondary min-h-10 px-3 text-xs"
+          >
+            {copiado ? "✓ Copiado" : "Copiar mensaje"}
+          </button>
+          {mail ? (
+            <a href={mail} onClick={onEnviado} className="btn-secondary inline-flex min-h-10 items-center justify-center gap-1.5 px-3 text-xs">
+              <Mail className="h-3.5 w-3.5" />
+              Por email
+            </a>
+          ) : (
+            <span />
+          )}
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] text-white/35">{lead.estado === "nuevo" ? "Al enviarlo se marca como contactado." : "Ya está marcado, no cambia su estado."}</p>
+    </div>
+  );
+}
+
+// Los dos mensajes predeterminados (con fotos / sin fotos), editables. {nombre} se cambia solo por el del lead.
+function PlantillasMensajes({ plantillas, onGuardado }: { plantillas: PlantillasLeads; onGuardado: (p: PlantillasLeads) => void }) {
+  const [abierto, setAbierto] = useState(false);
+  const [borrador, setBorrador] = useState(plantillas);
+  const [guardando, setGuardando] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  async function guardar() {
+    setGuardando(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/leads/plantillas", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(borrador) });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(j.error ?? "No se pudo guardar");
+      onGuardado(borrador);
+      setMsg({ ok: true, texto: "Guardados. Se usan desde ya en todos los leads." });
+    } catch (e) {
+      setMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-2xl border border-white/[0.08] bg-white/[0.03]">
+      <button type="button" onClick={() => setAbierto((v) => !v)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+        <span>
+          <span className="block text-sm font-semibold text-white">✉️ Mensajes para contactar</span>
+          <span className="block text-xs text-white/40">Uno para quien subió fotos y otro para pedírselas a quien no. Solo cambia el nombre.</span>
+        </span>
+        <span className="text-white/50">{abierto ? "▲" : "▼"}</span>
+      </button>
+      {abierto ? (
+        <div className="space-y-3 border-t border-white/[0.08] p-4">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-200/80">Si SUBIÓ fotos en el formulario</span>
+            <textarea value={borrador.con_fotos} onChange={(e) => setBorrador({ ...borrador, con_fotos: e.target.value })} rows={4} className="input-base w-full resize-y text-sm" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-amber-100/80">Si NO subió fotos (pedírselas)</span>
+            <textarea value={borrador.sin_fotos} onChange={(e) => setBorrador({ ...borrador, sin_fotos: e.target.value })} rows={4} className="input-base w-full resize-y text-sm" />
+          </label>
+          <p className="text-xs text-white/40">
+            Escribe <code className="rounded bg-white/10 px-1">{"{nombre}"}</code> donde vaya el nombre: se cambia solo por el primer nombre de cada lead (si no dejó nombre, se quita).
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={guardar} disabled={guardando} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
+              {guardando ? "Guardando…" : "Guardar mensajes"}
+            </button>
+            {msg ? <span className={`text-sm ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>{msg.texto}</span> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
