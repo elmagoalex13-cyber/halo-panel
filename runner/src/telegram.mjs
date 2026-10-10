@@ -98,6 +98,10 @@ async function colaInmediata(supabase) {
       texto = `✅ <b>${nombre}</b> ya cumple todos los mínimos${mins ? ` (${mins})` : ""}.\n👉 Crea su cuenta de Instagram y revisa/aprueba sus reels.${enlace("/modelos")}`;
     }
     else if (e.tipo === "accesos") texto = `🔑 <b>${nombre}</b> ha ${e.datos?.actualizacion ? "actualizado" : "enviado"} ${e.datos?.parcial ? "su acceso de OnlyFans" : "sus accesos de OnlyFans y Skrill"} (está en el Vault${m?.ambito === "compartido" ? " compartido" : ""}).${enlace("/vault")}`;
+    else if (e.tipo === "contrato_firmado") {
+      texto = `✍️ <b>${esc(e.datos?.nombre ?? "Una modelo nueva")}</b> ha firmado el contrato.${enlace("/dashboard")}`;
+      chat = config.telegramChat; // es de una modelo que aun no existe en el panel: va al grupo
+    }
     else if (e.tipo === "prueba") {
       texto = "✅ Telegram conectado: los avisos del panel llegarán a este grupo.";
       chat = config.telegramChat;

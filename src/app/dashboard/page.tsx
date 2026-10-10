@@ -26,6 +26,8 @@ import { formatCurrency } from "@/lib/utils";
 import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
 import type { FacturacionModelo, Modelo } from "@/types";
 import { AvisarModelos } from "./AvisarModelos";
+import { EnviarContrato } from "./EnviarContrato";
+import { avisosContratos } from "@/lib/contratos";
 
 export const dynamic = "force-dynamic";
 
@@ -122,7 +124,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null)]);
+  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal, avisosContrato] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null), avisosContratos()]);
   const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
@@ -206,6 +208,8 @@ export default async function DashboardPage({
   const notificaciones: { id?: string; nivel: NotifNivel; texto: string; href?: string }[] = [
     // Lo sensible que ha hecho tu socio (solo lo ve el dueño)
     ...(sesionPanel?.dueno ? avisosSocio : []),
+    // Contratos para modelos nuevas: firmados esta semana / pendientes de firma
+    ...avisosContrato,
     // Ronda semanal de cuentas de referencia (la lanza sola la extension de Chrome cada lunes)
     ...(semanal?.hecha
       ? [{ id: `ronda-hecha|${semanal.semana}`, nivel: "verde" as NotifNivel, texto: `Ronda semanal hecha: ${semanal.cuentas ?? "todas las"} cuentas analizadas, ${semanal.nuevos ?? 0} virales nuevos. Ya puedes revisarlos y asignarlos`, href: "/instagram?tab=ideas" }]
@@ -292,6 +296,8 @@ export default async function DashboardPage({
       <AvisosDashboard avisos={notificaciones} />
 
       <AvisarModelos />
+
+      <EnviarContrato />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile label="Modelos activas" value={modelosActivas} icon={Users} subtitle={`de ${modelos.length} registradas`} />

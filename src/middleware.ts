@@ -9,6 +9,8 @@ const PUBLIC_PREFIXES = [
   "/m/",
   "/api/auth/",
   "/api/portal/",
+  "/contrato/", // la modelo firma su contrato desde el enlace del email (el token es el secreto)
+  "/api/contrato/",
   "/api/leads/public",
   "/api/landing-track",
   "/api/publer/programar",
