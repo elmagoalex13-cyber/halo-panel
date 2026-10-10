@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { GlassCard } from "@/components/GlassCard";
 import { FirmaPad } from "@/components/FirmaPad";
 
 type Contrato = {
@@ -37,8 +36,7 @@ const hoy = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Mad
 const cuando = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" }) : "");
 
 /** Contratos para modelos nuevas, sin crearles el portal: se rellena nombre, email y fecha, se pone la firma y sale por email con la explicacion. */
-export function EnviarContrato() {
-  const [abierto, setAbierto] = useState(false);
+export function ContratosClient() {
   const [lista, setLista] = useState<Contrato[]>([]);
   const [resend, setResend] = useState(true);
   const [sinTabla, setSinTabla] = useState(false);
@@ -64,8 +62,8 @@ export function EnviarContrato() {
   }, []);
 
   useEffect(() => {
-    if (abierto) void cargar();
-  }, [abierto, cargar]);
+    void cargar();
+  }, [cargar]);
 
   const firmaLista = firmaNueva ?? firmaGuardada;
   const puede = nombre.trim().length >= 2 && (!email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) && Boolean(fecha) && Boolean(firmaLista) && !enviando;
@@ -98,11 +96,19 @@ export function EnviarContrato() {
     }
   }
 
-  async function accion(c: Contrato, a: "reenviar" | "cancelar") {
-    if (a === "cancelar" && !confirm(`¿Cancelar el contrato de ${c.nombre}? Su enlace dejará de funcionar.`)) return;
-    const res = await fetch(`/api/contratos/${c.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: a }) });
+  async function reenviar(c: Contrato) {
+    const res = await fetch(`/api/contratos/${c.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "reenviar" }) });
     const j = (await res.json().catch(() => ({}))) as { error?: string };
-    setMsg(res.ok ? { ok: true, texto: a === "reenviar" ? `Reenviado a ${c.email}.` : "Contrato cancelado." } : { ok: false, texto: j.error ?? "No se pudo" });
+    setMsg(res.ok ? { ok: true, texto: `Reenviado a ${c.email}.` } : { ok: false, texto: j.error ?? "No se pudo" });
+    await cargar();
+  }
+
+  // Un contrato sin firmar se elimina del todo (y su enlace deja de funcionar). Los firmados se conservan.
+  async function eliminar(c: Contrato) {
+    if (!confirm(`¿Eliminar el contrato de ${c.nombre}? Se borra del todo y su enlace deja de funcionar.`)) return;
+    const res = await fetch(`/api/contratos/${c.id}`, { method: "DELETE" });
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    setMsg(res.ok ? { ok: true, texto: `Contrato de ${c.nombre} eliminado.` } : { ok: false, texto: j.error ?? "No se pudo eliminar" });
     await cargar();
   }
 
@@ -112,22 +118,10 @@ export function EnviarContrato() {
     setTimeout(() => setCopiado(null), 1800);
   }
 
-  const pendientes = lista.filter((c) => c.estado === "enviado" || c.estado === "visto").length;
 
   return (
-    <GlassCard className="mb-6 p-5">
-      <button onClick={() => setAbierto((v) => !v)} className="flex w-full items-center justify-between text-left">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-white">
-            📝 Contratos para modelos nuevas {pendientes ? <span className="ml-2 rounded-full bg-amber-300/20 px-2 py-0.5 text-xs font-bold text-amber-100">{pendientes} sin firmar</span> : null}
-          </h2>
-          <p className="text-sm text-white/45">Envía el contrato por email sin crearles el portal: lo leen explicado en sencillo y lo firman desde el móvil.</p>
-        </div>
-        <span className="text-white/50">{abierto ? "▲" : "▼"}</span>
-      </button>
-
-      {abierto ? (
-        <div className="mt-5 space-y-5">
+    <div>
+      <div className="space-y-5">
           {sinTabla ? <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Falta ejecutar el SQL <code>20261024_contratos_modelos.sql</code> en Supabase.</p> : null}
           {!resend ? (
             <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/60">
@@ -232,14 +226,16 @@ export function EnviarContrato() {
                             {copiado === c.id ? "✓ Copiado" : "Copiar mensaje"}
                           </button>
                           {c.email && resend ? (
-                            <button onClick={() => void accion(c, "reenviar")} className="font-semibold text-white/60 hover:text-white hover:underline">
+                            <button onClick={() => void reenviar(c)} className="font-semibold text-white/60 hover:text-white hover:underline">
                               Reenviar email
                             </button>
                           ) : null}
-                          <button onClick={() => void accion(c, "cancelar")} className="font-semibold text-red-300/70 hover:text-red-300 hover:underline">
-                            Cancelar
-                          </button>
                         </>
+                      ) : null}
+                      {c.estado !== "firmado" ? (
+                        <button onClick={() => void eliminar(c)} className="font-semibold text-red-300/70 hover:text-red-300 hover:underline">
+                          Eliminar
+                        </button>
                       ) : null}
                     </span>
                   </li>
@@ -247,8 +243,7 @@ export function EnviarContrato() {
               </ul>
             </div>
           ) : null}
-        </div>
-      ) : null}
-    </GlassCard>
+      </div>
+    </div>
   );
 }

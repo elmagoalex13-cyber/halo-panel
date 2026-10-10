@@ -26,7 +26,6 @@ import { formatCurrency } from "@/lib/utils";
 import { progresoOnboarding, sanearDatos } from "@/lib/onboarding";
 import type { FacturacionModelo, Modelo } from "@/types";
 import { AvisarModelos } from "./AvisarModelos";
-import { EnviarContrato } from "./EnviarContrato";
 import { avisosContratos } from "@/lib/contratos";
 
 export const dynamic = "force-dynamic";
@@ -296,8 +295,6 @@ export default async function DashboardPage({
       <AvisosDashboard avisos={notificaciones} />
 
       <AvisarModelos />
-
-      <EnviarContrato />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile label="Modelos activas" value={modelosActivas} icon={Users} subtitle={`de ${modelos.length} registradas`} />

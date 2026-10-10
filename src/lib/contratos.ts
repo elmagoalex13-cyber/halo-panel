@@ -84,11 +84,11 @@ export async function avisosContratos(): Promise<Array<{ id: string; nivel: "ver
     const avisos: Array<{ id: string; nivel: "verde" | "amarillo"; texto: string; href: string }> = [];
     if (firmados.length) {
       const nombres = firmados.map((c) => c.nombre).sort();
-      avisos.push({ id: `contrato-firmado|${nombres.join(",")}`, nivel: "verde", texto: `Contrato firmado: ${nombres.join(", ")}`, href: "/dashboard" });
+      avisos.push({ id: `contrato-firmado|${nombres.join(",")}`, nivel: "verde", texto: `Contrato firmado: ${nombres.join(", ")}`, href: "/contratos" });
     }
     if (sinFirmar.length) {
       const nombres = sinFirmar.map((c) => c.nombre).sort();
-      avisos.push({ id: `contrato-pendiente|${nombres.join(",")}`, nivel: "amarillo", texto: `Contratos sin firmar desde hace 3 días o más: ${nombres.join(", ")}. Recuérdaselo o reenvíaselo`, href: "/dashboard" });
+      avisos.push({ id: `contrato-pendiente|${nombres.join(",")}`, nivel: "amarillo", texto: `Contratos sin firmar desde hace 3 días o más: ${nombres.join(", ")}. Recuérdaselo o elimínalo`, href: "/contratos" });
     }
     return avisos;
   } catch {
