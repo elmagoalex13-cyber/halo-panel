@@ -1,7 +1,7 @@
 // GENERADO a partir de «Contrato_Porcentaje_Halo_Models_70-30.docx». Es el texto del contrato tal cual; no se reescribe.
 // Para cambiarlo, edita este archivo (o dime qué clausula cambiar).
 
-export type BloqueContrato = { tipo: "p" | "li"; texto: string; negrita?: string };
+export type BloqueContrato = { tipo: "p" | "li"; texto: string; negrita?: string; sub?: boolean };
 export type ClausulaContrato = { n: number; titulo: string; bloques: BloqueContrato[] };
 
 export const CONTRATO_TITULO = "CONTRATO DE PRESTACIÓN DE SERVICIOS DE GESTIÓN DIGITAL";
@@ -145,7 +145,27 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
    },
    {
     "tipo": "li",
-    "texto": "Entregar el contenido inicial requerido por la Agencia para comenzar la actividad en un plazo máximo de dos (2) semanas desde la fecha de firma del contrato."
+    "texto": "Entregar el contenido inicial requerido por la Agencia para comenzar la actividad en un plazo máximo de dos (2) semanas desde la fecha de firma del contrato. Dicho contenido incluye, como mínimo:"
+   },
+   {
+    "tipo": "li",
+    "sub": true,
+    "texto": "30 reels para redes sociales (vídeos hablando a cámara y vídeos de contenido según las indicaciones de la Agencia)."
+   },
+   {
+    "tipo": "li",
+    "sub": true,
+    "texto": "4 scripts de contenido."
+   },
+   {
+    "tipo": "li",
+    "sub": true,
+    "texto": "5 packs de fotos según las indicaciones de la Agencia."
+   },
+   {
+    "tipo": "li",
+    "sub": true,
+    "texto": "30 posts para OnlyFans, que incluirán tanto contenido de lencería como contenido explícito."
    },
    {
     "tipo": "li",

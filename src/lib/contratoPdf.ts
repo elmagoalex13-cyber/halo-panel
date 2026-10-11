@@ -116,8 +116,9 @@ export async function generarPdfContrato(d: DatosPdfContrato): Promise<Uint8Arra
     for (const b of c.bloques) {
       if (b.tipo === "li") {
         asegurar(14);
-        page.drawText("•", { x: MARGEN + 6, y: y - 10, size: 10, font: normal, color: rgb(0.08, 0.08, 0.1) });
-        linea(b.texto, { x: MARGEN + 20, ancho: ancho - 20, espacio: 1 });
+        const sangria = b.sub ? 18 : 0; // los elementos de una lista dentro de otro punto van un poco mas adentro
+        page.drawText(b.sub ? "–" : "•", { x: MARGEN + 6 + sangria, y: y - 10, size: 10, font: normal, color: rgb(0.08, 0.08, 0.1) });
+        linea(b.texto, { x: MARGEN + 20 + sangria, ancho: ancho - 20 - sangria, espacio: 1 });
       } else if (b.negrita) {
         // Encabezado en negrita seguido del texto en la misma linea (como en el contrato original)
         mixto(b.negrita, b.texto);
