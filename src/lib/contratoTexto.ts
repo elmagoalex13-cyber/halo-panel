@@ -418,6 +418,3 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   ]
  }
 ];
-
-/** Aclaracion de la portada: que es la fecha de inicio efectivo. */
-export const CONTRATO_NOTA_INICIO = "(La fecha de inicio efectivo corresponde al día en que la Creadora entrega a la Agencia la totalidad del contenido inicial requerido para comenzar la actividad. La Creadora dispone de un plazo máximo de dos (2) semanas desde la fecha de firma para entregar dicho contenido inicial.)";
