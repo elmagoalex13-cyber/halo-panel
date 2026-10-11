@@ -160,15 +160,23 @@ export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firm
 
       <section aria-labelledby="faq" className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
         <h2 id="faq" className="font-display text-xl font-semibold text-white">Preguntas frecuentes</h2>
-        <div className="mt-3 space-y-2">
-          {PREGUNTAS_FRECUENTES.map((f) => (
-            <details key={f.p} className="group rounded-xl bg-black/20">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white">
-                <span>{f.p}</span>
-                <span className="text-white/40 transition group-open:rotate-180">▾</span>
-              </summary>
-              <p className="px-4 pb-3 text-sm leading-relaxed text-white/65">{f.r}</p>
-            </details>
+        <p className="mt-1 text-sm text-white/50">Todo lo que dice el contrato, explicado sin letra pequeña.</p>
+        <div className="mt-4 space-y-5">
+          {PREGUNTAS_FRECUENTES.map((g) => (
+            <div key={g.titulo}>
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-[#C4B5FD]">{g.titulo}</h3>
+              <div className="space-y-2">
+                {g.preguntas.map((f) => (
+                  <details key={f.p} className="group rounded-xl bg-black/20">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white">
+                      <span>{f.p}</span>
+                      <span className="text-white/40 transition group-open:rotate-180">▾</span>
+                    </summary>
+                    <p className="px-4 pb-3 text-sm leading-relaxed text-white/65">{f.r}</p>
+                  </details>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </section>

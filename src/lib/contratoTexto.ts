@@ -155,12 +155,12 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
    {
     "tipo": "li",
     "sub": true,
-    "texto": "4 scripts de contenido."
+    "texto": "4 scripts de contenido explícito."
    },
    {
     "tipo": "li",
     "sub": true,
-    "texto": "5 packs de fotos según las indicaciones de la Agencia."
+    "texto": "5 packs de fotos de contenido explícito según las indicaciones de la Agencia."
    },
    {
     "tipo": "li",
