@@ -241,7 +241,7 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   "bloques": [
    {
     "tipo": "p",
-    "texto": "El presente contrato tendrá una duración indefinida. A efectos del cómputo de plazos, derechos y obligaciones, se entenderá como fecha de inicio efectivo el día en que la Creadora haya entregado a la Agencia la totalidad del contenido inicial requerido para comenzar la actividad. Dicha fecha quedará reflejada en la portada del contrato y será comunicada por escrito por la Agencia una vez recibido el contenido."
+    "texto": "El presente contrato tendrá una duración indefinida. A efectos del cómputo de plazos, derechos y obligaciones, se entenderá como fecha de inicio efectivo el día en que la Creadora haya entregado a la Agencia la totalidad del contenido inicial requerido para comenzar la actividad. Dicha fecha será comunicada por escrito por la Agencia una vez recibido el contenido."
    },
    {
     "tipo": "p",
