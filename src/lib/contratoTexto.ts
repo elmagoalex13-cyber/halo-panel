@@ -66,12 +66,18 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
     "texto": "Las ganancias netas generadas en OnlyFans y plataformas complementarias serán distribuidas de la siguiente manera:"
    },
    {
-    "tipo": "li",
-    "texto": "70% para la Agencia"
+    "tipo": "p",
+    "negrita": "Primeros 6 meses desde la fecha de inicio:",
+    "texto": "70% para la Agencia / 30% para la Creadora."
    },
    {
-    "tipo": "li",
-    "texto": "30% para la Creadora"
+    "tipo": "p",
+    "negrita": "A partir del mes 7 en adelante:",
+    "texto": "60% para la Agencia / 40% para la Creadora."
+   },
+   {
+    "tipo": "p",
+    "texto": "El cambio de porcentaje se aplicará automáticamente al inicio del séptimo mes natural contado desde la fecha de inicio del contrato, sin necesidad de notificación adicional."
    },
    {
     "tipo": "p",

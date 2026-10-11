@@ -69,6 +69,37 @@ export async function generarPdfContrato(d: DatosPdfContrato): Promise<Uint8Arra
     y -= o.espacio ?? 0;
   };
 
+  // Parrafo con el principio en negrita y el resto normal, ajustado al ancho
+  const mixto = (lead: string, texto: string) => {
+    const tam = 10;
+    const fichas = [
+      ...limpiar(lead).split(" ").filter(Boolean).map((w) => ({ w, f: negrita })),
+      ...limpiar(texto).split(" ").filter(Boolean).map((w) => ({ w, f: normal })),
+    ];
+    const espacio = normal.widthOfTextAtSize(" ", tam);
+    let fila: typeof fichas = [];
+    let ancho_fila = 0;
+    const pintar = () => {
+      if (!fila.length) return;
+      asegurar(tam + 3);
+      let x = MARGEN;
+      for (const t of fila) {
+        page.drawText(t.w, { x, y: y - tam, size: tam, font: t.f, color: rgb(0.08, 0.08, 0.1) });
+        x += t.f.widthOfTextAtSize(t.w, tam) + espacio;
+      }
+      y -= tam + 3.2;
+      fila = [];
+      ancho_fila = 0;
+    };
+    for (const t of fichas) {
+      const w = t.f.widthOfTextAtSize(t.w, tam);
+      if (fila.length && ancho_fila + espacio + w > ancho) pintar();
+      ancho_fila += (fila.length ? espacio : 0) + w;
+      fila.push(t);
+    }
+    pintar();
+  };
+
   // Cabecera
   linea(CONTRATO_TITULO, { fuente: negrita, tam: 14, espacio: 8 });
   linea("Entre:", { espacio: 2 });
@@ -88,9 +119,9 @@ export async function generarPdfContrato(d: DatosPdfContrato): Promise<Uint8Arra
         page.drawText("•", { x: MARGEN + 6, y: y - 10, size: 10, font: normal, color: rgb(0.08, 0.08, 0.1) });
         linea(b.texto, { x: MARGEN + 20, ancho: ancho - 20, espacio: 1 });
       } else if (b.negrita) {
-        // "Cuentas de monetizacion (...):" en negrita y el resto debajo
-        linea(b.negrita, { fuente: negrita, espacio: 0 });
-        linea(b.texto, { espacio: 4 });
+        // Encabezado en negrita seguido del texto en la misma linea (como en el contrato original)
+        mixto(b.negrita, b.texto);
+        y -= 4;
       } else {
         linea(b.texto, { espacio: 4 });
       }
