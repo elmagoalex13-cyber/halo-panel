@@ -67,7 +67,7 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
    },
    {
     "tipo": "p",
-    "negrita": "Primeros 6 meses desde la fecha de inicio:",
+    "negrita": "Primeros 6 meses desde la fecha de inicio efectivo:",
     "texto": "70% para la Agencia / 30% para la Creadora."
    },
    {
@@ -77,7 +77,7 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
    },
    {
     "tipo": "p",
-    "texto": "El cambio de porcentaje se aplicará automáticamente al inicio del séptimo mes natural contado desde la fecha de inicio del contrato, sin necesidad de notificación adicional."
+    "texto": "El cambio de porcentaje se aplicará automáticamente al inicio del séptimo mes natural contado desde la fecha de inicio efectivo, sin necesidad de notificación adicional."
    },
    {
     "tipo": "p",
@@ -142,6 +142,10 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
    {
     "tipo": "p",
     "texto": "La Creadora se compromete a:"
+   },
+   {
+    "tipo": "li",
+    "texto": "Entregar el contenido inicial requerido por la Agencia para comenzar la actividad en un plazo máximo de dos (2) semanas desde la fecha de firma del contrato."
    },
    {
     "tipo": "li",
@@ -237,7 +241,7 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   "bloques": [
    {
     "tipo": "p",
-    "texto": "El presente contrato tendrá una duración indefinida desde la fecha de firma."
+    "texto": "El presente contrato tendrá una duración indefinida. A efectos del cómputo de plazos, derechos y obligaciones, se entenderá como fecha de inicio efectivo el día en que la Creadora haya entregado a la Agencia la totalidad del contenido inicial requerido para comenzar la actividad. Dicha fecha quedará reflejada en la portada del contrato y será comunicada por escrito por la Agencia una vez recibido el contenido."
    },
    {
     "tipo": "p",
@@ -414,3 +418,6 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   ]
  }
 ];
+
+/** Aclaracion de la portada: que es la fecha de inicio efectivo. */
+export const CONTRATO_NOTA_INICIO = "(La fecha de inicio efectivo corresponde al día en que la Creadora entrega a la Agencia la totalidad del contenido inicial requerido para comenzar la actividad. La Creadora dispone de un plazo máximo de dos (2) semanas desde la fecha de firma para entregar dicho contenido inicial.)";

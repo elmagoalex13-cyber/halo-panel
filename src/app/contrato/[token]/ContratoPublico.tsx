@@ -107,7 +107,8 @@ export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firm
         <dl className="mt-3 space-y-1 text-sm text-white/70">
           <div className="flex justify-between gap-3"><dt className="text-white/40">Entre</dt><dd className="text-right">{CONTRATO_AGENCIA}</dd></div>
           <div className="flex justify-between gap-3"><dt className="text-white/40">y</dt><dd className="text-right font-semibold text-white">{nombre}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-white/40">Fecha de inicio</dt><dd className="text-right">{fechaLarga(fechaInicio)}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-white/40">Fecha de firma</dt><dd className="text-right">{fechaLarga(fechaInicio)}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-white/40">Inicio efectivo</dt><dd className="text-right">cuando entregues el contenido inicial</dd></div>
         </dl>
 
 

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   const fecha = typeof body.fecha_inicio === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha_inicio) ? body.fecha_inicio : "";
   if (nombre.length < 2) return NextResponse.json({ error: "Escribe el nombre de la modelo" }, { status: 400 });
   if (email && !emailValido(email)) return NextResponse.json({ error: "El email no es válido (o déjalo vacío para mandarlo por enlace)" }, { status: 400 });
-  if (!fecha) return NextResponse.json({ error: "Elige la fecha de inicio" }, { status: 400 });
+  if (!fecha) return NextResponse.json({ error: "Elige la fecha de firma" }, { status: 400 });
 
   const db = createAdminClient();
   let firma: string | null = esFirmaPng(body.firma_agencia) ? body.firma_agencia : null;

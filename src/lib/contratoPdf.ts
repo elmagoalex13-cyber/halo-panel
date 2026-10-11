@@ -1,11 +1,12 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { CONTRATO_AGENCIA, CONTRATO_CLAUSULAS, CONTRATO_TITULO } from "@/lib/contratoTexto";
+import { CONTRATO_AGENCIA, CONTRATO_CLAUSULAS, CONTRATO_NOTA_INICIO, CONTRATO_TITULO } from "@/lib/contratoTexto";
 
 // PDF del contrato: el texto tal cual, con el nombre de la modelo y la fecha rellenados, la firma de la agencia y, si ya firmo, la suya.
 
 export type DatosPdfContrato = {
   nombre: string;
-  fechaInicio: string; // YYYY-MM-DD
+  fechaInicio: string; // YYYY-MM-DD: la fecha de FIRMA que pone la agencia (la columna se llama fecha_inicio por historia)
+  fechaInicioEfectivo?: string | null; // YYYY-MM-DD: el dia que la modelo entrega el contenido inicial (se fija despues)
   firmaAgencia?: string | null; // PNG como data URL
   firmaCreadora?: string | null;
   nombreFirmante?: string | null;
@@ -106,7 +107,9 @@ export async function generarPdfContrato(d: DatosPdfContrato): Promise<Uint8Arra
   linea(`${CONTRATO_AGENCIA} (en adelante, "la Agencia")`, { fuente: negrita, espacio: 2 });
   linea("y", { espacio: 2 });
   linea(`${d.nombre} (en adelante, "la Creadora")`, { fuente: negrita, espacio: 2 });
-  linea(`Con fecha de inicio: ${fechaLarga(d.fechaInicio)}`, { espacio: 10 });
+  linea(`Fecha de firma: ${fechaLarga(d.fechaInicio)}`, { espacio: 2 });
+  linea(`Fecha de inicio efectivo: ${d.fechaInicioEfectivo ? fechaLarga(d.fechaInicioEfectivo) : "___ / ___ / _______"}`, { espacio: 2 });
+  linea(CONTRATO_NOTA_INICIO, { tam: 8.5, color: [0.38, 0.38, 0.43], espacio: 10 });
 
   // Clausulas (texto tal cual)
   for (const c of CONTRATO_CLAUSULAS) {

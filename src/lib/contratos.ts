@@ -53,7 +53,7 @@ export async function enviarEmailContrato(c: { nombre: string; email: string; fe
   <p style="margin:0 0 6px;color:#1b1530;font-size:15px;font-weight:700">Lo esencial:</p>
   <table role="presentation" style="width:100%;border-collapse:collapse">${puntos}</table>
   <div style="text-align:center;margin:26px 0 8px"><a href="${esc(enlace)}" style="display:inline-block;background:#7c4dff;color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:14px 28px;border-radius:12px">Leer y firmar mi contrato</a></div>
-  <p style="margin:10px 0 0;color:#7a7592;font-size:13px;text-align:center">Fecha de inicio: ${esc(fechaLarga(c.fecha_inicio))}. Si el botón no funciona, copia este enlace:<br><span style="word-break:break-all">${esc(enlace)}</span></p>
+  <p style="margin:10px 0 0;color:#7a7592;font-size:13px;text-align:center">Fecha de firma: ${esc(fechaLarga(c.fecha_inicio))}. Si el botón no funciona, copia este enlace:<br><span style="word-break:break-all">${esc(enlace)}</span></p>
  </div>
  <p style="color:#7a7592;font-size:13px;line-height:1.5;text-align:center;margin:16px 8px 0">¿Dudas? Respóndenos a este email antes de firmar y te contestamos encantados. Es importante que lo entiendas todo.</p>
 </div></body></html>`;

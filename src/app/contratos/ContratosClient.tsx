@@ -139,7 +139,7 @@ export function ContratosClient() {
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ella@email.com" className="input-base w-full" />
             </label>
             <label className="block space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/40">Fecha de inicio</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-white/40">Fecha de firma</span>
               <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="input-base w-full" />
             </label>
           </div>
