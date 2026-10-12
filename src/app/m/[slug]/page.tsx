@@ -8,6 +8,7 @@ import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
 import { sanearDatos } from "@/lib/onboarding";
 import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
 import { urlVista } from "@/lib/r2/onlyfans";
+import { miniaturasDeModelo, urlVistaFoto } from "@/lib/ofMiniaturas";
 import type { ArchivoVista } from "./OnlyFansPortal";
 import { modeloEliminada } from "@/lib/papelera";
 import { progresoCaptacion } from "@/lib/captacion";
@@ -74,10 +75,11 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
   let contenidoOF: { colecciones: ColeccionOF[]; archivos: ArchivoVista[] } | null = null;
   if (!ofColRes.error && !ofArcRes.error) {
     const filas = (ofArcRes.data ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>;
+    const minis = await miniaturasDeModelo(modelo.id as string); // las fotos se piden en miniatura (la original pesa varios MB)
     const archivos: ArchivoVista[] = await Promise.all(
       filas.map(async ({ storage_key, bucket, ...a }) => ({
         ...a,
-        vista: a.tipo_archivo === "foto" ? await urlVista(storage_key, bucket).catch(() => null) : null,
+        vista: a.tipo_archivo === "foto" ? await urlVistaFoto(storage_key, bucket, minis).catch(() => null) : null,
       })),
     );
     contenidoOF = { colecciones: (ofColRes.data ?? []) as ColeccionOF[], archivos };

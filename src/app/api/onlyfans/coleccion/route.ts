@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { UUID } from "@/lib/ofServer";
 import { borrarObjetoOF } from "@/lib/r2/onlyfans";
+import { claveMiniatura } from "@/lib/ofMiniaturas";
 import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export async function DELETE(req: NextRequest) {
     (archivos ?? []).map(async (a) => {
       try {
         await borrarObjetoOF(a.storage_key, a.bucket);
+        await borrarObjetoOF(claveMiniatura(a.storage_key), a.bucket).catch(() => undefined);
       } catch (e) {
         fallos.push(e instanceof Error ? e.message : "error");
       }

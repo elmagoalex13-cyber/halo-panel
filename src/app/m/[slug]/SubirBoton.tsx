@@ -116,23 +116,20 @@ export function SubirBoton({
   const subiendo = progreso !== null;
   return (
     <div>
-      <input
-        ref={input}
-        type="file"
-        accept="video/*"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          if (files.length) void subir(files);
-        }}
-      />
-      <button
-        type="button"
-        disabled={subiendo}
-        onClick={() => input.current?.click()}
-        className="btn-primary relative h-12 w-full overflow-hidden text-base disabled:opacity-80"
-      >
+      {/* Etiqueta nativa en vez de input.click(): asi el selector se abre tambien en el movil y en los navegadores de WhatsApp o Instagram */}
+      <label className={`btn-primary relative flex h-12 w-full cursor-pointer items-center justify-center overflow-hidden text-base ${subiendo ? "pointer-events-none opacity-80" : ""}`}>
+        <input
+          ref={input}
+          type="file"
+          accept="video/*"
+          multiple
+          disabled={subiendo}
+          className="sr-only"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length) void subir(files);
+          }}
+        />
         {subiendo ? (
           <>
             <span className="absolute inset-y-0 left-0 bg-white/20" style={{ width: `${progreso}%` }} />
@@ -147,7 +144,7 @@ export function SubirBoton({
             {etiqueta}
           </span>
         )}
-      </button>
+      </label>
       {mensaje ? (
         <p className={`mt-2 rounded-xl px-3 py-2 text-sm ${mensaje.ok ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300"}`}>
           {mensaje.texto}

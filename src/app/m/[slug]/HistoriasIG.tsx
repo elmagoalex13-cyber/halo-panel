@@ -95,20 +95,21 @@ export function HistoriasIG() {
         <p className="mt-1 text-sm leading-relaxed text-white/60">
           Aquí subes las <b className="text-white/85">fotos para las historias de Instagram</b> (no son de OnlyFans). Puedes elegir varias a la vez: se suben tal cual, sin perder calidad, y el equipo las publica.
         </p>
-        <button type="button" onClick={() => input.current?.click()} disabled={subiendo} className="btn-primary mt-3 min-h-11 w-full px-5 text-sm disabled:opacity-50">
+        <label className={`btn-primary mt-3 flex min-h-11 w-full cursor-pointer items-center justify-center px-5 text-sm ${subiendo ? "pointer-events-none opacity-50" : ""}`}>
+          <input
+            ref={input}
+            type="file"
+            accept="image/*,.heic,.heif"
+            multiple
+            disabled={subiendo}
+            className="sr-only"
+            onChange={(e) => {
+              void elegir(e.target.files);
+              e.currentTarget.value = "";
+            }}
+          />
           {subiendo ? `Subiendo ${hechas + fallidas.length}/${cola.length}…` : "＋ Subir fotos de historias"}
-        </button>
-        <input
-          ref={input}
-          type="file"
-          accept="image/*,.heic,.heif"
-          multiple
-          className="sr-only"
-          onChange={(e) => {
-            void elegir(e.target.files);
-            e.currentTarget.value = "";
-          }}
-        />
+        </label>
         {cola.length && !subiendo ? (
           <p className={`mt-3 text-sm ${fallidas.length ? "text-amber-300" : "text-emerald-300"}`}>
             {hechas ? `✓ ${hechas} ${hechas === 1 ? "foto subida" : "fotos subidas"}.` : ""}{" "}

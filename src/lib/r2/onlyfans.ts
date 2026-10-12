@@ -82,6 +82,11 @@ export async function tamanoEnR2(key: string): Promise<number | null> {
   }
 }
 
+/** Guarda un objeto pequeno (miniaturas) desde el servidor. */
+export async function subirObjetoOF(key: string, cuerpo: Buffer | Uint8Array, contentType: string, bucket = bucketOF()) {
+  await cliente().send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: cuerpo, ContentType: contentType }));
+}
+
 export async function borrarObjetoOF(key: string, bucket = bucketOF()) {
   await cliente().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }

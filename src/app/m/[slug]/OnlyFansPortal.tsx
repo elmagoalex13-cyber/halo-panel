@@ -114,7 +114,7 @@ function BotonSubida({
               setProgreso(Math.min(100, Math.round((cargado.reduce((a, b) => a + b, 0) / total) * 100)));
             });
             hechos++;
-            onSubido(r);
+            onSubido({ archivo: r.archivo, vista: r.vistaLocal ?? r.vista });
           }
         }),
       );
@@ -131,18 +131,20 @@ function BotonSubida({
   const subiendo = progreso !== null;
   return (
     <div>
-      <input
-        ref={input}
-        type="file"
-        accept={accept}
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          if (files.length) void subir(files);
-        }}
-      />
-      <button type="button" disabled={subiendo} onClick={() => input.current?.click()} className={BTN_SUBIR}>
+      {/* El selector se abre con una etiqueta nativa (no con input.click()): funciona tambien en el movil y en los navegadores de WhatsApp o Instagram */}
+      <label className={`${BTN_SUBIR} cursor-pointer ${subiendo ? "pointer-events-none" : ""}`}>
+        <input
+          ref={input}
+          type="file"
+          accept={accept}
+          multiple
+          disabled={subiendo}
+          className="sr-only"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length) void subir(files);
+          }}
+        />
         {subiendo ? (
           <>
             <span className="absolute inset-y-0 left-0 bg-white/20" style={{ width: `${progreso}%` }} />
@@ -156,7 +158,7 @@ function BotonSubida({
             <Upload className="h-4 w-4" /> {etiqueta}
           </>
         )}
-      </button>
+      </label>
       {error ? <p className="mt-1.5 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs text-red-300">{error}</p> : null}
     </div>
   );

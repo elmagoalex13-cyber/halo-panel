@@ -3,7 +3,7 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { UUID } from "@/lib/ofServer";
-import { urlVista } from "@/lib/r2/onlyfans";
+import { miniaturasDeModelo, urlVistaFoto } from "@/lib/ofMiniaturas";
 import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
 import { ColeccionDetalle, type ArchivoConVista } from "./ColeccionDetalle";
 import { alcanceActual, veModelo } from "@/lib/alcance";
@@ -31,10 +31,11 @@ export default async function ColeccionPage({ params }: { params: Promise<{ id: 
 
   const [{ data: modelo }, fotos] = await Promise.all([supabase.from("modelos").select("id, nombre").eq("id", coleccion.modelo_id).maybeSingle(), versionesFotos()]);
 
+  const minis = await miniaturasDeModelo(coleccion.modelo_id);
   const archivos: ArchivoConVista[] = await Promise.all(
     ((filas ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>).map(async ({ storage_key, bucket, ...a }) => ({
       ...a,
-      vista: a.tipo_archivo === "foto" ? await urlVista(storage_key, bucket).catch(() => null) : null,
+      vista: a.tipo_archivo === "foto" ? await urlVistaFoto(storage_key, bucket, minis).catch(() => null) : null,
     })),
   );
 

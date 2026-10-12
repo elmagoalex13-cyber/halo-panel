@@ -55,6 +55,29 @@ async function json<T>(res: Response): Promise<T> {
   return j;
 }
 
+/** Copia pequena de la foto (JPEG ~480 px) para pintarla rapido en el movil. null si el navegador no puede leerla. */
+async function crearMiniatura(file: File): Promise<Blob | null> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, fallo) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = () => fallo(new Error("no se pudo leer la foto"));
+      i.src = url;
+    });
+    const k = Math.min(1, 480 / Math.max(img.naturalWidth, img.naturalHeight));
+    const lienzo = document.createElement("canvas");
+    lienzo.width = Math.max(1, Math.round(img.naturalWidth * k));
+    lienzo.height = Math.max(1, Math.round(img.naturalHeight * k));
+    lienzo.getContext("2d")?.drawImage(img, 0, 0, lienzo.width, lienzo.height);
+    return await new Promise<Blob | null>((ok) => lienzo.toBlob((b) => ok(b), "image/jpeg", 0.72));
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export async function subirArchivoOF(file: File, destino: DestinoOF, onProgress: (loaded: number) => void) {
   const contentType = file.type || (/\.(mov)$/i.test(file.name) ? "video/quicktime" : /\.(heic|heif)$/i.test(file.name) ? "image/heic" : "application/octet-stream");
 
@@ -110,7 +133,7 @@ export async function subirArchivoOF(file: File, destino: DestinoOF, onProgress:
   onProgress(file.size);
 
   const duracion = await leerDuracion(file);
-  return json<{ archivo: import("@/lib/onlyfans").ArchivoOF; vista: string | null }>(
+  const registro = await json<{ archivo: import("@/lib/onlyfans").ArchivoOF; vista: string | null }>(
     await fetch("/api/portal/of/registrar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -126,4 +149,15 @@ export async function subirArchivoOF(file: File, destino: DestinoOF, onProgress:
       }),
     }),
   );
+
+  // Fotos: miniatura al momento (se ve al instante, sin volver a bajar la original) y se guarda para las proximas veces
+  let vistaLocal: string | null = null;
+  if (registro.archivo.tipo_archivo === "foto") {
+    const mini = await crearMiniatura(file);
+    if (mini) {
+      vistaLocal = URL.createObjectURL(mini);
+      void fetch(`/api/portal/of/miniatura?id=${registro.archivo.id}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: mini, keepalive: true }).catch(() => undefined);
+    }
+  }
+  return { ...registro, vistaLocal };
 }

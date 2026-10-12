@@ -3,6 +3,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { UUID, coleccionDeModelo } from "@/lib/ofServer";
 import { borrarObjetoOF } from "@/lib/r2/onlyfans";
+import { claveMiniatura } from "@/lib/ofMiniaturas";
 
 export const dynamic = "force-dynamic";
 
@@ -23,5 +24,6 @@ export async function DELETE(req: NextRequest) {
   const { error } = await supabase.from("of_archivos").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await borrarObjetoOF(a.storage_key, a.bucket).catch(() => undefined);
+  await borrarObjetoOF(claveMiniatura(a.storage_key as string), a.bucket).catch(() => undefined);
   return NextResponse.json({ ok: true });
 }
