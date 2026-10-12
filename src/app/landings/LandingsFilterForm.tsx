@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Filter } from "lucide-react";
 
 type LandingOption = {
@@ -32,9 +32,12 @@ const PERIODS = [
 export function LandingsFilterForm({ landings, filters }: LandingsFilterFormProps) {
   const [period, setPeriod] = useState(filters.period);
   const isCustom = period === "custom";
+  const formulario = useRef<HTMLFormElement>(null);
+  const enviar = () => formulario.current?.requestSubmit();
 
   return (
     <form
+      ref={formulario}
       className={`mb-6 grid gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 ${
         isCustom ? "md:grid-cols-6" : "md:grid-cols-[1.1fr_1.1fr_1fr_1.4fr_auto]"
       }`}
@@ -42,7 +45,7 @@ export function LandingsFilterForm({ landings, filters }: LandingsFilterFormProp
     >
       <label className="text-xs font-semibold text-white/45">
         Landing
-        <select name="landing" defaultValue={filters.landing} className="input-base mt-1">
+        <select name="landing" defaultValue={filters.landing} onChange={enviar} className="input-base mt-1">
           <option value="all">Todas</option>
           {landings.map((landing) => (
             <option key={landing.slug} value={landing.slug}>
@@ -54,7 +57,10 @@ export function LandingsFilterForm({ landings, filters }: LandingsFilterFormProp
 
       <label className="text-xs font-semibold text-white/45">
         Periodo
-        <select name="period" value={period} onChange={(event) => setPeriod(event.target.value)} className="input-base mt-1">
+        <select name="period" value={period} onChange={(event) => {
+            setPeriod(event.target.value);
+            if (event.target.value !== "custom") setTimeout(enviar, 0); // con «Personalizado» se espera a elegir las fechas
+          }} className="input-base mt-1">
           {PERIODS.map((item) => (
             <option key={item.value} value={item.value}>
               {item.label}
@@ -67,18 +73,18 @@ export function LandingsFilterForm({ landings, filters }: LandingsFilterFormProp
         <>
           <label className="text-xs font-semibold text-white/45">
             Desde
-            <input type="date" name="from" defaultValue={filters.from} className="input-base mt-1" />
+            <input type="date" name="from" defaultValue={filters.from} onChange={enviar} className="input-base mt-1" />
           </label>
           <label className="text-xs font-semibold text-white/45">
             Hasta
-            <input type="date" name="to" defaultValue={filters.to} className="input-base mt-1" />
+            <input type="date" name="to" defaultValue={filters.to} onChange={enviar} className="input-base mt-1" />
           </label>
         </>
       ) : null}
 
       <label className="text-xs font-semibold text-white/45">
         Evento
-        <select name="eventType" defaultValue={filters.eventType} className="input-base mt-1">
+        <select name="eventType" defaultValue={filters.eventType} onChange={enviar} className="input-base mt-1">
           <option value="all">Todos</option>
           <option value="pageview">Pageview</option>
           <option value="click">Click</option>

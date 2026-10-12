@@ -3,6 +3,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PanelLayout } from "@/components/PanelLayout";
 import { StatTile } from "@/components/StatTile";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { madridAUtc } from "@/lib/postsHorarios";
 import type { LandingEvent, LandingStats } from "@/types";
 import { IntegrationPanel } from "./IntegrationPanel";
 import { LandingLineChart, type LandingChartPoint } from "./LandingLineChart";
@@ -39,8 +40,30 @@ const PERIODS = [
   { value: "custom", label: "Personalizado" },
 ] as const;
 
+// Los dias se cuentan en hora de Madrid (no en UTC): «Hoy» es el dia de Madrid y no cambia a las 2:00 de la madrugada.
+const FORMATO_DIA = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" });
+
 function toDateInput(date: Date) {
-  return date.toISOString().split("T")[0];
+  return FORMATO_DIA.format(date);
+}
+
+function sumarDias(dia: string, n: number) {
+  const [y, m, d] = dia.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().split("T")[0];
+}
+
+function diasEntre(desde: string, hasta: string) {
+  const ms = (d: string) => {
+    const [y, m, dd] = d.split("-").map(Number);
+    return Date.UTC(y, m - 1, dd);
+  };
+  return Math.round((ms(hasta) - ms(desde)) / DAY_MS);
+}
+
+/** Inicio (UTC) del dia de Madrid indicado. */
+function inicioDia(dia: string) {
+  const [y, m, d] = dia.split("-").map(Number);
+  return madridAUtc(y, m, d, 0, 0);
 }
 
 function isValidDateInput(value?: string) {
@@ -49,32 +72,19 @@ function isValidDateInput(value?: string) {
 
 function getResolvedDates(params: Search) {
   const today = toDateInput(new Date());
-  const yesterday = toDateInput(new Date(Date.now() - DAY_MS));
   const period = params.period === "today" || params.period === "yesterday" || params.period === "7d" || params.period === "90d" || params.period === "custom" ? params.period : "30d";
 
-  if (period === "today") {
-    return { period, from: today, to: today };
-  }
-
-  if (period === "yesterday") {
-    return { period, from: yesterday, to: yesterday };
-  }
-
-  if (period === "7d") {
-    return { period, from: toDateInput(new Date(Date.now() - 6 * DAY_MS)), to: today };
-  }
-
-  if (period === "90d") {
-    return { period, from: toDateInput(new Date(Date.now() - 89 * DAY_MS)), to: today };
-  }
-
+  if (period === "today") return { period, from: today, to: today };
+  if (period === "yesterday") return { period, from: sumarDias(today, -1), to: sumarDias(today, -1) };
+  if (period === "7d") return { period, from: sumarDias(today, -6), to: today };
+  if (period === "90d") return { period, from: sumarDias(today, -89), to: today };
   if (period === "custom") {
-    const from = isValidDateInput(params.from) ? params.from! : toDateInput(new Date(Date.now() - 29 * DAY_MS));
-    const to = isValidDateInput(params.to) ? params.to! : today;
+    let from = isValidDateInput(params.from) ? params.from! : sumarDias(today, -29);
+    let to = isValidDateInput(params.to) ? params.to! : today;
+    if (from > to) [from, to] = [to, from];
     return { period, from, to };
   }
-
-  return { period, from: toDateInput(new Date(Date.now() - 29 * DAY_MS)), to: today };
+  return { period, from: sumarDias(today, -29), to: today };
 }
 
 async function loadLandingsData(filters: Required<Search>): Promise<LandingsData> {
@@ -82,22 +92,21 @@ async function loadLandingsData(filters: Required<Search>): Promise<LandingsData
 
   try {
     const supabase = createAdminClient();
-    const eventsQuery = supabase
-      .from("landing_events")
-      .select("*")
-      .gte("occurred_at", `${filters.from}T00:00:00.000Z`)
-      .lte("occurred_at", `${filters.to}T23:59:59.999Z`)
-      .order("occurred_at", { ascending: false })
-      .limit(1000);
-
-    if (filters.landing !== "all") eventsQuery.eq("landing_slug", filters.landing);
-    if (filters.eventType !== "all") eventsQuery.eq("event_type", filters.eventType);
-    if (filters.label) eventsQuery.ilike("label", `%${filters.label}%`);
-
-    const [landingsResult, eventsResult] = await Promise.all([
-      supabase.from("landing_stats").select("*").order("visitas_totales", { ascending: false }),
-      eventsQuery,
-    ]);
+    // Supabase devuelve como mucho 1.000 filas por peticion: se pide por paginas para que 30 o 90 dias no queden cortados
+    const desde = inicioDia(filters.from).toISOString();
+    const hasta = inicioDia(sumarDias(filters.to, 1)).toISOString();
+    const eventos: LandingEvent[] = [];
+    for (let pagina = 0; pagina < 30; pagina += 1) {
+      const q = supabase.from("landing_events").select("*").gte("occurred_at", desde).lt("occurred_at", hasta).order("occurred_at", { ascending: false }).order("id", { ascending: false }).range(pagina * 1000, pagina * 1000 + 999);
+      if (filters.landing !== "all") q.eq("landing_slug", filters.landing);
+      if (filters.eventType !== "all") q.eq("event_type", filters.eventType);
+      if (filters.label) q.ilike("label", `%${filters.label}%`);
+      const { data } = await q;
+      eventos.push(...((data ?? []) as LandingEvent[]));
+      if ((data?.length ?? 0) < 1000) break;
+    }
+    const eventsResult = { data: eventos };
+    const landingsResult = await supabase.from("landing_stats").select("*").order("visitas_totales", { ascending: false });
 
     return {
       landings: ((landingsResult.data ?? []) as LandingStats[]).map((landing) => ({
@@ -142,13 +151,11 @@ function formatDateTime(value?: string | null) {
 }
 
 function getDailyMetrics(events: LandingEvent[], from: string, to: string): LandingChartPoint[] {
-  const start = new Date(`${from}T00:00:00.000Z`);
-  const end = new Date(`${to}T00:00:00.000Z`);
-  const days = Math.max(1, Math.min(90, Math.floor((end.getTime() - start.getTime()) / DAY_MS) + 1));
+  const days = Math.max(1, Math.min(90, diasEntre(from, to) + 1));
   const map = new Map<string, LandingChartPoint>();
 
   for (let i = 0; i < days; i += 1) {
-    const date = toDateInput(new Date(start.getTime() + i * DAY_MS));
+    const date = sumarDias(from, i);
     map.set(date, { date, pageviews: 0, linkClicks: 0, onlyfansClicks: 0 });
   }
 
