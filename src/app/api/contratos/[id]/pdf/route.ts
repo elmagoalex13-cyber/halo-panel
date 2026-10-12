@@ -6,7 +6,7 @@ import { generarPdfContrato } from "@/lib/contratoPdf";
 export const dynamic = "force-dynamic";
 
 // PDF del contrato desde el panel: el firmado si ya lo esta; si no, el contrato tal como lo vera la modelo (con la firma de la agencia).
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
   const { data: c } = await createAdminClient().from("contratos_modelos").select("*").eq("id", id).maybeSingle();
@@ -34,7 +34,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     });
   }
   const nombreArchivo = `Contrato-${String(c.nombre).replace(/[^\w.-]+/g, "_")}${c.estado === "firmado" ? "-firmado" : ""}.pdf`;
+  // ?descargar=1 -> se descarga siempre (octet-stream); sin eso se abre en el navegador
+  const descargar = Boolean(req.nextUrl.searchParams.get("descargar"));
   return new NextResponse(Buffer.from(bytes), {
-    headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${nombreArchivo}"`, "Cache-Control": "private, no-store" },
+    headers: {
+      "Content-Type": descargar ? "application/octet-stream" : "application/pdf",
+      "Content-Disposition": `${descargar ? "attachment" : "inline"}; filename="${nombreArchivo}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }

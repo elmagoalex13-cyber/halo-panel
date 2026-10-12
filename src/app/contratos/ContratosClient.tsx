@@ -16,7 +16,10 @@ type Contrato = {
   firmado_at: string | null;
   created_at: string;
   enlace: string;
+  modelo_id?: string | null;
 };
+
+type ModeloOpcion = { id: string; nombre: string };
 
 const ESTADO: Record<Contrato["estado"], { texto: string; clase: string }> = {
   enviado: { texto: "Enviado", clase: "bg-sky-400/15 text-sky-200" },
@@ -38,6 +41,7 @@ const cuando = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-E
 /** Contratos para modelos nuevas, sin crearles el portal: se rellena nombre, email y fecha, se pone la firma y sale por email con la explicacion. */
 export function ContratosClient() {
   const [lista, setLista] = useState<Contrato[]>([]);
+  const [modelos, setModelos] = useState<ModeloOpcion[]>([]);
   const [resend, setResend] = useState(true);
   const [sinTabla, setSinTabla] = useState(false);
   const [firmaGuardada, setFirmaGuardada] = useState<string | null>(null);
@@ -53,10 +57,11 @@ export function ContratosClient() {
 
   const cargar = useCallback(async () => {
     const [c, f] = await Promise.all([fetch("/api/contratos", { cache: "no-store" }), fetch("/api/contratos/firma", { cache: "no-store" })]);
-    const j = (await c.json().catch(() => ({}))) as { contratos?: Contrato[]; resend?: boolean; sinTabla?: boolean };
+    const j = (await c.json().catch(() => ({}))) as { contratos?: Contrato[]; modelos?: ModeloOpcion[]; resend?: boolean; sinTabla?: boolean };
     setSinTabla(Boolean(j.sinTabla));
     setResend(j.resend !== false);
     setLista(j.contratos ?? []);
+    setModelos(j.modelos ?? []);
     const jf = (await f.json().catch(() => ({}))) as { firma?: string | null };
     setFirmaGuardada(jf.firma ?? null);
   }, []);
@@ -65,6 +70,8 @@ export function ContratosClient() {
     void cargar();
   }, [cargar]);
 
+  const firmados = lista.filter((c) => c.estado === "firmado");
+  const pendientes = lista.filter((c) => c.estado !== "firmado");
   const firmaLista = firmaNueva ?? firmaGuardada;
   const puede = nombre.trim().length >= 2 && (!email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) && Boolean(fecha) && Boolean(firmaLista) && !enviando;
 
@@ -109,6 +116,13 @@ export function ContratosClient() {
     const res = await fetch(`/api/contratos/${c.id}`, { method: "DELETE" });
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     setMsg(res.ok ? { ok: true, texto: `Contrato de ${c.nombre} eliminado.` } : { ok: false, texto: j.error ?? "No se pudo eliminar" });
+    await cargar();
+  }
+
+  async function vincular(c: Contrato, modeloId: string) {
+    const res = await fetch(`/api/contratos/${c.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "vincular", modelo_id: modeloId || null }) });
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    setMsg(res.ok ? { ok: true, texto: modeloId ? "Contrato guardado en la ficha de la modelo." : "Contrato desligado de la modelo." } : { ok: false, texto: j.error ?? "No se pudo" });
     await cargar();
   }
 
@@ -202,25 +216,25 @@ export function ContratosClient() {
             </div>
           ) : null}
 
-          {lista.length ? (
+          {pendientes.length ? (
             <div className="border-t border-white/[0.08] pt-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">Contratos enviados</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">Pendientes de firma</p>
               <ul className="space-y-2">
-                {lista.map((c) => (
+                {pendientes.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-sm">
                     <span className="font-semibold text-white">{c.nombre}</span>
                     <span className="text-xs text-white/40">{c.email || "sin email (por enlace)"}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${ESTADO[c.estado].clase}`}>{ESTADO[c.estado].texto}</span>
                     <span className="text-xs text-white/35">
-                      {c.firmado_at ? `firmado ${cuando(c.firmado_at)}` : c.visto_at ? `abierto ${cuando(c.visto_at)}` : c.enviado_at ? `enviado ${cuando(c.enviado_at)}` : "enlace creado"}
+                      {c.visto_at ? `abierto ${cuando(c.visto_at)}` : c.enviado_at ? `enviado ${cuando(c.enviado_at)}` : "enlace creado"}
                       {c.enviado_por ? ` · ${c.enviado_por}` : ""}
                     </span>
-                    {c.email_error && c.estado !== "firmado" ? <span className="w-full text-[11px] text-red-300/80">Email: {c.email_error}</span> : null}
+                    {c.email_error ? <span className="w-full text-[11px] text-red-300/80">Email: {c.email_error}</span> : null}
                     <span className="ml-auto flex flex-wrap gap-2 text-xs">
                       <a href={`/api/contratos/${c.id}/pdf`} target="_blank" rel="noreferrer" className="font-semibold text-[#A78BFA] hover:underline">
                         PDF
                       </a>
-                      {c.estado !== "firmado" && c.estado !== "cancelado" ? (
+                      {c.estado !== "cancelado" ? (
                         <>
                           <button onClick={() => copiar(c)} className="font-semibold text-white/60 hover:text-white hover:underline">
                             {copiado === c.id ? "✓ Copiado" : "Copiar mensaje"}
@@ -232,17 +246,58 @@ export function ContratosClient() {
                           ) : null}
                         </>
                       ) : null}
-                      {c.estado !== "firmado" ? (
-                        <button onClick={() => void eliminar(c)} className="font-semibold text-red-300/70 hover:text-red-300 hover:underline">
-                          Eliminar
-                        </button>
-                      ) : null}
+                      <button onClick={() => void eliminar(c)} className="font-semibold text-red-300/70 hover:text-red-300 hover:underline">
+                        Eliminar
+                      </button>
                     </span>
                   </li>
                 ))}
               </ul>
             </div>
           ) : null}
+
+          <div className="border-t border-white/[0.08] pt-4">
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Archivo de contratos firmados ({firmados.length})</p>
+              {firmados.length ? <span className="text-[11px] text-white/30">Copia guardada con la firma, la fecha y el DNI. No se pueden eliminar.</span> : null}
+            </div>
+            {firmados.length ? (
+              <ul className="space-y-2">
+                {firmados.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] px-3 py-2.5 text-sm">
+                    <span className="font-semibold text-white">{c.nombre}</span>
+                    <span className="text-xs text-white/40">firmado {cuando(c.firmado_at)}</span>
+                    <label className="flex items-center gap-1.5 text-xs text-white/45">
+                      Ficha:
+                      <select value={c.modelo_id ?? ""} onChange={(e) => void vincular(c, e.target.value)} className="rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-white/80">
+                        <option value="">Sin ligar a una modelo</option>
+                        {modelos.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {c.modelo_id ? (
+                      <a href={`/modelos/${c.modelo_id}#contrato`} className="text-xs font-semibold text-white/60 hover:text-white hover:underline">
+                        Ver ficha
+                      </a>
+                    ) : null}
+                    <span className="ml-auto flex flex-wrap gap-3 text-xs">
+                      <a href={`/api/contratos/${c.id}/pdf`} target="_blank" rel="noreferrer" className="font-semibold text-[#A78BFA] hover:underline">
+                        Ver PDF
+                      </a>
+                      <a href={`/api/contratos/${c.id}/pdf?descargar=1`} className="font-semibold text-white/60 hover:text-white hover:underline">
+                        Descargar
+                      </a>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-sm text-white/35">Aquí se guardará una copia de cada contrato en cuanto lo firme la modelo.</p>
+            )}
+          </div>
       </div>
     </div>
   );

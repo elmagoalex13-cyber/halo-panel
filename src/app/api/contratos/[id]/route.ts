@@ -4,15 +4,27 @@ import { enlaceContrato, enviarEmailContrato } from "@/lib/contratos";
 
 export const dynamic = "force-dynamic";
 
-// POST { accion: "reenviar" | "cancelar" } sobre un contrato ya creado.
+// POST { accion: "reenviar" | "cancelar" | "vincular", modelo_id? } sobre un contrato ya creado.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
-  const { accion } = (await req.json().catch(() => ({}))) as { accion?: string };
+  const { accion, modelo_id } = (await req.json().catch(() => ({}))) as { accion?: string; modelo_id?: string | null };
   const db = createAdminClient();
   const { data: c } = await db.from("contratos_modelos").select("id, token, nombre, email, fecha_inicio, estado").eq("id", id).maybeSingle();
   if (!c) return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
 
+  if (accion === "vincular") {
+    // Liga el contrato a una modelo (o lo desliga con modelo_id null): asi aparece en su ficha
+    let destino: string | null = null;
+    if (modelo_id) {
+      const { data: m } = await db.from("modelos").select("id").eq("id", modelo_id).maybeSingle();
+      if (!m) return NextResponse.json({ error: "Modelo no encontrada" }, { status: 404 });
+      destino = m.id as string;
+    }
+    const { error } = await db.from("contratos_modelos").update({ modelo_id: destino }).eq("id", id);
+    if (error) return NextResponse.json({ error: /modelo_id/i.test(error.message) ? "Falta ejecutar el SQL 20261026_contratos_modelo_id.sql en Supabase." : error.message }, { status: /modelo_id/i.test(error.message) ? 409 : 500 });
+    return NextResponse.json({ ok: true });
+  }
   if (accion === "cancelar") {
     // Cancelar un contrato = eliminarlo (el enlace deja de funcionar y no queda en la lista). Los firmados no se tocan.
     if (c.estado === "firmado") return NextResponse.json({ error: "Ya está firmado: no se puede eliminar" }, { status: 409 });

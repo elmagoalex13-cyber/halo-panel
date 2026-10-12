@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { emailConfigurado } from "@/lib/resend";
-import { CAMPOS_LISTA, emailValido, enlaceContrato, enviarEmailContrato, nuevoToken, type ContratoFila } from "@/lib/contratos";
+import { CAMPOS_LISTA, emailValido, enlaceContrato, enviarEmailContrato, ligarContratosAutomatico, nuevoToken, type ContratoFila } from "@/lib/contratos";
 import { CLAVE_FIRMA_AGENCIA } from "@/lib/contratoFirma";
 
 export const dynamic = "force-dynamic";
@@ -15,14 +15,20 @@ const esFirmaPng = (v: unknown): v is string => typeof v === "string" && v.start
 export async function GET(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const db = createAdminClient();
-  const { data, error } = await db.from("contratos_modelos").select(CAMPOS_LISTA).order("created_at", { ascending: false }).limit(100);
+  await ligarContratosAutomatico();
+  // modelo_id existe solo si se ejecuto el SQL 20261026: si no, se pide sin esa columna
+  let r = await db.from("contratos_modelos").select(`${CAMPOS_LISTA}, modelo_id`).order("created_at", { ascending: false }).limit(500);
+  if (r.error && /modelo_id/i.test(r.error.message)) r = (await db.from("contratos_modelos").select(CAMPOS_LISTA).order("created_at", { ascending: false }).limit(500)) as unknown as typeof r;
+  const { data, error } = r;
   if (error) {
     const falta = /contratos|relation|schema cache/i.test(error.message);
     return NextResponse.json({ error: falta ? SIN_TABLA : error.message, sinTabla: falta, resend: emailConfigurado() }, { status: falta ? 409 : 500 });
   }
+  const { data: modelos } = await db.from("modelos").select("id, nombre").is("eliminada_at", null).order("nombre");
   const origen = req.nextUrl.origin;
   return NextResponse.json({
     resend: emailConfigurado(),
+    modelos: modelos ?? [],
     contratos: ((data ?? []) as unknown as ContratoFila[]).map((c) => ({ ...c, enlace: enlaceContrato(origen, c.token) })),
   });
 }

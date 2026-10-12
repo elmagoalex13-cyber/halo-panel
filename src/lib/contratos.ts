@@ -20,6 +20,7 @@ export type ContratoFila = {
   firmado_at: string | null;
   pdf_key: string | null;
   created_at: string;
+  modelo_id?: string | null;
 };
 
 export const CAMPOS_LISTA = "id, token, nombre, email, fecha_inicio, estado, enviado_por, enviado_at, email_error, visto_at, firmado_at, pdf_key, created_at";
@@ -93,5 +94,42 @@ export async function avisosContratos(): Promise<Array<{ id: string; nivel: "ver
     return avisos;
   } catch {
     return [];
+  }
+}
+
+const normalizar = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+
+/** ¿El nombre del contrato corresponde a esa modelo? Iguales, o todas las palabras de uno estan en el otro (Rachel / Rachel Sweet). */
+export function mismoNombre(a: string, b: string) {
+  const x = normalizar(a).split(" ").filter(Boolean);
+  const y = normalizar(b).split(" ").filter(Boolean);
+  if (!x.length || !y.length) return false;
+  const [corto, largo] = x.length <= y.length ? [x, y] : [y, x];
+  return corto.every((p) => largo.includes(p));
+}
+
+/**
+ * Liga a su modelo los contratos firmados que aun no lo estan, cuando el nombre coincide con UNA sola modelo (si hay duda no toca nada:
+ * se elige a mano). Devuelve los ids ligados. Si falta el SQL de modelo_id no hace nada.
+ */
+export async function ligarContratosAutomatico(): Promise<number> {
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/server");
+    const db = createAdminClient();
+    const [{ data: sueltos, error }, { data: modelos }] = await Promise.all([
+      db.from("contratos_modelos").select("id, nombre").is("modelo_id", null).eq("estado", "firmado"),
+      db.from("modelos").select("id, nombre").is("eliminada_at", null),
+    ]);
+    if (error || !sueltos?.length || !modelos?.length) return 0;
+    let n = 0;
+    for (const c of sueltos) {
+      const candidatas = modelos.filter((m) => mismoNombre(c.nombre as string, m.nombre as string));
+      if (candidatas.length !== 1) continue;
+      const { error: e } = await db.from("contratos_modelos").update({ modelo_id: candidatas[0].id }).eq("id", c.id).is("modelo_id", null);
+      if (!e) n++;
+    }
+    return n;
+  } catch {
+    return 0;
   }
 }

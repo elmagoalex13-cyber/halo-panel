@@ -18,6 +18,8 @@ import { CaptacionRevision } from "./CaptacionRevision";
 import { FichaEditable } from "./FichaEditable";
 import { piezasEnEspera } from "@/lib/captacionPiezas";
 import { progresoCaptacion } from "@/lib/captacion";
+import { ligarContratosAutomatico } from "@/lib/contratos";
+import { ContratoModelo, type ContratoFicha } from "./ContratoModelo";
 
 export const revalidate = 0;
 
@@ -341,6 +343,18 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
           ).count ?? 0,
       }
     : null;
+  // Contrato(s) de la modelo: solo los ve el dueño (llevan firma y DNI). Si falta el SQL de modelo_id, la pestana no sale.
+  let contratosFicha: { propios: ContratoFicha[]; disponibles: ContratoFicha[] } | null = null;
+  if ((await alcanceActual()).dueno) {
+    await ligarContratosAutomatico();
+    const campos = "id, nombre, estado, fecha_inicio, firmado_at, created_at";
+    const dbc = createAdminClient();
+    const [{ data: propios, error: e1 }, { data: libres }] = await Promise.all([
+      dbc.from("contratos_modelos").select(campos).eq("modelo_id", modelo.id).neq("estado", "cancelado").order("created_at", { ascending: false }),
+      dbc.from("contratos_modelos").select(campos).is("modelo_id", null).neq("estado", "cancelado").order("created_at", { ascending: false }).limit(100),
+    ]);
+    if (!e1) contratosFicha = { propios: (propios ?? []) as ContratoFicha[], disponibles: (libres ?? []) as ContratoFicha[] };
+  }
   const of = await cargarResumenOF(modelo.id);
   const ofNuevos = of.resumen.filter((c) => c.nuevo).length;
 
@@ -384,6 +398,17 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
       aviso: ofNuevos ? `${ofNuevos} nuevo${ofNuevos === 1 ? "" : "s"}` : null,
       contenido: <ContenidoModelo modelo={{ id: modelo.id, nombre: modelo.nombre, foto: of.modelos[0]?.foto ?? null }} instagram={instagram} onlyfans={of.resumen} />,
     },
+    ...(contratosFicha
+      ? [
+          {
+            id: "contrato",
+            label: "Contrato",
+            icono: "✎",
+            aviso: contratosFicha.propios.some((c) => c.estado === "firmado") ? null : contratosFicha.propios.length ? "sin firmar" : "sin contrato",
+            contenido: <ContratoModelo modeloId={modelo.id} nombre={modelo.nombre} contratos={contratosFicha.propios} disponibles={contratosFicha.disponibles} />,
+          } satisfies Pestana,
+        ]
+      : []),
   ];
 
   return (

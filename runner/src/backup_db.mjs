@@ -17,7 +17,7 @@ const TABLAS = [
   "cuentas_instagram", "facturacion_modelos", "venuz_cuentas", "venuz_ingresos_diarios", "venuz_resumen_mensual",
   "library_content", "encargos", "referencias", "referencias_cuentas", "referencias_videos", "banco_frases_canciones",
   "of_colecciones", "of_archivos", "modelo_onboarding", "modelo_onboarding_historial", "creator_configs",
-  "virales_propios", "asignaciones_modelo", "landings", "leads",
+  "virales_propios", "asignaciones_modelo", "landings", "leads", "contratos_modelos",
 ];
 const DIAS_VPS = 30;
 const DIAS_SUPABASE = 14;
