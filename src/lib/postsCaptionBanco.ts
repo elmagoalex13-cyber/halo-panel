@@ -18,12 +18,12 @@ export function variante(texto: string): string {
   return `${base} ${emojis}`.trim();
 }
 
-export type ContextoBanco = { bancos: string[]; usadosModelo: Set<string>; usosGlobales: Map<string, number> };
+export type ContextoBanco = { bancos: string[]; temas: Map<string, string[]>; usadosModelo: Set<string>; usosGlobales: Map<string, number> };
 
 /** Carga el banco de captions activos de tipo foto y lo que ya se ha usado (por esta modelo y por todas). null si el banco no existe todavia. */
 export async function cargarBanco(db: Db, modeloId: string): Promise<ContextoBanco | null> {
   const [{ data: banco, error }, { data: usados }] = await Promise.all([
-    db.from("captions").select("texto").eq("tipo", "foto").eq("activa", true).limit(5000),
+    db.from("captions").select("texto, tags").eq("tipo", "foto").eq("activa", true).limit(5000),
     db.from("posts_programados").select("modelo_id, caption").not("caption", "is", null).neq("estado", "descartado").limit(20000),
   ]);
   if (error || !banco?.length) return null;
@@ -34,13 +34,13 @@ export async function cargarBanco(db: Db, modeloId: string): Promise<ContextoBan
     usosGlobales.set(k, (usosGlobales.get(k) ?? 0) + 1);
     if (u.modelo_id === modeloId) usadosModelo.add(k);
   }
-  return { bancos: banco.map((b) => b.texto as string), usadosModelo, usosGlobales };
+  return { bancos: banco.map((b) => b.texto as string), temas: new Map(banco.map((b) => [b.texto as string, (b.tags as string[] | null) ?? []])), usadosModelo, usosGlobales };
 }
 
-/** Elige el siguiente caption y lo apunta como usado en el contexto (para que el siguiente post de la misma tanda no lo repita). */
-export function elegirCaption(ctx: ContextoBanco, excluir: string[] = []): string | null {
+/** Elige el siguiente caption (del tema indicado, si se pide uno) y lo apunta como usado en el contexto (para que el siguiente post de la misma tanda no lo repita). */
+export function elegirCaption(ctx: ContextoBanco, excluir: string[] = [], tema?: string | null): string | null {
   const fuera = new Set(excluir.map(clave));
-  const libres = ctx.bancos.filter((t) => !ctx.usadosModelo.has(clave(t)) && !fuera.has(clave(t)));
+  const libres = ctx.bancos.filter((t) => !ctx.usadosModelo.has(clave(t)) && !fuera.has(clave(t)) && (!tema || ctx.temas.get(t)?.includes(tema)));
   if (!libres.length) return null;
   const usos = (t: string) => ctx.usosGlobales.get(clave(t)) ?? 0;
   const minimo = Math.min(...libres.map(usos));

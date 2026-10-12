@@ -3,6 +3,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { exigirModelo } from "@/lib/alcance";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { cargarBanco, elegirCaption } from "@/lib/postsCaptionBanco";
+import { TEMAS_CAPTION, etiquetaTema } from "@/lib/captionTemas";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -48,11 +49,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ ok: true });
 }
 
-// POST { accion: "regenerar" } -> otro caption del banco para esa foto
+// POST { accion: "regenerar", tema? } -> otro caption del banco para esa foto (del tema elegido, si se indica)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
-  const { accion } = (await req.json().catch(() => ({}))) as { accion?: string };
+  const { accion, tema } = (await req.json().catch(() => ({}))) as { accion?: string; tema?: string };
   if (accion !== "regenerar") return NextResponse.json({ error: "Acción no válida" }, { status: 400 });
   const { db, p } = await fila(id);
   if (!p) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
@@ -62,8 +63,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const ctx = await cargarBanco(db, p.modelo_id as string);
   if (!ctx) return NextResponse.json({ error: "El banco de captions está vacío: importa los captions en la página Captions." }, { status: 409 });
-  const caption = elegirCaption(ctx, p.caption ? [p.caption as string] : []);
-  if (!caption) return NextResponse.json({ error: "Esta modelo ya ha usado todos los captions del banco" }, { status: 409 });
+  const temaOk = typeof tema === "string" && TEMAS_CAPTION.some((t) => t.id === tema) ? tema : null;
+  const caption = elegirCaption(ctx, p.caption ? [p.caption as string] : [], temaOk);
+  if (!caption) return NextResponse.json({ error: temaOk ? `Esta modelo ya ha usado todos los captions del tema «${etiquetaTema(temaOk)}» (o no hay ninguno activo)` : "Esta modelo ya ha usado todos los captions del banco" }, { status: 409 });
   await db.from("posts_programados").update({ caption, caption_motivo: null, estado: "borrador", updated_at: new Date().toISOString() }).eq("id", id);
   return NextResponse.json({ ok: true, caption });
 }

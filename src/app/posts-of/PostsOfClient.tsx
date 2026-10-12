@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { TEMAS_CAPTION } from "@/lib/captionTemas";
 import { VisorFotos } from "@/components/VisorFotos";
 
 type Post = {
@@ -96,10 +97,13 @@ export function PostsOfClient() {
     return r.ok;
   }
 
-  async function regenerar(id: string) {
+  // Tema elegido para cada post (piscina/playa, culo, gym…): el caption nuevo sale de ese tema. Vacio = cualquiera.
+  const [temas, setTemas] = useState<Record<string, string>>({});
+
+  async function regenerar(id: string, tema?: string) {
     setTrabajando(id);
     setMsg(null);
-    const r = await fetch(`/api/posts-of/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "regenerar" }) });
+    const r = await fetch(`/api/posts-of/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "regenerar", tema: (tema ?? temas[id]) || undefined }) });
     const j = (await r.json().catch(() => ({}))) as { error?: string };
     if (!r.ok) setMsg({ ok: false, texto: j.error ?? "No se pudo generar" });
     await cargar();
@@ -200,6 +204,24 @@ export function PostsOfClient() {
                             ) : (
                               <button onClick={() => void guardar(p.id, { estado: "borrador" })} className="btn-secondary px-3 py-1.5">Volver a revisar</button>
                             )}
+                            <select
+                              value={temas[p.id] ?? ""}
+                              onChange={(e) => {
+                                setTemas((t) => ({ ...t, [p.id]: e.target.value }));
+                                void regenerar(p.id, e.target.value);
+                              }}
+                              disabled={trabajando === p.id}
+                              aria-label="Tipo de foto: el caption sale de este tema"
+                              title="Tipo de foto: al elegirlo, el caption sale de ese tema"
+                              className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-white/80 disabled:opacity-50"
+                            >
+                              <option value="">Tipo: cualquiera</option>
+                              {TEMAS_CAPTION.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.etiqueta}
+                                </option>
+                              ))}
+                            </select>
                             <button onClick={() => void regenerar(p.id)} disabled={trabajando === p.id} className="btn-secondary px-3 py-1.5 disabled:opacity-50">{trabajando === p.id ? "Buscando…" : "🔄 Otro caption"}</button>
                             <button onClick={() => void guardar(p.id, { estado: "descartado" })} className="px-2 py-1.5 font-semibold text-red-300/70 hover:text-red-300">Descartar</button>
                           </div>

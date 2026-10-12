@@ -32,7 +32,24 @@ export async function POST(req: NextRequest) {
       if (error) return NextResponse.json({ error: falta(error.message) ? SIN_TABLA : error.message }, { status: falta(error.message) ? 409 : 500 });
       nuevos += data?.length ?? 0;
     }
-    return NextResponse.json({ ok: true, nuevos, total: filas.length });
+    // Los que ya estaban importados reciben su tema (solo si aun no tienen etiquetas: lo que hayas cambiado a mano no se toca)
+    const { data: existentes } = await db.from("captions").select("id, texto, tags").eq("origen", "documento").limit(5000);
+    const temaDe = new Map(filas.map((f) => [f.texto, f.tags]));
+    const grupos = new Map<string, string[]>();
+    for (const e of existentes ?? []) {
+      const tags = temaDe.get(e.texto as string);
+      if (!tags?.length || (e.tags as string[] | null)?.length) continue;
+      const k = JSON.stringify(tags);
+      grupos.set(k, [...(grupos.get(k) ?? []), e.id as string]);
+    }
+    let etiquetados = 0;
+    for (const [k, ids] of grupos) {
+      for (let i = 0; i < ids.length; i += 100) {
+        const { error } = await db.from("captions").update({ tags: JSON.parse(k) }).in("id", ids.slice(i, i + 100));
+        if (!error) etiquetados += Math.min(100, ids.length - i);
+      }
+    }
+    return NextResponse.json({ ok: true, nuevos, total: filas.length, etiquetados });
   }
 
   if (body.accion === "agregar") {

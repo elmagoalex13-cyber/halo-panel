@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { TEMAS_CAPTION } from "@/lib/captionTemas";
 
 type Tipo = "foto" | "propina" | "encuesta" | "plantilla";
 type Caption = { id: string; texto: string; tipo: Tipo; activa: boolean; tags: string[]; origen: string };
@@ -21,6 +22,7 @@ export function CaptionsClient() {
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const [busca, setBusca] = useState("");
   const [tipo, setTipo] = useState<Tipo | "todos">("todos");
+  const [tema, setTema] = useState("todos");
   const [estado, setEstado] = useState<"todos" | "activas" | "apagadas">("todos");
   const [pagina, setPagina] = useState(0);
   const [editando, setEditando] = useState<string | null>(null);
@@ -42,9 +44,9 @@ export function CaptionsClient() {
 
   const visibles = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return (lista ?? []).filter((c) => (tipo === "todos" || c.tipo === tipo) && (estado === "todos" || (estado === "activas" ? c.activa : !c.activa)) && (!q || c.texto.toLowerCase().includes(q)));
-  }, [lista, busca, tipo, estado]);
-  useEffect(() => setPagina(0), [busca, tipo, estado]);
+    return (lista ?? []).filter((c) => (tipo === "todos" || c.tipo === tipo) && (tema === "todos" || (tema === "sin" ? !c.tags.some((t) => TEMAS_CAPTION.some((x) => x.id === t)) : c.tags.includes(tema))) && (estado === "todos" || (estado === "activas" ? c.activa : !c.activa)) && (!q || c.texto.toLowerCase().includes(q)));
+  }, [lista, busca, tipo, tema, estado]);
+  useEffect(() => setPagina(0), [busca, tipo, tema, estado]);
 
   const cuenta = (f: (c: Caption) => boolean) => (lista ?? []).filter(f).length;
   const paginas = Math.max(1, Math.ceil(visibles.length / POR_PAGINA));
@@ -55,9 +57,9 @@ export function CaptionsClient() {
     setMsg(null);
     try {
       const r = await fetch("/api/captions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "importar_base" }) });
-      const j = (await r.json().catch(() => ({}))) as { error?: string; nuevos?: number; total?: number };
+      const j = (await r.json().catch(() => ({}))) as { error?: string; nuevos?: number; total?: number; etiquetados?: number };
       if (!r.ok) throw new Error(j.error ?? "No se pudo importar");
-      setMsg({ ok: true, texto: j.nuevos ? `Importados ${j.nuevos} captions del documento.` : "El documento ya estaba importado: no hay captions nuevos." });
+      setMsg({ ok: true, texto: `${j.nuevos ? `Importados ${j.nuevos} captions del documento.` : "No hay captions nuevos en el documento."}${j.etiquetados ? ` Clasificados por tema: ${j.etiquetados}.` : ""}` });
       await cargar();
     } catch (e) {
       setMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
@@ -117,6 +119,14 @@ export function CaptionsClient() {
           ))}
         </div>
       )}
+      {lista.length && lista.some((c) => c.tipo === "foto" && c.origen === "documento" && !c.tags.length) ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-4 py-3">
+          <p className="text-sm text-white/70">Hay captions del documento sin tema. Se clasifican solos (piscina/playa, culo, pecho, gym…) y luego puedes corregir cualquiera a mano.</p>
+          <button onClick={importar} disabled={trabajando} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
+            {trabajando ? "Clasificando…" : "Clasificar por tema"}
+          </button>
+        </div>
+      ) : null}
       {error && !sinTabla ? <p className="text-sm text-red-300">{error}</p> : null}
       {msg ? <p className={`text-sm ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>{msg.texto}</p> : null}
 
@@ -129,6 +139,13 @@ export function CaptionsClient() {
               {TIPOS.map((t) => (
                 <option key={t.id} value={t.id}>{t.etiqueta}</option>
               ))}
+            </select>
+            <select value={tema} onChange={(e) => setTema(e.target.value)} className="input-base py-2 text-sm" aria-label="Tema">
+              <option value="todos">Todos los temas</option>
+              {TEMAS_CAPTION.map((t) => (
+                <option key={t.id} value={t.id}>{t.etiqueta} ({cuenta((c) => c.tags.includes(t.id))})</option>
+              ))}
+              <option value="sin">Sin tema</option>
             </select>
             <select value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)} className="input-base py-2 text-sm">
               <option value="todos">Activos y apagados</option>
@@ -144,7 +161,7 @@ export function CaptionsClient() {
             </button>
           </div>
 
-          <p className="text-xs text-white/40">{visibles.length} {visibles.length === 1 ? "caption" : "captions"} · se usan para programar posts solo los <b className="text-white/60">activos de tipo «Para foto»</b> (los que piden propina, las encuestas y las plantillas se reservan).</p>
+          <p className="text-xs text-white/40">Cada caption tiene un <b className="text-white/60">tema</b> (playa/piscina, culo, pecho, gym…): en «Posts por programar» eliges el tema de la foto y el caption sale de ese tema. {visibles.length} {visibles.length === 1 ? "caption" : "captions"} · se usan para programar posts solo los <b className="text-white/60">activos de tipo «Para foto»</b> (los que piden propina, las encuestas y las plantillas se reservan).</p>
 
           <ul className="space-y-2">
             {pagActual.map((c) => (
@@ -166,9 +183,17 @@ export function CaptionsClient() {
                       <option key={t.id} value={t.id}>{t.etiqueta}</option>
                     ))}
                   </select>
-                  {c.tags.map((t) => (
-                    <span key={t} className="rounded-full bg-white/10 px-2 py-0.5 text-white/60">{t}</span>
-                  ))}
+                  <select
+                    value={c.tags.find((t) => TEMAS_CAPTION.some((x) => x.id === t)) ?? ""}
+                    onChange={(e) => void cambiar(c.id, { tags: [...c.tags.filter((t) => !TEMAS_CAPTION.some((x) => x.id === t)), ...(e.target.value ? [e.target.value] : [])] })}
+                    className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-white/70"
+                    aria-label="Tema del caption"
+                  >
+                    <option value="">Sin tema</option>
+                    {TEMAS_CAPTION.map((t) => (
+                      <option key={t.id} value={t.id}>{t.etiqueta}</option>
+                    ))}
+                  </select>
                   <span className="ml-auto flex gap-3">
                     <button onClick={() => void cambiar(c.id, { activa: !c.activa })} className={`font-semibold hover:underline ${c.activa ? "text-emerald-300" : "text-white/40"}`}>
                       {c.activa ? "● Activo" : "○ Apagado"}
