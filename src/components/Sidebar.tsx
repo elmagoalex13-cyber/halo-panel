@@ -11,7 +11,6 @@ const NAV = [
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
   { href: "/originales", label: "Originales", icon: "▤" },
   { href: "/onlyfans", label: "OnlyFans", icon: "♡", ofBadge: true },
-  { href: "/captions", label: "Captions", icon: "❝" },
   { href: "/leads", label: "Leads", icon: "◇", leadsBadge: true },
   { href: "/contratos", label: "Contratos", icon: "✎" },
   { href: "/asignar", label: "Asignar vídeos", icon: "⇪" },
