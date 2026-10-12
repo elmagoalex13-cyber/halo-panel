@@ -13,7 +13,7 @@ type Post = {
   aprobado_por: string | null;
   vista: string | null;
 };
-type ModeloPosts = { id: string; nombre: string; cada_dias: number; venuz_activo: boolean; nuevas: number; posts: Post[] };
+type ModeloPosts = { id: string; nombre: string; cada_dias: number; venuz_activo: boolean; fan_baul: string; nuevas: number; posts: Post[] };
 
 const ESTADO: Record<Post["estado"], { texto: string; clase: string }> = {
   borrador: { texto: "Por revisar", clase: "bg-amber-300/15 text-amber-100" },
@@ -85,7 +85,7 @@ export function PostsOfClient() {
     }
   }
 
-  async function ajustes(m: ModeloPosts, cambios: { cada_dias?: number; venuz_activo?: boolean }) {
+  async function ajustes(m: ModeloPosts, cambios: { cada_dias?: number; venuz_activo?: boolean; fan_baul?: string }) {
     setModelos((p) => (p ?? []).map((x) => (x.id === m.id ? { ...x, ...cambios } : x)));
     await fetch("/api/posts-of", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "ajustes", modelo_id: m.id, ...cambios }) });
   }
@@ -114,7 +114,7 @@ export function PostsOfClient() {
   return (
     <div className="space-y-6">
       <p className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-white/60">
-        Las fotos de la carpeta «Posts» de cada modelo con perfil activo en Venuz se convierten aquí en posts: la IA propone el <b className="text-white/80">caption</b> y el <b className="text-white/80">día y la hora</b> (entre las 8:00 y las 19:00, hora de Madrid). Tú revisas y apruebas. <b className="text-white/80">Todavía no se envían a Venuz</b>: los aprobados quedan listos para cuando conectemos la cola.
+        Las fotos de la carpeta «Posts» de cada modelo con perfil activo en Venuz se convierten aquí en posts: la IA propone el <b className="text-white/80">caption</b> y el <b className="text-white/80">día y la hora</b> (entre las 8:00 y las 19:00, hora de Madrid). Tú revisas y apruebas. Al <b className="text-white/80">aprobar</b> un post de una modelo con «Enviar a Venuz» activado, el editor lo sube al baúl y lo programa en la cola de Venuz (en uno o dos minutos). Si no está activado, el post solo queda aprobado aquí.
       </p>
       {!ia ? <p className="text-sm text-red-300">Falta la clave de la IA (ANTHROPIC_API_KEY) en Vercel: sin ella no se pueden generar captions.</p> : null}
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
@@ -139,8 +139,19 @@ export function PostsOfClient() {
                     ))}
                   </select>
                 </label>
-                <label className="flex cursor-pointer items-center gap-1.5 text-white/60" title="Cuando esté conectada la cola, solo se enviará a Venuz lo de las modelos con esto activado">
-                  <input type="checkbox" checked={m.venuz_activo} onChange={(e) => void ajustes(m, { venuz_activo: e.target.checked })} className="h-4 w-4 accent-[#8B5CF6]" />
+                <label className="flex items-center gap-1.5 text-white/60" title="ID de OnlyFans de un fan (por ejemplo, tu propia cuenta de fan). Venuz le «envía» cada foto como mensaje para guardarla en el baúl; la foto no se publica ahí.">
+                  Fan para el baúl
+                  <input
+                    defaultValue={m.fan_baul}
+                    key={m.fan_baul}
+                    inputMode="numeric"
+                    placeholder="ID de OnlyFans"
+                    onBlur={(e) => e.target.value.trim() !== m.fan_baul && void ajustes(m, { fan_baul: e.target.value.trim() })}
+                    className="w-28 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-white/80"
+                  />
+                </label>
+                <label className={`flex items-center gap-1.5 ${m.fan_baul ? "cursor-pointer text-white/60" : "text-white/25"}`} title={m.fan_baul ? "Los posts aprobados de esta modelo se envían solos a la cola de Venuz" : "Pon primero el fan para el baúl"}>
+                  <input type="checkbox" disabled={!m.fan_baul} checked={m.venuz_activo} onChange={(e) => void ajustes(m, { venuz_activo: e.target.checked })} className="h-4 w-4 accent-[#8B5CF6]" />
                   Enviar a Venuz
                 </label>
                 <button onClick={() => void preparar(m)} disabled={trabajando === m.id} className="btn-primary px-4 py-2 text-xs disabled:opacity-50">

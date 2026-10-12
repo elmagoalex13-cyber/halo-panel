@@ -22,3 +22,8 @@ ALTER TABLE posts_programados ENABLE ROW LEVEL SECURITY;
 -- Ajustes por modelo: cada cuantos dias se publica un post (1 = diario, 2 = dia si dia no) y si se manda a Venuz (apagado hasta que lo actives)
 ALTER TABLE modelos ADD COLUMN IF NOT EXISTS posts_cada_dias   smallint NOT NULL DEFAULT 1;
 ALTER TABLE modelos ADD COLUMN IF NOT EXISTS posts_venuz_activo boolean  NOT NULL DEFAULT false;
+
+-- Para enviar a la cola de Venuz: id del post en Venuz, id de la foto en el baul de OnlyFans y el fan al que Venuz «envia» cada foto para guardarla en el baul
+ALTER TABLE posts_programados ADD COLUMN IF NOT EXISTS venuz_media_id bigint;
+ALTER TABLE posts_programados ADD COLUMN IF NOT EXISTS enviado_at     timestamptz;
+ALTER TABLE modelos           ADD COLUMN IF NOT EXISTS posts_fan_baul  text;   -- id de OnlyFans de ese fan (solo numeros)

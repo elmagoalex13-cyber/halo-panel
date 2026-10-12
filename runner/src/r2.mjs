@@ -39,6 +39,13 @@ export async function downloadFromR2(key, destPath) {
   await pipeline(Body, createWriteStream(destPath));
 }
 
+/** Descarga un objeto de un bucket concreto (los archivos de OnlyFans pueden estar en otro bucket que los videos). */
+export async function downloadFromR2Bucket(bucket, key, destPath) {
+  await mkdir(path.dirname(destPath), { recursive: true });
+  const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket || config.r2Bucket, Key: key }));
+  await pipeline(Body, createWriteStream(destPath));
+}
+
 export async function uploadToR2(localPath, key, contentType = "video/mp4") {
   await s3.send(
     new PutObjectCommand({ Bucket: config.r2Bucket, Key: key, Body: createReadStream(localPath), ContentType: contentType }),

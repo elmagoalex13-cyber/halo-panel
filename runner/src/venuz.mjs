@@ -101,7 +101,10 @@ export class SesionVenuz {
     for (let intento = 0; intento < 2; intento++) {
       if (!this.cookies.size) await this.login();
       const cabeceras = this.cabeceras(json !== undefined ? { "Content-Type": "application/json" } : {});
-      if (bearer) cabeceras.Authorization = `Bearer ${bearer}`;
+      if (bearer) {
+        delete cabeceras.Cookie; // el servidor de subida es otro: se identifica solo con el token, sin la cookie de sesion
+        cabeceras.Authorization = `Bearer ${bearer}`;
+      }
       const res = await fetch(url ?? `${API}${ruta}`, { method: metodo, headers: cabeceras, body: form ?? (json !== undefined ? JSON.stringify(json) : undefined) });
       if ((res.status === 401 || res.status === 403) && intento === 0 && !bearer) {
         if (!(await this.refrescar())) {

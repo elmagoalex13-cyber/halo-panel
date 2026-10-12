@@ -16,6 +16,7 @@ import { descargarReferenciasPendientes } from "./referencias.mjs";
 import { cicloTrials } from "./trials.mjs";
 import { backupOnboarding } from "./backup_onboarding.mjs";
 import { cicloVenuz } from "./venuz.mjs";
+import { cicloPostsVenuz } from "./venuz_posts.mjs";
 import { cicloPreviews } from "./previews.mjs";
 
 const falta = faltanVariables();
@@ -81,6 +82,9 @@ setInterval(avisarPanel, 10 * 60000);
 // Facturacion de Venuz.ai: refresca cada VENUZ_HORAS y cuando el panel pulsa "Sync Venuz" (se mira cada 30 s)
 setTimeout(() => cicloVenuz(supabase), 15000);
 setInterval(() => cicloVenuz(supabase), 30000);
+// Posts de OnlyFans aprobados en el panel -> cola de posts de Venuz (solo modelos con «Enviar a Venuz» y fan para el baul)
+setTimeout(() => cicloPostsVenuz(supabase), 30000);
+setInterval(() => cicloPostsVenuz(supabase), 60000);
 
 // Vistas previas (miniatura + copia ligera) de los originales de las modelos, para la pagina Originales del panel
 setTimeout(() => cicloPreviews(supabase), 25000);

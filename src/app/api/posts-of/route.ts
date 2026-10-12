@@ -22,7 +22,7 @@ export async function GET() {
   if (!ids.length) return NextResponse.json({ modelos: [], ia: Boolean(process.env.ANTHROPIC_API_KEY) });
 
   const [{ data: modelos, error: eM }, { data: posts, error: eP }] = await Promise.all([
-    db.from("modelos").select("id, nombre, posts_cada_dias, posts_venuz_activo").in("id", ids).is("eliminada_at", null).order("nombre"),
+    db.from("modelos").select("id, nombre, posts_cada_dias, posts_venuz_activo, posts_fan_baul").in("id", ids).is("eliminada_at", null).order("nombre"),
     db.from("posts_programados").select("id, modelo_id, archivo_id, caption, caption_motivo, estado, programar_para, error, aprobado_por").in("modelo_id", ids).neq("estado", "descartado").order("programar_para", { ascending: true }).limit(2000),
   ]);
   const err = eM?.message ?? eP?.message;
@@ -45,14 +45,14 @@ export async function GET() {
         return { ...p, vista: a ? await urlVistaFoto(a.storage_key as string, a.bucket as string, minis).catch(() => null) : null };
       }),
     );
-    salida.push({ id: m.id, nombre: m.nombre, cada_dias: m.posts_cada_dias ?? 1, venuz_activo: Boolean(m.posts_venuz_activo), nuevas, posts: lista });
+    salida.push({ id: m.id, nombre: m.nombre, cada_dias: m.posts_cada_dias ?? 1, venuz_activo: Boolean(m.posts_venuz_activo), fan_baul: (m.posts_fan_baul as string | null) ?? "", nuevas, posts: lista });
   }
   return NextResponse.json({ modelos: salida, ia: Boolean(process.env.ANTHROPIC_API_KEY) });
 }
 
 export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
-  const body = (await req.json().catch(() => ({}))) as { accion?: string; modelo_id?: string; cada_dias?: unknown; venuz_activo?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { accion?: string; modelo_id?: string; cada_dias?: unknown; venuz_activo?: unknown; fan_baul?: unknown };
   const modeloId = String(body.modelo_id ?? "");
   const g = await exigirModelo(modeloId);
   if (g) return g;
@@ -63,6 +63,11 @@ export async function POST(req: NextRequest) {
     const d = Math.round(Number(body.cada_dias));
     if (Number.isFinite(d) && d >= 1 && d <= 7) cambios.posts_cada_dias = d;
     if (typeof body.venuz_activo === "boolean") cambios.posts_venuz_activo = body.venuz_activo;
+    if (typeof body.fan_baul === "string") {
+      const f = body.fan_baul.replace(/\D/g, "");
+      if (f && (f.length < 5 || f.length > 15)) return NextResponse.json({ error: "El ID del fan son solo números (unos 9 dígitos)" }, { status: 400 });
+      cambios.posts_fan_baul = f || null;
+    }
     const { error } = await db.from("modelos").update(cambios).eq("id", modeloId);
     if (error) return NextResponse.json({ error: falta(error.message) ? SIN_TABLA : error.message }, { status: falta(error.message) ? 409 : 500 });
     return NextResponse.json({ ok: true });
