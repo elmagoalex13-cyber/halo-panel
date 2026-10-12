@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, exigirModelo, soloVisibles } from "@/lib/alcance";
 import { miniaturasDeModelo, urlVistaFoto } from "@/lib/ofMiniaturas";
-import { cuentaVenuzActiva, prepararPosts } from "@/lib/postsOF";
+import { cuentaVenuzActiva, prepararPosts, rellenarCaptions } from "@/lib/postsOF";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,7 +11,7 @@ const SIN_TABLA = "Falta ejecutar el SQL 20261025_posts_programados.sql en Supab
 const falta = (m: string) => /posts_programados|posts_cada_dias|posts_venuz_activo|relation|schema cache/i.test(m);
 
 // GET  -> las modelos con perfil activo en Venuz, sus posts (con foto, caption y fecha) y cuantas fotos nuevas hay por preparar
-// POST { accion: "preparar", modelo_id }                    -> crea posts de las fotos nuevas (caption de la IA + hueco)
+// POST { accion: "preparar", modelo_id }                    -> crea posts de las fotos nuevas (caption del banco + hueco)
 // POST { accion: "ajustes", modelo_id, cada_dias, venuz_activo }
 export async function GET() {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
@@ -19,7 +19,10 @@ export async function GET() {
   const alcance = await alcanceActual();
   const { data: cuentas } = await soloVisibles(db.from("venuz_cuentas").select("modelo_id").eq("activa", true).not("modelo_id", "is", null), alcance, "modelo_id");
   const ids = [...new Set((cuentas ?? []).map((c) => c.modelo_id as string))];
-  if (!ids.length) return NextResponse.json({ modelos: [], ia: Boolean(process.env.ANTHROPIC_API_KEY) });
+  if (!ids.length) return NextResponse.json({ modelos: [] });
+
+  // Los posts por revisar que se quedaron sin caption reciben uno del banco
+  for (const id of ids) await rellenarCaptions(db, id).catch(() => 0);
 
   const [{ data: modelos, error: eM }, { data: posts, error: eP }] = await Promise.all([
     db.from("modelos").select("id, nombre, posts_cada_dias, posts_venuz_activo, posts_fan_baul").in("id", ids).is("eliminada_at", null).order("nombre"),
@@ -47,7 +50,7 @@ export async function GET() {
     );
     salida.push({ id: m.id, nombre: m.nombre, cada_dias: m.posts_cada_dias ?? 1, venuz_activo: Boolean(m.posts_venuz_activo), fan_baul: (m.posts_fan_baul as string | null) ?? "", nuevas, posts: lista });
   }
-  return NextResponse.json({ modelos: salida, ia: Boolean(process.env.ANTHROPIC_API_KEY) });
+  return NextResponse.json({ modelos: salida });
 }
 
 export async function POST(req: NextRequest) {

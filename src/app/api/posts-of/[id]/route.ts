@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { exigirModelo } from "@/lib/alcance";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
-import { captionDeArchivo } from "@/lib/postsOF";
-import { miniaturasDeModelo } from "@/lib/ofMiniaturas";
+import { cargarBanco, elegirCaption } from "@/lib/postsCaptionBanco";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -49,7 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ ok: true });
 }
 
-// POST { accion: "regenerar" } -> la IA escribe otro caption para esa foto
+// POST { accion: "regenerar" } -> otro caption del banco para esa foto
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
@@ -61,14 +60,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (g) return g;
   if (p.estado === "programado" || p.estado === "publicado") return NextResponse.json({ error: "Ya está en la cola de Venuz" }, { status: 409 });
 
-  const { data: a } = await db.from("of_archivos").select("storage_key, bucket").eq("id", p.archivo_id as string).maybeSingle();
-  if (!a) return NextResponse.json({ error: "No se encontró la foto" }, { status: 404 });
-  const r = await captionDeArchivo(db, p.modelo_id as string, { storage_key: a.storage_key as string, bucket: a.bucket as string }, await miniaturasDeModelo(p.modelo_id as string));
-  if (!r.ok) {
-    const motivo = r.motivo === "error" ? `error: ${r.detalle ?? ""}`.slice(0, 200) : r.motivo;
-    await db.from("posts_programados").update({ caption_motivo: motivo, updated_at: new Date().toISOString() }).eq("id", id);
-    return NextResponse.json({ error: r.motivo === "explicita" ? "La foto es explícita: la IA no escribe el caption. Pónselo a mano." : r.motivo === "rechazada" ? "La IA no ha querido escribir el caption de esta foto. Pónselo a mano." : (r.detalle ?? "No se pudo generar") }, { status: 422 });
-  }
-  await db.from("posts_programados").update({ caption: r.caption, caption_motivo: null, estado: "borrador", updated_at: new Date().toISOString() }).eq("id", id);
-  return NextResponse.json({ ok: true, caption: r.caption });
+  const ctx = await cargarBanco(db, p.modelo_id as string);
+  if (!ctx) return NextResponse.json({ error: "El banco de captions está vacío: importa los captions en la página Captions." }, { status: 409 });
+  const caption = elegirCaption(ctx, p.caption ? [p.caption as string] : []);
+  if (!caption) return NextResponse.json({ error: "Esta modelo ya ha usado todos los captions del banco" }, { status: 409 });
+  await db.from("posts_programados").update({ caption, caption_motivo: null, estado: "borrador", updated_at: new Date().toISOString() }).eq("id", id);
+  return NextResponse.json({ ok: true, caption });
 }

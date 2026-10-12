@@ -1,8 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import { miniaturasDeModelo, urlVistaFoto } from "@/lib/ofMiniaturas";
-import { generarCaption, personaDe, type ResultadoCaption } from "@/lib/postsCaptionIA";
+import { cargarBanco, elegirCaption } from "@/lib/postsCaptionBanco";
 import { proximosHuecos } from "@/lib/postsHorarios";
-import { sanearDatos } from "@/lib/onboarding";
 
 type Db = ReturnType<typeof createAdminClient>;
 
@@ -12,39 +10,26 @@ export async function cuentaVenuzActiva(db: Db, modeloId: string): Promise<{ id:
   return data ? { id: data.id as string, nombre: data.nombre as string } : null;
 }
 
-async function imagenBase64(db: Db, archivo: { storage_key: string; bucket: string }, minis: Set<string>): Promise<string | null> {
-  try {
-    const url = await urlVistaFoto(archivo.storage_key, archivo.bucket, minis);
-    const r = await fetch(url);
-    if (!r.ok) return null;
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (!buf.length || buf.length > 4.5 * 1024 * 1024) return null; // sin miniatura la original puede ser enorme: no se manda
-    return buf.toString("base64");
-  } catch {
-    return null;
+/** Rellena con un caption del banco los posts por revisar que no tienen. Devuelve cuantos relleno (0 si no hay banco). */
+export async function rellenarCaptions(db: Db, modeloId: string): Promise<number> {
+  const { data: vacios } = await db.from("posts_programados").select("id").eq("modelo_id", modeloId).eq("estado", "borrador").is("caption", null).order("programar_para", { ascending: true }).limit(200);
+  if (!vacios?.length) return 0;
+  const ctx = await cargarBanco(db, modeloId);
+  if (!ctx) return 0;
+  let n = 0;
+  for (const v of vacios) {
+    const c = elegirCaption(ctx);
+    if (!c) break;
+    const { error } = await db.from("posts_programados").update({ caption: c, caption_motivo: null, updated_at: new Date().toISOString() }).eq("id", v.id);
+    if (!error) n++;
   }
-}
-
-/** Voz de la modelo (onboarding) y ultimos captions, para escribir uno nuevo que suene a ella y no se repita. */
-export async function contextoCaption(db: Db, modeloId: string) {
-  const [{ data: ob }, { data: rec }] = await Promise.all([
-    db.from("modelo_onboarding").select("datos").eq("modelo_id", modeloId).maybeSingle(),
-    db.from("posts_programados").select("caption").eq("modelo_id", modeloId).not("caption", "is", null).order("created_at", { ascending: false }).limit(8),
-  ]);
-  return { persona: personaDe(ob?.datos ? (sanearDatos(ob.datos) as unknown as Record<string, unknown>) : null), recientes: (rec ?? []).map((r) => r.caption as string).filter(Boolean) };
-}
-
-export async function captionDeArchivo(db: Db, modeloId: string, archivo: { storage_key: string; bucket: string }, minis: Set<string>): Promise<ResultadoCaption> {
-  const b64 = await imagenBase64(db, archivo, minis);
-  if (!b64) return { ok: false, motivo: "error", detalle: "No se pudo leer la foto" };
-  return generarCaption({ imagenBase64: b64, ...(await contextoCaption(db, modeloId)) });
+  return n;
 }
 
 /**
- * Convierte en posts las fotos nuevas de la carpeta «Posts» de una modelo (maximo `limite` por llamada): cada una recibe un caption de la IA
- * (si puede) y el siguiente hueco de publicacion. Devuelve cuantas creo y cuantas faltan.
+ * Convierte en posts las fotos nuevas de la carpeta «Posts» de una modelo (maximo `limite` por llamada): cada una recibe un caption del banco y el siguiente hueco de publicacion. Devuelve cuantas creo y cuantas faltan.
  */
-export async function prepararPosts(db: Db, modeloId: string, limite = 6) {
+export async function prepararPosts(db: Db, modeloId: string, limite = 60) {
   const { data: cols } = await db.from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post");
   const colIds = (cols ?? []).map((c) => c.id as string);
   if (!colIds.length) return { creados: 0, restantes: 0 };
@@ -59,16 +44,15 @@ export async function prepararPosts(db: Db, modeloId: string, limite = 6) {
   const lote = nuevas.slice(0, limite);
   if (!lote.length) return { creados: 0, restantes: 0 };
 
-  const minis = await miniaturasDeModelo(modeloId);
+  const ctx = await cargarBanco(db, modeloId);
   const huecos = proximosHuecos(modeloId, ult?.[0]?.programar_para ? new Date(ult[0].programar_para as string) : null, Number(modelo?.posts_cada_dias ?? 1), lote.length);
   let creados = 0;
   for (const [i, f] of lote.entries()) {
-    const r = await captionDeArchivo(db, modeloId, { storage_key: f.storage_key as string, bucket: f.bucket as string }, minis);
+    const caption = ctx ? elegirCaption(ctx) : null;
     const { error } = await db.from("posts_programados").insert({
       modelo_id: modeloId,
       archivo_id: f.id,
-      caption: r.ok ? r.caption : null,
-      caption_motivo: r.ok ? null : r.motivo === "error" ? `error: ${r.detalle ?? ""}`.slice(0, 200) : r.motivo,
+      caption,
       programar_para: huecos[i].toISOString(),
     });
     if (!error) creados++;

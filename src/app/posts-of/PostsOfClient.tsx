@@ -42,22 +42,20 @@ const deMadrid = (local: string) => {
 };
 const bonita = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-ES", { timeZone: "Europe/Madrid", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "sin fecha");
 
-/** Posts de OnlyFans por programar: la IA propone el caption y el hueco; tu revisas, editas y apruebas. */
+/** Posts de OnlyFans por programar: el caption sale de tu banco y el hueco lo pone el panel; tu revisas, editas y apruebas. */
 export function PostsOfClient() {
   const [modelos, setModelos] = useState<ModeloPosts[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sinTabla, setSinTabla] = useState(false);
-  const [ia, setIa] = useState(true);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const [trabajando, setTrabajando] = useState<string | null>(null);
   const [visor, setVisor] = useState<{ modelo: string; i: number } | null>(null);
 
   const cargar = useCallback(async () => {
     const r = await fetch("/api/posts-of", { cache: "no-store" });
-    const j = (await r.json().catch(() => ({}))) as { modelos?: ModeloPosts[]; error?: string; sinTabla?: boolean; ia?: boolean };
+    const j = (await r.json().catch(() => ({}))) as { modelos?: ModeloPosts[]; error?: string; sinTabla?: boolean };
     setSinTabla(Boolean(j.sinTabla));
     setError(r.ok ? null : (j.error ?? "No se pudo cargar"));
-    setIa(j.ia !== false);
     setModelos(j.modelos ?? []);
   }, []);
   useEffect(() => {
@@ -114,9 +112,8 @@ export function PostsOfClient() {
   return (
     <div className="space-y-6">
       <p className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-white/60">
-        Las fotos de la carpeta «Posts» de cada modelo con perfil activo en Venuz se convierten aquí en posts: la IA propone el <b className="text-white/80">caption</b> y el <b className="text-white/80">día y la hora</b> (entre las 8:00 y las 19:00, hora de Madrid). Tú revisas y apruebas. Al <b className="text-white/80">aprobar</b> un post de una modelo con «Enviar a Venuz» activado, el editor lo sube al baúl y lo programa en la cola de Venuz (en uno o dos minutos). Si no está activado, el post solo queda aprobado aquí.
+        Las fotos de la carpeta «Posts» de cada modelo con perfil activo en Venuz se convierten aquí en posts: el <b className="text-white/80">caption</b> sale de tu banco de captions y el <b className="text-white/80">día y la hora</b> (entre las 8:00 y las 19:00, hora de Madrid). Tú revisas y apruebas. Al <b className="text-white/80">aprobar</b> un post de una modelo con «Enviar a Venuz» activado, el editor lo sube al baúl y lo programa en la cola de Venuz (en uno o dos minutos). Si no está activado, el post solo queda aprobado aquí.
       </p>
-      {!ia ? <p className="text-sm text-red-300">Falta la clave de la IA (ANTHROPIC_API_KEY) en Vercel: sin ella no se pueden generar captions.</p> : null}
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
       {msg ? <p className={`text-sm ${msg.ok ? "text-emerald-300" : "text-red-300"}`}>{msg.texto}</p> : null}
       {!modelos.length ? <p className="rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center text-sm text-white/40">No hay modelos con un perfil activo en Venuz vinculado. Se vinculan desde Facturación.</p> : null}
@@ -191,7 +188,7 @@ export function PostsOfClient() {
                           key={p.caption ?? "vacio"}
                           rows={3}
                           disabled={!editable}
-                          placeholder={p.caption_motivo === "explicita" ? "Foto explícita: la IA no escribe el caption. Ponlo a mano." : p.caption_motivo === "rechazada" ? "La IA no ha querido escribirlo. Ponlo a mano." : "Caption…"}
+                          placeholder="Caption…"
                           onBlur={(e) => e.target.value.trim() !== (p.caption ?? "") && void guardar(p.id, { caption: e.target.value })}
                           className="input-base w-full resize-y text-sm disabled:opacity-60"
                         />
@@ -203,7 +200,7 @@ export function PostsOfClient() {
                             ) : (
                               <button onClick={() => void guardar(p.id, { estado: "borrador" })} className="btn-secondary px-3 py-1.5">Volver a revisar</button>
                             )}
-                            <button onClick={() => void regenerar(p.id)} disabled={trabajando === p.id} className="btn-secondary px-3 py-1.5 disabled:opacity-50">{trabajando === p.id ? "Generando…" : "🔄 Otro caption"}</button>
+                            <button onClick={() => void regenerar(p.id)} disabled={trabajando === p.id} className="btn-secondary px-3 py-1.5 disabled:opacity-50">{trabajando === p.id ? "Buscando…" : "🔄 Otro caption"}</button>
                             <button onClick={() => void guardar(p.id, { estado: "descartado" })} className="px-2 py-1.5 font-semibold text-red-300/70 hover:text-red-300">Descartar</button>
                           </div>
                         ) : null}

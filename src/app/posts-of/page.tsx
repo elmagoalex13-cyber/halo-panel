@@ -8,7 +8,7 @@ export default function PostsOfPage() {
   return (
     <PanelLayout>
       <div className="mb-6">
-        <p className="text-sm text-[color:var(--text-secondary)]">Posts de OnlyFans con caption de la IA, para revisar</p>
+        <p className="text-sm text-[color:var(--text-secondary)]">Posts de OnlyFans con caption de tu banco, para revisar</p>
         <h1 className="mt-1 font-display text-3xl font-semibold text-white">Posts por programar</h1>
       </div>
       <PostsOfClient />
