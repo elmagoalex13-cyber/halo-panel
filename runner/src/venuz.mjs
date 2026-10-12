@@ -35,7 +35,7 @@ const normalizar = (s) =>
 
 /* ---------------------------- sesion con cookies ---------------------------- */
 
-class SesionVenuz {
+export class SesionVenuz {
   constructor(email, password) {
     this.email = email;
     this.password = password;
@@ -91,6 +91,34 @@ class SesionVenuz {
     if (!res.ok) return false;
     this.guardarCookies(res);
     return true;
+  }
+
+  /**
+   * Peticion generica (POST/PUT/PATCH/DELETE/GET) que NO lanza error por el estado HTTP: devuelve { status, cuerpo } para poder ver la respuesta.
+   * Renueva la sesion una vez si caduca. `json` o `form` (FormData) como cuerpo; `bearer` para el token de subida; `url` absoluta opcional.
+   */
+  async enviar(metodo, ruta, { json, form, bearer, url } = {}) {
+    for (let intento = 0; intento < 2; intento++) {
+      if (!this.cookies.size) await this.login();
+      const cabeceras = this.cabeceras(json !== undefined ? { "Content-Type": "application/json" } : {});
+      if (bearer) cabeceras.Authorization = `Bearer ${bearer}`;
+      const res = await fetch(url ?? `${API}${ruta}`, { method: metodo, headers: cabeceras, body: form ?? (json !== undefined ? JSON.stringify(json) : undefined) });
+      if ((res.status === 401 || res.status === 403) && intento === 0 && !bearer) {
+        if (!(await this.refrescar())) {
+          this.cookies.clear();
+          await this.login();
+        }
+        continue;
+      }
+      this.guardarCookies(res);
+      const texto = await res.text();
+      let cuerpo = texto;
+      try {
+        cuerpo = JSON.parse(texto);
+      } catch {}
+      return { status: res.status, cuerpo };
+    }
+    return { status: 0, cuerpo: null };
   }
 
   /** GET JSON; si la sesion caduca renueva (refresh y, si hace falta, login) y reintenta una vez. */
