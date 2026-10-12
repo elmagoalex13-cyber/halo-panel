@@ -453,6 +453,7 @@ ALTER TABLE contratos_modelos ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- 20261025_posts_programados.sql
+-- =====================================================
 -- ============================================================
 -- POSTS DE ONLYFANS PROGRAMADOS: cada foto de la carpeta «Posts» de una modelo se convierte en un post con su caption (lo escribe la IA,
 -- tu lo revisas) y una fecha/hora. Despues se manda a la cola de Venuz. Solo las toca el servidor (service role).
@@ -483,3 +484,22 @@ ALTER TABLE modelos ADD COLUMN IF NOT EXISTS posts_venuz_activo boolean  NOT NUL
 ALTER TABLE posts_programados ADD COLUMN IF NOT EXISTS venuz_media_id bigint;
 ALTER TABLE posts_programados ADD COLUMN IF NOT EXISTS enviado_at     timestamptz;
 ALTER TABLE modelos           ADD COLUMN IF NOT EXISTS posts_fan_baul  text;   -- id de OnlyFans de ese fan (solo numeros)
+=======
+-- 20261025_captions.sql
+-- ============================================================
+-- BANCO DE CAPTIONS para los posts de OnlyFans (se importa del documento de captions y se puede editar desde el panel).
+--  tipo: foto (caption normal para un post con foto) | propina (pide propina u objetivo) | encuesta | plantilla (lleva [huecos] que hay que rellenar)
+--  activa: solo las activas se usan para programar posts. tags: etiquetas de tema/estilo (se rellenan despues).
+-- Solo las toca el servidor (service role).
+CREATE TABLE IF NOT EXISTS captions (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  texto       text NOT NULL UNIQUE,
+  tipo        text NOT NULL DEFAULT 'foto' CHECK (tipo IN ('foto', 'propina', 'encuesta', 'plantilla')),
+  activa      boolean NOT NULL DEFAULT true,
+  tags        text[] NOT NULL DEFAULT '{}',
+  origen      text NOT NULL DEFAULT 'documento',
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS captions_tipo_activa_idx ON captions (tipo, activa);
+ALTER TABLE captions ENABLE ROW LEVEL SECURITY;
