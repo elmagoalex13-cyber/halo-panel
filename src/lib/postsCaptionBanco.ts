@@ -1,6 +1,7 @@
 // Captions de los posts de OnlyFans: salen del banco propio (tabla captions, pagina Captions), sin IA.
 // Para cada modelo se elige uno que ella no haya usado ya; si lo han usado otras modelos se cambia el final (emojis) para que no sea calcado.
 import { createAdminClient } from "@/lib/supabase/server";
+import { leerTodo } from "@/lib/paginar";
 
 type Db = ReturnType<typeof createAdminClient>;
 
@@ -23,8 +24,8 @@ export type ContextoBanco = { bancos: string[]; temas: Map<string, string[]>; us
 /** Carga el banco de captions activos de tipo foto y lo que ya se ha usado (por esta modelo y por todas). null si el banco no existe todavia. */
 export async function cargarBanco(db: Db, modeloId: string): Promise<ContextoBanco | null> {
   const [{ data: banco, error }, { data: usados }] = await Promise.all([
-    db.from("captions").select("texto, tags").eq("tipo", "foto").eq("activa", true).limit(5000),
-    db.from("posts_programados").select("modelo_id, caption").not("caption", "is", null).neq("estado", "descartado").limit(20000),
+    leerTodo<{ texto: string; tags: string[] | null }>((d, h) => db.from("captions").select("texto, tags").eq("tipo", "foto").eq("activa", true).order("id").range(d, h)),
+    leerTodo<{ modelo_id: string; caption: string }>((d, h) => db.from("posts_programados").select("modelo_id, caption").not("caption", "is", null).neq("estado", "descartado").order("id").range(d, h)),
   ]);
   if (error || !banco?.length) return null;
   const usadosModelo = new Set<string>();

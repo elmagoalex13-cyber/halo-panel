@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, exigirModelo, soloVisibles } from "@/lib/alcance";
 import { miniaturasDeModelo, urlVistaFoto } from "@/lib/ofMiniaturas";
+import { leerTodo } from "@/lib/paginar";
 import { cuentaVenuzActiva, prepararPosts, rellenarCaptions } from "@/lib/postsOF";
 
 export const dynamic = "force-dynamic";
@@ -26,12 +27,12 @@ export async function GET() {
 
   const [{ data: modelos, error: eM }, { data: posts, error: eP }] = await Promise.all([
     db.from("modelos").select("id, nombre, posts_cada_dias, posts_venuz_activo, posts_fan_baul").in("id", ids).is("eliminada_at", null).order("nombre"),
-    db.from("posts_programados").select("id, modelo_id, archivo_id, caption, caption_motivo, estado, programar_para, error, aprobado_por").in("modelo_id", ids).neq("estado", "descartado").order("programar_para", { ascending: true }).limit(2000),
+    leerTodo<Record<string, unknown> & { id: string; modelo_id: string; archivo_id: string }>((d, h) => db.from("posts_programados").select("id, modelo_id, archivo_id, caption, caption_motivo, estado, programar_para, error, aprobado_por").in("modelo_id", ids).neq("estado", "descartado").order("programar_para", { ascending: true }).order("id").range(d, h)),
   ]);
   const err = eM?.message ?? eP?.message;
   if (err) return NextResponse.json({ error: falta(err) ? SIN_TABLA : err, sinTabla: falta(err) }, { status: falta(err) ? 409 : 500 });
 
-  const { data: archivos } = await db.from("of_archivos").select("id, modelo_id, storage_key, bucket, tipo_archivo, coleccion_id, created_at").in("modelo_id", ids).eq("tipo_archivo", "foto").limit(5000);
+  const { data: archivos } = await leerTodo<{ id: string; modelo_id: string; storage_key: string; bucket: string; tipo_archivo: string; coleccion_id: string; created_at: string }>((d, h) => db.from("of_archivos").select("id, modelo_id, storage_key, bucket, tipo_archivo, coleccion_id, created_at").in("modelo_id", ids).eq("tipo_archivo", "foto").order("id").range(d, h));
   const { data: cols } = await db.from("of_colecciones").select("id").in("modelo_id", ids).eq("tipo", "post");
   const colPost = new Set((cols ?? []).map((c) => c.id as string));
   const porArchivo = new Map((archivos ?? []).map((a) => [a.id as string, a]));

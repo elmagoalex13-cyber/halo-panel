@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { cargarBanco, elegirCaption } from "@/lib/postsCaptionBanco";
 import { proximosHuecos } from "@/lib/postsHorarios";
+import { leerTodo } from "@/lib/paginar";
 
 type Db = ReturnType<typeof createAdminClient>;
 
@@ -34,8 +35,8 @@ export async function prepararPosts(db: Db, modeloId: string, limite = 60) {
   const colIds = (cols ?? []).map((c) => c.id as string);
   if (!colIds.length) return { creados: 0, restantes: 0 };
   const [{ data: fotos }, { data: ya }, { data: modelo }, { data: ult }] = await Promise.all([
-    db.from("of_archivos").select("id, storage_key, bucket, created_at").eq("modelo_id", modeloId).eq("tipo_archivo", "foto").in("coleccion_id", colIds).order("created_at", { ascending: true }).limit(2000),
-    db.from("posts_programados").select("archivo_id").eq("modelo_id", modeloId),
+    leerTodo<{ id: string; storage_key: string; bucket: string; created_at: string }>((d, h) => db.from("of_archivos").select("id, storage_key, bucket, created_at").eq("modelo_id", modeloId).eq("tipo_archivo", "foto").in("coleccion_id", colIds).order("created_at", { ascending: true }).order("id").range(d, h)),
+    leerTodo<{ archivo_id: string }>((d, h) => db.from("posts_programados").select("archivo_id").eq("modelo_id", modeloId).order("id").range(d, h)),
     db.from("modelos").select("posts_cada_dias").eq("id", modeloId).maybeSingle(),
     db.from("posts_programados").select("programar_para").eq("modelo_id", modeloId).neq("estado", "descartado").not("programar_para", "is", null).order("programar_para", { ascending: false }).limit(1),
   ]);

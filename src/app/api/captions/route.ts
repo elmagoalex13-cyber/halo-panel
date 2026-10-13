@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import base from "@/lib/captionsBase.json";
+import { leerTodo } from "@/lib/paginar";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -14,7 +15,8 @@ const falta = (m: string) => /captions|relation|schema cache/i.test(m);
 // POST { accion: "agregar", texto, tipo? } -> anade uno nuevo
 export async function GET() {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
-  const { data, error } = await createAdminClient().from("captions").select("id, texto, tipo, activa, tags, origen, created_at").order("created_at", { ascending: true }).limit(5000);
+  const db = createAdminClient();
+  const { data, error } = await leerTodo((d, h) => db.from("captions").select("id, texto, tipo, activa, tags, origen, created_at").order("created_at", { ascending: true }).order("id").range(d, h));
   if (error) return NextResponse.json({ error: falta(error.message) ? SIN_TABLA : error.message, sinTabla: falta(error.message) }, { status: falta(error.message) ? 409 : 500 });
   return NextResponse.json({ captions: data ?? [] });
 }
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
       nuevos += data?.length ?? 0;
     }
     // Los que ya estaban importados reciben su tema (solo si aun no tienen etiquetas: lo que hayas cambiado a mano no se toca)
-    const { data: existentes } = await db.from("captions").select("id, texto, tags").eq("origen", "documento").limit(5000);
+    const { data: existentes } = await leerTodo((d, h) => db.from("captions").select("id, texto, tags").eq("origen", "documento").order("id").range(d, h));
     const temaDe = new Map(filas.map((f) => [f.texto, f.tags]));
     const grupos = new Map<string, string[]>();
     for (const e of existentes ?? []) {
