@@ -159,7 +159,7 @@ export function PostsOfClient() {
                     ))}
                   </select>
                 </label>
-                <label className="flex items-center gap-1.5 text-white/60" title="ID de OnlyFans de un fan (por ejemplo, tu propia cuenta de fan). Venuz le «envía» cada foto como mensaje para guardarla en el baúl; la foto no se publica ahí.">
+                <label className="flex items-center gap-1.5 text-white/60" title="ID de OnlyFans de un fan (por ejemplo, tu propia cuenta de fan). Venuz le «envía» cada foto como mensaje GRATIS (sin precio) para guardarla en el baúl; la foto no se publica ahí.">
                   Fan para el baúl
                   <input
                     defaultValue={m.fan_baul}

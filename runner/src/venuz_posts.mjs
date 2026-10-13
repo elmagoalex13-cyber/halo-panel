@@ -2,11 +2,12 @@
  * Envia a la COLA DE POSTS de Venuz los posts de OnlyFans que se han APROBADO en el panel («Posts por programar»).
  *
  * Solo se manda lo que cumple las tres condiciones: el post esta aprobado, la modelo tiene «Enviar a Venuz» activado y tiene un
- * «fan para el baul» configurado. Venuz no deja subir una foto suelta al baul de OnlyFans: lo hace «enviandola» a un fan (como
- * mensaje de pago de 5 $) y OnlyFans la guarda en el baul. Por eso cada foto sigue estos pasos (los mismos que usa la web de Venuz):
+ * «fan para el baul» configurado. Venuz no deja subir una foto suelta al baul de OnlyFans: lo hace «enviandola» a un fan como mensaje
+ * (SIN precio: mensaje gratis) y OnlyFans la guarda en el baul. Por eso cada foto sigue estos pasos:
  *   1. POST /api/messages/upload-init            -> URL y token de subida
  *   2. POST upload.venuz.ai/.../upload-media-direct (multipart, Bearer token) -> processId / host / extra
- *   3. POST /api/vault/upload-send               -> la manda al fan y devuelve el id de la foto en el baul de OnlyFans
+ *   3. POST /api/messages/send                   -> la manda al fan SIN precio (gratis) y devuelve el id de la foto en el baul de OnlyFans
+ *      (no se usa /api/vault/upload-send: ese la manda siempre como mensaje de pago de 5 $)
  *   4. POST /api/vault/of/categories/<id>/media  -> (opcional) la mete en la categoria «POSTS» del baul
  *   5. POST /api/queue/posts                     -> programa el post (texto, foto, fecha) en la cola
  */
@@ -40,11 +41,13 @@ export async function subirAlBaul(sesion, { cuentaId, fanOfId, nombre, mime, byt
   const sub = ok(await sesion.enviar("POST", "", { form, bearer: ini.upload_token, url: /^https?:/.test(ini.upload_url) ? ini.upload_url : `${URL_UPLOAD}${ini.upload_url}` }), "subida del archivo");
   if (!sub?.processId || !sub?.host || !sub?.extra) throw new Error("La subida no devolvio los datos de procesado de OnlyFans");
   const env = ok(
-    await sesion.enviar("POST", "/api/vault/upload-send", {
-      json: { account_id: cuentaId, conversation_of_id: String(fanOfId), uploadedMedia: [{ processId: sub.processId, host: sub.host, extra: sub.extra, name: sub.name ?? nombre }], clientMessageId: randomUUID() },
+    await sesion.enviar("POST", "/api/messages/send", {
+      // sin «price»: el mensaje va gratis
+      json: { account_id: cuentaId, conversation_of_id: String(fanOfId), text: "", uploadedMedia: [{ processId: sub.processId, host: sub.host, extra: sub.extra, name: sub.name ?? nombre }], clientMessageId: randomUUID() },
     }),
-    "guardar en el baul",
+    "enviar la foto al fan (baul)",
   );
+  if (env?.is_ppv || Number(env?.ppv_price) > 0) console.warn("[posts-venuz] AVISO: Venuz ha enviado la foto al fan como mensaje de pago, no gratis");
   const mediaId = Number(env?.media?.[0]?.id);
   if (!Number.isFinite(mediaId) || mediaId <= 0) throw new Error("Venuz no devolvio el id de la foto en el baul");
   return mediaId;
