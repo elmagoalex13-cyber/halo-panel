@@ -27,22 +27,32 @@ export async function POST(req: NextRequest) {
   const db = createAdminClient();
 
   if (body.accion === "importar_base") {
-    const filas = (base as Array<{ texto: string; tipo: string; activa: boolean; tags: string[] }>).map((c) => ({ ...c, origen: "documento" }));
+    // El documento (22 pestañas = 22 temas): los que ya estan en el banco solo reciben su tema (si aun no tienen etiquetas: lo que hayas
+    // cambiado a mano no se toca); los que faltan se anaden. Se compara sin espacios ni mayusculas para no duplicar por un salto de linea.
+    const clave = (t: string) => t.replace(/[\s\u200b-\u200f\ufeff]+/g, "").toLowerCase();
+    const filas = base as Array<{ texto: string; tipo: string; activa: boolean; tags: string[] }>;
+    const { data: existentes, error: eLeer } = await leerTodo((d, h) => db.from("captions").select("id, texto, tags").order("id").range(d, h));
+    if (eLeer) return NextResponse.json({ error: falta(eLeer.message) ? SIN_TABLA : eLeer.message }, { status: falta(eLeer.message) ? 409 : 500 });
+    const porClave = new Map((existentes ?? []).map((e) => [clave(e.texto as string), e]));
+
+    const aInsertar: Array<{ texto: string; tipo: string; activa: boolean; tags: string[]; origen: string }> = [];
+    const grupos = new Map<string, string[]>();
+    for (const f of filas) {
+      const e = porClave.get(clave(f.texto));
+      if (!e) {
+        aInsertar.push({ ...f, origen: "documento" });
+        continue;
+      }
+      if (!f.tags.length || (e.tags as string[] | null)?.length) continue;
+      const k = JSON.stringify(f.tags);
+      grupos.set(k, [...(grupos.get(k) ?? []), e.id as string]);
+    }
+
     let nuevos = 0;
-    for (let i = 0; i < filas.length; i += 200) {
-      const { data, error } = await db.from("captions").upsert(filas.slice(i, i + 200), { onConflict: "texto", ignoreDuplicates: true }).select("id");
+    for (let i = 0; i < aInsertar.length; i += 200) {
+      const { data, error } = await db.from("captions").upsert(aInsertar.slice(i, i + 200), { onConflict: "texto", ignoreDuplicates: true }).select("id");
       if (error) return NextResponse.json({ error: falta(error.message) ? SIN_TABLA : error.message }, { status: falta(error.message) ? 409 : 500 });
       nuevos += data?.length ?? 0;
-    }
-    // Los que ya estaban importados reciben su tema (solo si aun no tienen etiquetas: lo que hayas cambiado a mano no se toca)
-    const { data: existentes } = await leerTodo((d, h) => db.from("captions").select("id, texto, tags").eq("origen", "documento").order("id").range(d, h));
-    const temaDe = new Map(filas.map((f) => [f.texto, f.tags]));
-    const grupos = new Map<string, string[]>();
-    for (const e of existentes ?? []) {
-      const tags = temaDe.get(e.texto as string);
-      if (!tags?.length || (e.tags as string[] | null)?.length) continue;
-      const k = JSON.stringify(tags);
-      grupos.set(k, [...(grupos.get(k) ?? []), e.id as string]);
     }
     let etiquetados = 0;
     for (const [k, ids] of grupos) {

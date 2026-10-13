@@ -59,7 +59,7 @@ export function CaptionsClient() {
       const r = await fetch("/api/captions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "importar_base" }) });
       const j = (await r.json().catch(() => ({}))) as { error?: string; nuevos?: number; total?: number; etiquetados?: number };
       if (!r.ok) throw new Error(j.error ?? "No se pudo importar");
-      setMsg({ ok: true, texto: `${j.nuevos ? `Importados ${j.nuevos} captions del documento.` : "No hay captions nuevos en el documento."}${j.etiquetados ? ` Clasificados por tema: ${j.etiquetados}.` : ""}` });
+      setMsg({ ok: true, texto: `${j.nuevos ? `Importados ${j.nuevos} captions del documento.` : "No hay captions nuevos en el documento."}${j.etiquetados ? ` Temas puestos a ${j.etiquetados} captions que ya estaban.` : ""}` });
       await cargar();
     } catch (e) {
       setMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
@@ -119,11 +119,11 @@ export function CaptionsClient() {
           ))}
         </div>
       )}
-      {lista.length && lista.some((c) => c.tipo === "foto" && c.origen === "documento" && !c.tags.length) ? (
+      {lista.length && (lista.some((c) => c.origen === "documento" && !c.tags.length) || !lista.some((c) => c.tags.includes("culo"))) ? (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-4 py-3">
-          <p className="text-sm text-white/70">Hay captions del documento sin tema. Se clasifican solos (piscina/playa, culo, pecho, gym…) y luego puedes corregir cualquiera a mano.</p>
+          <p className="text-sm text-white/70">Faltan captions del documento o sus temas (cada pestaña del documento es un tema: Culo, Tetas, Mañana, Noche, Fitness, Piscina/Playa…). Se importan solos y luego puedes corregir cualquiera a mano.</p>
           <button onClick={importar} disabled={trabajando} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
-            {trabajando ? "Clasificando…" : "Clasificar por tema"}
+            {trabajando ? "Importando…" : "Importar temas del documento"}
           </button>
         </div>
       ) : null}
@@ -161,7 +161,7 @@ export function CaptionsClient() {
             </button>
           </div>
 
-          <p className="text-xs text-white/40">Cada caption tiene un <b className="text-white/60">tema</b> (playa/piscina, culo, pecho, gym…): en «Posts por programar» eliges el tema de la foto y el caption sale de ese tema. {visibles.length} {visibles.length === 1 ? "caption" : "captions"} · se usan para programar posts solo los <b className="text-white/60">activos de tipo «Para foto»</b> (los que piden propina, las encuestas y las plantillas se reservan).</p>
+          <p className="text-xs text-white/40">Cada caption tiene un <b className="text-white/60">tema</b> (cada pestaña de tu documento: Culo, Tetas, Mañana, Noche, Fitness, Piscina/Playa…): en «Posts por programar» eliges el tema de la foto y el caption sale de ese tema. {visibles.length} {visibles.length === 1 ? "caption" : "captions"} · se usan para programar posts solo los <b className="text-white/60">activos de tipo «Para foto»</b> (los que piden propina, las encuestas y las plantillas se reservan).</p>
 
           <ul className="space-y-2">
             {pagActual.map((c) => (
