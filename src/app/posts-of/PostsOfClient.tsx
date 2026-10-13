@@ -63,6 +63,8 @@ export function PostsOfClient() {
     void cargar();
   }, [cargar]);
 
+  const porAprobar = (m: ModeloPosts) => m.posts.filter((p) => p.estado === "borrador" && p.caption?.trim() && p.programar_para && new Date(p.programar_para).getTime() > Date.now() + 11 * 60000).length;
+
   async function preparar(m: ModeloPosts) {
     setTrabajando(m.id);
     setMsg(null);
@@ -87,6 +89,23 @@ export function PostsOfClient() {
   async function ajustes(m: ModeloPosts, cambios: { cada_dias?: number; venuz_activo?: boolean; fan_baul?: string }) {
     setModelos((p) => (p ?? []).map((x) => (x.id === m.id ? { ...x, ...cambios } : x)));
     await fetch("/api/posts-of", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "ajustes", modelo_id: m.id, ...cambios }) });
+  }
+
+  // Aprueba de golpe todos los posts por revisar que ya tienen caption y una fecha futura
+  async function aprobarTodos(m: ModeloPosts) {
+    const lista = m.posts.filter((p) => p.estado === "borrador" && p.caption?.trim() && p.programar_para && new Date(p.programar_para).getTime() > Date.now() + 11 * 60000);
+    if (!lista.length) return;
+    const aviso = m.venuz_activo ? "Se enviarán a la cola de Venuz en uno o dos minutos." : "«Enviar a Venuz» está desactivado para esta modelo: solo quedarán aprobados aquí.";
+    if (!confirm(`¿Aprobar los ${lista.length} posts de ${m.nombre}? ${aviso}`)) return;
+    setTrabajando(m.id);
+    let fallos = 0;
+    for (const p of lista) {
+      const r = await fetch(`/api/posts-of/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ estado: "aprobado" }) });
+      if (!r.ok) fallos++;
+    }
+    await cargar();
+    setTrabajando(null);
+    setMsg(fallos ? { ok: false, texto: `${lista.length - fallos} aprobados; ${fallos} no se pudieron aprobar (revisa su fecha o su caption).` } : { ok: true, texto: `${lista.length} posts de ${m.nombre} aprobados.` });
   }
 
   async function guardar(id: string, cambios: Record<string, unknown>) {
@@ -155,6 +174,11 @@ export function PostsOfClient() {
                   <input type="checkbox" disabled={!m.fan_baul} checked={m.venuz_activo} onChange={(e) => void ajustes(m, { venuz_activo: e.target.checked })} className="h-4 w-4 accent-[#8B5CF6]" />
                   Enviar a Venuz
                 </label>
+                {porAprobar(m) ? (
+                  <button onClick={() => void aprobarTodos(m)} disabled={trabajando === m.id} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+                    ✓ Aprobar los {porAprobar(m)}
+                  </button>
+                ) : null}
                 <button onClick={() => void preparar(m)} disabled={trabajando === m.id} className="btn-primary px-4 py-2 text-xs disabled:opacity-50">
                   {trabajando === m.id ? "Preparando…" : m.nuevas ? `Preparar ${m.nuevas} foto${m.nuevas === 1 ? "" : "s"} nueva${m.nuevas === 1 ? "" : "s"}` : "Buscar fotos nuevas"}
                 </button>

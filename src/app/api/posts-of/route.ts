@@ -32,6 +32,7 @@ export async function GET() {
   const err = eM?.message ?? eP?.message;
   if (err) return NextResponse.json({ error: falta(err) ? SIN_TABLA : err, sinTabla: falta(err) }, { status: falta(err) ? 409 : 500 });
 
+  const { data: descartados } = await leerTodo<{ modelo_id: string; archivo_id: string }>((d, h) => db.from("posts_programados").select("modelo_id, archivo_id").in("modelo_id", ids).eq("estado", "descartado").order("id").range(d, h));
   const { data: archivos } = await leerTodo<{ id: string; modelo_id: string; storage_key: string; bucket: string; tipo_archivo: string; coleccion_id: string; created_at: string }>((d, h) => db.from("of_archivos").select("id, modelo_id, storage_key, bucket, tipo_archivo, coleccion_id, created_at").in("modelo_id", ids).eq("tipo_archivo", "foto").order("id").range(d, h));
   const { data: cols } = await db.from("of_colecciones").select("id").in("modelo_id", ids).eq("tipo", "post");
   const colPost = new Set((cols ?? []).map((c) => c.id as string));
@@ -41,7 +42,7 @@ export async function GET() {
   for (const m of modelos ?? []) {
     const minis = await miniaturasDeModelo(m.id as string);
     const mios = (posts ?? []).filter((p) => p.modelo_id === m.id);
-    const hechos = new Set(mios.map((p) => p.archivo_id as string));
+    const hechos = new Set([...mios.map((p) => p.archivo_id as string), ...descartados.filter((d) => d.modelo_id === m.id).map((d) => d.archivo_id)]);
     const nuevas = (archivos ?? []).filter((a) => a.modelo_id === m.id && colPost.has(a.coleccion_id as string) && !hechos.has(a.id as string)).length;
     const lista = await Promise.all(
       mios.map(async (p) => {
