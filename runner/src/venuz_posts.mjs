@@ -21,7 +21,10 @@ import { SesionVenuz } from "./venuz.mjs";
 import { downloadFromR2Bucket } from "./r2.mjs";
 
 const execFileAsync = promisify(execFile);
-const MAX_POR_CICLO = 3;
+const MAX_POR_CICLO = 120; // posts que se reparten entre las cuentas en cada vuelta
+const CONCURRENCIA = 5; // cuentas (modelos) que se procesan a la vez; dentro de una cuenta los posts van de uno en uno
+const HUECO_MS = 11500; // OnlyFans exige >10 s entre dos posts programados de la misma cuenta («Please allow 10 seconds»)
+const REINTENTOS = 3;
 const MARGEN_MIN = 20; // no se programa nada que quede a menos de 20 min
 const URL_UPLOAD = "https://crm-api-next.venuz.ai";
 
@@ -98,7 +101,66 @@ async function leerFoto(archivo) {
   }
 }
 
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const esLimite = (e) => /HTTP 429|rate_limited|Please allow/i.test(String(e?.message ?? e));
+
+/** Repite el paso si OnlyFans pide esperar unos segundos (limite de velocidad), en lugar de dar el post por fallido. */
+async function conReintento(paso) {
+  for (let i = 1; ; i++) {
+    try {
+      return await paso();
+    } catch (e) {
+      if (!esLimite(e) || i >= REINTENTOS) throw e;
+      await esperar(HUECO_MS);
+    }
+  }
+}
+
+const ultimoPost = new Map(); // cuenta de Venuz -> cuando se programo su ultimo post (para dejar pasar los 10 s)
+async function esperarHueco(cuentaId) {
+  const falta = (ultimoPost.get(cuentaId) ?? 0) + HUECO_MS - Date.now();
+  if (falta > 0) await esperar(falta);
+}
+
 let ocupado = false;
+
+/** Procesa un post aprobado: sube la foto (si no estaba ya), la mete en el baul y programa el post. */
+async function procesarPost(supabase, sesion, p, cuentaId, fanOfId) {
+  // «Reclamar»: solo uno lo procesa, aunque haya dos editores o se repita el ciclo
+  const { data: reclamado } = await supabase.from("posts_programados").update({ estado: "programado", enviado_at: new Date().toISOString(), error: null }).eq("id", p.id).eq("estado", "aprobado").select("id");
+  if (!reclamado?.length) return;
+  try {
+    const { data: archivo } = await supabase.from("of_archivos").select("storage_key, bucket, mime").eq("id", p.archivo_id).maybeSingle();
+    if (!archivo) throw new Error("No se encontró la foto");
+    if (!p.caption) throw new Error("El post no tiene caption");
+
+    let mediaId = p.venuz_media_id ? Number(p.venuz_media_id) : null;
+    if (!mediaId) {
+      const foto = await leerFoto(archivo);
+      mediaId = await conReintento(() => subirAlBaul(sesion, { cuentaId, fanOfId, nombre: foto.nombre, mime: foto.mime, bytes: foto.bytes }));
+      await supabase.from("posts_programados").update({ venuz_media_id: mediaId }).eq("id", p.id);
+      await ponerEnCategoriaPosts(sesion, cuentaId, mediaId);
+    }
+    const postId = await conReintento(async () => {
+      await esperarHueco(cuentaId);
+      try {
+        return await crearPostEnCola(sesion, { cuentaId, texto: p.caption, mediaId, fechaISO: new Date(p.programar_para).toISOString() });
+      } finally {
+        ultimoPost.set(cuentaId, Date.now());
+      }
+    });
+    await supabase.from("posts_programados").update({ venuz_post_id: postId, estado: "programado", error: null, updated_at: new Date().toISOString() }).eq("id", p.id);
+    console.log(`[posts-venuz] ${p.id} programado en Venuz para ${p.programar_para}`);
+  } catch (e) {
+    console.error(`[posts-venuz] ${p.id}:`, tapar(e.message));
+    if (esLimite(e)) {
+      // OnlyFans pidio esperar y se agotaron los reintentos: vuelve a la cola para la siguiente vuelta (la foto ya esta en el baul, no se vuelve a subir)
+      await supabase.from("posts_programados").update({ estado: "aprobado", error: null, updated_at: new Date().toISOString() }).eq("id", p.id);
+    } else {
+      await supabase.from("posts_programados").update({ estado: "error", error: tapar(e.message).slice(0, 400), updated_at: new Date().toISOString() }).eq("id", p.id);
+    }
+  }
+}
 
 export async function cicloPostsVenuz(supabase) {
   if (ocupado || !config.venuzEmail || !config.venuzPassword) return;
@@ -126,35 +188,29 @@ export async function cicloPostsVenuz(supabase) {
       .limit(MAX_POR_CICLO);
     if (!posts?.length) return;
 
-    const sesion = new SesionVenuz(config.venuzEmail, config.venuzPassword);
+    // Una cuenta de Venuz por modelo: cada cuenta lleva sus posts en orden (con su pausa de 10 s) y varias cuentas avanzan a la vez
+    const { data: cuentas } = await supabase.from("venuz_cuentas").select("id, modelo_id").eq("activa", true).in("modelo_id", [...fan.keys()]);
+    const cuentaDe = new Map((cuentas ?? []).map((c) => [c.modelo_id, c.id]));
+    const porCuenta = new Map();
     for (const p of posts) {
-      // «Reclamar»: solo uno lo procesa, aunque haya dos editores o se repita el ciclo
-      const { data: reclamado } = await supabase.from("posts_programados").update({ estado: "programado", enviado_at: new Date().toISOString(), error: null }).eq("id", p.id).eq("estado", "aprobado").select("id");
-      if (!reclamado?.length) continue;
-      try {
-        const [{ data: cuenta }, { data: archivo }] = await Promise.all([
-          supabase.from("venuz_cuentas").select("id").eq("modelo_id", p.modelo_id).eq("activa", true).limit(1).maybeSingle(),
-          supabase.from("of_archivos").select("storage_key, bucket, mime").eq("id", p.archivo_id).maybeSingle(),
-        ]);
-        if (!cuenta) throw new Error("La modelo ya no tiene un perfil activo vinculado en Venuz");
-        if (!archivo) throw new Error("No se encontró la foto");
-        if (!p.caption) throw new Error("El post no tiene caption");
-
-        let mediaId = p.venuz_media_id ? Number(p.venuz_media_id) : null;
-        if (!mediaId) {
-          const foto = await leerFoto(archivo);
-          mediaId = await subirAlBaul(sesion, { cuentaId: cuenta.id, fanOfId: fan.get(p.modelo_id), nombre: foto.nombre, mime: foto.mime, bytes: foto.bytes });
-          await supabase.from("posts_programados").update({ venuz_media_id: mediaId }).eq("id", p.id);
-          await ponerEnCategoriaPosts(sesion, cuenta.id, mediaId);
-        }
-        const postId = await crearPostEnCola(sesion, { cuentaId: cuenta.id, texto: p.caption, mediaId, fechaISO: new Date(p.programar_para).toISOString() });
-        await supabase.from("posts_programados").update({ venuz_post_id: postId, estado: "programado", error: null, updated_at: new Date().toISOString() }).eq("id", p.id);
-        console.log(`[posts-venuz] ${p.id} programado en Venuz para ${p.programar_para}`);
-      } catch (e) {
-        console.error(`[posts-venuz] ${p.id}:`, tapar(e.message));
-        await supabase.from("posts_programados").update({ estado: "error", error: tapar(e.message).slice(0, 400), updated_at: new Date().toISOString() }).eq("id", p.id);
+      const cuentaId = cuentaDe.get(p.modelo_id);
+      if (!cuentaId) {
+        await supabase.from("posts_programados").update({ estado: "error", error: "La modelo ya no tiene un perfil activo vinculado en Venuz", updated_at: new Date().toISOString() }).eq("id", p.id).eq("estado", "aprobado");
+        continue;
       }
+      porCuenta.set(cuentaId, [...(porCuenta.get(cuentaId) ?? []), p]);
     }
+
+    const sesion = new SesionVenuz(config.venuzEmail, config.venuzPassword);
+    const colas = [...porCuenta.entries()];
+    let siguiente = 0;
+    const trabajador = async () => {
+      while (siguiente < colas.length) {
+        const [cuentaId, lista] = colas[siguiente++];
+        for (const p of lista) await procesarPost(supabase, sesion, p, cuentaId, fan.get(p.modelo_id));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCIA, colas.length) }, trabajador));
   } catch (e) {
     console.error("[posts-venuz] error inesperado:", tapar(e.message));
   } finally {
