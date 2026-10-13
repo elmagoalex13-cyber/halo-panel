@@ -14,7 +14,7 @@ type Post = {
   aprobado_por: string | null;
   vista: string | null;
 };
-type ModeloPosts = { id: string; nombre: string; cada_dias: number; venuz_activo: boolean; fan_baul: string; nuevas: number; posts: Post[] };
+type ModeloPosts = { id: string; nombre: string; cada_dias: number; venuz_activo: boolean; fan_baul: string; nuevas: number; en_venuz: number; posts: Post[] };
 
 const ESTADO: Record<Post["estado"], { texto: string; clase: string }> = {
   borrador: { texto: "Por revisar", clase: "bg-amber-300/15 text-amber-100" },
@@ -143,13 +143,13 @@ export function PostsOfClient() {
 
       {modelos.map((m) => {
         const porRevisar = m.posts.filter((p) => p.estado === "borrador").length;
-        const aprobados = m.posts.filter((p) => p.estado === "aprobado" || p.estado === "programado").length;
+        const aprobados = m.posts.filter((p) => p.estado === "aprobado").length;
         const visibles = m.posts.filter((p) => p.vista);
         return (
           <section key={m.id} className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="font-display text-xl font-semibold text-white">{m.nombre}</h2>
-              <span className="text-xs text-white/40">{porRevisar} por revisar · {aprobados} aprobados · {m.nuevas} fotos nuevas sin preparar</span>
+              <span className="text-xs text-white/40">{porRevisar} por revisar · {aprobados} aprobados (enviándose) · {m.en_venuz} ya en Venuz · {m.nuevas} fotos nuevas sin preparar</span>
               <div className="ml-auto flex flex-wrap items-center gap-3 text-xs">
                 <label className="flex items-center gap-1.5 text-white/60">
                   Publicar un post cada
@@ -256,7 +256,7 @@ export function PostsOfClient() {
                 })}
               </ul>
             ) : (
-              <p className="mt-4 text-sm text-white/40">Todavía no hay posts preparados. Pulsa «{m.nuevas ? "Preparar" : "Buscar fotos nuevas"}» cuando haya fotos en su carpeta «Posts».</p>
+              <p className="mt-4 text-sm text-white/40">{m.en_venuz ? `Nada pendiente: los ${m.en_venuz} posts ya están en la cola de Venuz. ` : "Todavía no hay posts preparados. "} Pulsa «{m.nuevas ? "Preparar" : "Buscar fotos nuevas"}» cuando haya fotos en su carpeta «Posts».</p>
             )}
 
             {visor?.modelo === m.id && visibles.length ? (

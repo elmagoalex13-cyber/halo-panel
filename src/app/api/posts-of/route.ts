@@ -27,12 +27,13 @@ export async function GET() {
 
   const [{ data: modelos, error: eM }, { data: posts, error: eP }] = await Promise.all([
     db.from("modelos").select("id, nombre, posts_cada_dias, posts_venuz_activo, posts_fan_baul").in("id", ids).is("eliminada_at", null).order("nombre"),
-    leerTodo<Record<string, unknown> & { id: string; modelo_id: string; archivo_id: string }>((d, h) => db.from("posts_programados").select("id, modelo_id, archivo_id, caption, caption_motivo, estado, programar_para, error, aprobado_por").in("modelo_id", ids).neq("estado", "descartado").order("programar_para", { ascending: true }).order("id").range(d, h)),
+    leerTodo<Record<string, unknown> & { id: string; modelo_id: string; archivo_id: string }>((d, h) => db.from("posts_programados").select("id, modelo_id, archivo_id, caption, caption_motivo, estado, programar_para, error, aprobado_por").in("modelo_id", ids).not("estado", "in", "(descartado,programado,publicado)").order("programar_para", { ascending: true }).order("id").range(d, h)),
   ]);
   const err = eM?.message ?? eP?.message;
   if (err) return NextResponse.json({ error: falta(err) ? SIN_TABLA : err, sinTabla: falta(err) }, { status: falta(err) ? 409 : 500 });
 
-  const { data: descartados } = await leerTodo<{ modelo_id: string; archivo_id: string }>((d, h) => db.from("posts_programados").select("modelo_id, archivo_id").in("modelo_id", ids).eq("estado", "descartado").order("id").range(d, h));
+  // Los descartados y los que ya estan en la cola de Venuz no se listan (no estorban), pero su foto no vuelve a contar como «nueva»
+  const { data: ocultos } = await leerTodo<{ modelo_id: string; archivo_id: string; estado: string }>((d, h) => db.from("posts_programados").select("modelo_id, archivo_id, estado").in("modelo_id", ids).in("estado", ["descartado", "programado", "publicado"]).order("id").range(d, h));
   const { data: archivos } = await leerTodo<{ id: string; modelo_id: string; storage_key: string; bucket: string; tipo_archivo: string; coleccion_id: string; created_at: string }>((d, h) => db.from("of_archivos").select("id, modelo_id, storage_key, bucket, tipo_archivo, coleccion_id, created_at").in("modelo_id", ids).eq("tipo_archivo", "foto").order("id").range(d, h));
   const { data: cols } = await db.from("of_colecciones").select("id").in("modelo_id", ids).eq("tipo", "post");
   const colPost = new Set((cols ?? []).map((c) => c.id as string));
@@ -42,7 +43,8 @@ export async function GET() {
   for (const m of modelos ?? []) {
     const minis = await miniaturasDeModelo(m.id as string);
     const mios = (posts ?? []).filter((p) => p.modelo_id === m.id);
-    const hechos = new Set([...mios.map((p) => p.archivo_id as string), ...descartados.filter((d) => d.modelo_id === m.id).map((d) => d.archivo_id)]);
+    const hechos = new Set([...mios.map((p) => p.archivo_id as string), ...ocultos.filter((d) => d.modelo_id === m.id).map((d) => d.archivo_id)]);
+    const enVenuz = ocultos.filter((d) => d.modelo_id === m.id && d.estado !== "descartado").length;
     const nuevas = (archivos ?? []).filter((a) => a.modelo_id === m.id && colPost.has(a.coleccion_id as string) && !hechos.has(a.id as string)).length;
     const lista = await Promise.all(
       mios.map(async (p) => {
@@ -50,7 +52,7 @@ export async function GET() {
         return { ...p, vista: a ? await urlVistaFoto(a.storage_key as string, a.bucket as string, minis).catch(() => null) : null };
       }),
     );
-    salida.push({ id: m.id, nombre: m.nombre, cada_dias: m.posts_cada_dias ?? 1, venuz_activo: Boolean(m.posts_venuz_activo), fan_baul: (m.posts_fan_baul as string | null) ?? "", nuevas, posts: lista });
+    salida.push({ id: m.id, nombre: m.nombre, cada_dias: m.posts_cada_dias ?? 1, venuz_activo: Boolean(m.posts_venuz_activo), fan_baul: (m.posts_fan_baul as string | null) ?? "", nuevas, en_venuz: enVenuz, posts: lista });
   }
   return NextResponse.json({ modelos: salida });
 }
