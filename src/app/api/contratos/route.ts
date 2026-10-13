@@ -17,7 +17,8 @@ export async function GET(req: NextRequest) {
   const db = createAdminClient();
   await ligarContratosAutomatico();
   // modelo_id existe solo si se ejecuto el SQL 20261026: si no, se pide sin esa columna
-  let r = await db.from("contratos_modelos").select(`${CAMPOS_LISTA}, modelo_id`).order("created_at", { ascending: false }).limit(500);
+  let r = await db.from("contratos_modelos").select(`${CAMPOS_LISTA}, modelo_id, nota_interna`).order("created_at", { ascending: false }).limit(500);
+  if (r.error && /nota_interna/i.test(r.error.message)) r = (await db.from("contratos_modelos").select(`${CAMPOS_LISTA}, modelo_id`).order("created_at", { ascending: false }).limit(500)) as unknown as typeof r;
   if (r.error && /modelo_id/i.test(r.error.message)) r = (await db.from("contratos_modelos").select(CAMPOS_LISTA).order("created_at", { ascending: false }).limit(500)) as unknown as typeof r;
   const { data, error } = r;
   if (error) {

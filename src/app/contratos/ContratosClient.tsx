@@ -17,6 +17,7 @@ type Contrato = {
   created_at: string;
   enlace: string;
   modelo_id?: string | null;
+  nota_interna?: string | null;
 };
 
 type ModeloOpcion = { id: string; nombre: string };
@@ -42,6 +43,7 @@ const cuando = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-E
 export function ContratosClient() {
   const [lista, setLista] = useState<Contrato[]>([]);
   const [modelos, setModelos] = useState<ModeloOpcion[]>([]);
+  const [busca, setBusca] = useState("");
   const [resend, setResend] = useState(true);
   const [sinTabla, setSinTabla] = useState(false);
   const [firmaGuardada, setFirmaGuardada] = useState<string | null>(null);
@@ -70,8 +72,10 @@ export function ContratosClient() {
     void cargar();
   }, [cargar]);
 
-  const firmados = lista.filter((c) => c.estado === "firmado");
-  const pendientes = lista.filter((c) => c.estado !== "firmado");
+  const q = busca.trim().toLowerCase();
+  const coincide = (c: Contrato) => !q || c.nombre.toLowerCase().includes(q) || (c.nota_interna ?? "").toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q);
+  const firmados = lista.filter((c) => c.estado === "firmado" && coincide(c));
+  const pendientes = lista.filter((c) => c.estado !== "firmado" && coincide(c));
   const firmaLista = firmaNueva ?? firmaGuardada;
   const puede = nombre.trim().length >= 2 && (!email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) && Boolean(fecha) && Boolean(firmaLista) && !enviando;
 
@@ -117,6 +121,18 @@ export function ContratosClient() {
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     setMsg(res.ok ? { ok: true, texto: `Contrato de ${c.nombre} eliminado.` } : { ok: false, texto: j.error ?? "No se pudo eliminar" });
     await cargar();
+  }
+
+  async function guardarNota(c: Contrato, texto: string) {
+    const limpio = texto.trim();
+    if (limpio === (c.nota_interna ?? "")) return;
+    setLista((p) => p.map((x) => (x.id === c.id ? { ...x, nota_interna: limpio || null } : x)));
+    const res = await fetch(`/api/contratos/${c.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "nota", nota: limpio }) });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      setMsg({ ok: false, texto: j.error ?? "No se pudo guardar la nota" });
+      await cargar();
+    }
   }
 
   async function vincular(c: Contrato, modeloId: string) {
@@ -216,6 +232,10 @@ export function ContratosClient() {
             </div>
           ) : null}
 
+          {lista.length ? (
+            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nombre, email o nota…" className="input-base w-full max-w-md text-sm" />
+          ) : null}
+
           {pendientes.length ? (
             <div className="border-t border-white/[0.08] pt-4">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">Pendientes de firma</p>
@@ -230,6 +250,7 @@ export function ContratosClient() {
                       {c.enviado_por ? ` · ${c.enviado_por}` : ""}
                     </span>
                     {c.email_error ? <span className="w-full text-[11px] text-red-300/80">Email: {c.email_error}</span> : null}
+                    <NotaInterna c={c} onGuardar={guardarNota} />
                     <span className="ml-auto flex flex-wrap gap-2 text-xs">
                       <a href={`/api/contratos/${c.id}/pdf`} target="_blank" rel="noreferrer" className="font-semibold text-[#A78BFA] hover:underline">
                         PDF
@@ -283,6 +304,7 @@ export function ContratosClient() {
                         Ver ficha
                       </a>
                     ) : null}
+                    <NotaInterna c={c} onGuardar={guardarNota} />
                     <span className="ml-auto flex flex-wrap gap-3 text-xs">
                       <a href={`/api/contratos/${c.id}/pdf`} target="_blank" rel="noreferrer" className="font-semibold text-[#A78BFA] hover:underline">
                         Ver PDF
@@ -300,5 +322,23 @@ export function ContratosClient() {
           </div>
       </div>
     </div>
+  );
+}
+
+/** Nota interna de un contrato: se guarda al salir del campo; la ven los dos, la modelo no. */
+function NotaInterna({ c, onGuardar }: { c: Contrato; onGuardar: (c: Contrato, texto: string) => Promise<void> }) {
+  return (
+    <label className="flex w-full items-center gap-2 text-xs text-white/45">
+      <span className="shrink-0">📝 Nota interna</span>
+      <input
+        defaultValue={c.nota_interna ?? ""}
+        key={c.nota_interna ?? ""}
+        maxLength={500}
+        placeholder="Para clasificarlo entre los dos (la modelo no la ve)"
+        onBlur={(e) => void onGuardar(c, e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/25 px-2 py-1 text-white/80 placeholder:text-white/25"
+      />
+    </label>
   );
 }

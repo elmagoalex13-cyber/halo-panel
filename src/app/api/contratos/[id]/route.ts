@@ -4,15 +4,22 @@ import { enlaceContrato, enviarEmailContrato } from "@/lib/contratos";
 
 export const dynamic = "force-dynamic";
 
-// POST { accion: "reenviar" | "cancelar" | "vincular", modelo_id? } sobre un contrato ya creado.
+// POST { accion: "reenviar" | "cancelar" | "vincular" | "nota", modelo_id?, nota? } sobre un contrato ya creado.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
-  const { accion, modelo_id } = (await req.json().catch(() => ({}))) as { accion?: string; modelo_id?: string | null };
+  const { accion, modelo_id, nota } = (await req.json().catch(() => ({}))) as { accion?: string; modelo_id?: string | null; nota?: unknown };
   const db = createAdminClient();
   const { data: c } = await db.from("contratos_modelos").select("id, token, nombre, email, fecha_inicio, estado").eq("id", id).maybeSingle();
   if (!c) return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
 
+  if (accion === "nota") {
+    // Nota interna para clasificar los contratos entre los dos (no la ve la modelo)
+    const texto = typeof nota === "string" ? nota.trim().slice(0, 500) : "";
+    const { error } = await db.from("contratos_modelos").update({ nota_interna: texto || null }).eq("id", id);
+    if (error) return NextResponse.json({ error: /nota_interna/i.test(error.message) ? "Falta ejecutar el SQL 20261027_contratos_nota.sql en Supabase." : error.message }, { status: /nota_interna/i.test(error.message) ? 409 : 500 });
+    return NextResponse.json({ ok: true });
+  }
   if (accion === "vincular") {
     // Liga el contrato a una modelo (o lo desliga con modelo_id null): asi aparece en su ficha
     let destino: string | null = null;
