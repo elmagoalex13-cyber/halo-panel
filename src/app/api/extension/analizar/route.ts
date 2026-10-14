@@ -40,10 +40,9 @@ export async function POST(req: NextRequest) {
   // asi que aqui solo se aplica el umbral de vistas; fecha y estilo se aplican en la pasada definitiva.
   const candidatos = body.fase === "candidatos";
   const ajustes = ajustesDe(body);
-  // Busqueda manual: si ninguno supera el umbral se sacan los mas vistos (pedido a mano para esas cuentas, o cuenta sin ningun video guardado todavia).
+  // Busqueda manual: si ninguno supera el umbral se sacan igualmente los 3 mas vistos del periodo elegido.
   // La ronda automatica del lunes no lo hace: ahi solo entran los que de verdad destacan.
-  const pedido = Math.min(5, Math.max(0, Math.round(Number(body.ranking) || 0)));
-  const ranking = body.origen === "lunes" ? 0 : pedido || (conocidos.size === 0 ? 3 : 0);
+  const ranking = body.origen === "lunes" ? 0 : 3;
   const r = analizarCuenta(reels, {
     ...ajustes,
     ranking,

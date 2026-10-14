@@ -291,7 +291,6 @@ async function ejecutar({ modo, categoria, dias, ids, origen }) {
   const maximoReels = modo === "propias" ? 120 : diasUsados <= 14 ? 36 : diasUsados <= 30 ? 60 : diasUsados <= 90 ? 90 : 120;
   const maxPorCuenta = modo === "propias" ? 15 : 8;
   const resumen = { nuevos: 0, analizados: 0, errores: 0, cuentas: 0 };
-  const eligioCuentas = Array.isArray(ids) && ids.length > 0; // cuentas elegidas a mano: si ninguno supera el umbral, se sacan sus mas vistos
   let tabInfo = null;
   const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
 
@@ -409,7 +408,7 @@ async function ejecutar({ modo, categoria, dias, ids, origen }) {
         // 1) Con solo las metricas de la cuadricula, el panel dice que reels superan el umbral.
         const previo = await panel("/api/extension/analizar", {
           method: "POST",
-          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: lectura.reels.map(sinMedios), dias: diasUsados, max: maxPorCuenta, fase: "candidatos", origen: origen ?? "manual", ranking: eligioCuentas ? 3 : 0 }),
+          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: lectura.reels.map(sinMedios), dias: diasUsados, max: maxPorCuenta, fase: "candidatos", origen: origen ?? "manual", ranking: 3 }),
         });
         if (cancelar) {
           await marcar({ estado: "cancelado" });
@@ -436,7 +435,7 @@ async function ejecutar({ modo, categoria, dias, ids, origen }) {
         // 3) El panel decide los definitivos (fecha, estilo...) y se suben.
         const analisis = await panel("/api/extension/analizar", {
           method: "POST",
-          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: [...reelsPorCodigo.values()].map(sinMedios), dias: diasUsados, max: maxPorCuenta, origen: origen ?? "manual", ranking: eligioCuentas ? 3 : 0 }),
+          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: [...reelsPorCodigo.values()].map(sinMedios), dias: diasUsados, max: maxPorCuenta, origen: origen ?? "manual", ranking: 3 }),
         });
         resumen.analizados += analisis.analizados;
         let subidos = 0;
