@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
-import { fraseDesdeDescripcion, sanearReels, scoreEstiloFraseMusica, scoreViralidad, tagsMetricas, type ReelViral } from "@/lib/viralesExtension";
+import { fraseDesdeDescripcion, sanearReels, scoreEstiloFraseMusica, scoreViralidad, tagsMetricas, type ReelViral, tipoAutomatico } from "@/lib/viralesExtension";
 import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
       likes: reel.likes,
       tags: tagsMetricas(reel, categoria),
       frase_detectada: esFrases ? fraseDesdeDescripcion(reel.descripcion) : null,
-      formato_propuesto: esFrases ? "tipo2" : null,
-      formato_confirmado: esFrases ? "tipo2" : null,
+      formato_propuesto: tipoAutomatico(categoria),
+      formato_confirmado: tipoAutomatico(categoria),
       fecha_publicacion: reel.fecha,
       estado_triaje: "pendiente",
     });

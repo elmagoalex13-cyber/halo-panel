@@ -196,8 +196,9 @@ export async function analizarCuenta(supabase, cuenta, reelsInyectados = null) {
         tags,
         frase_detectada: frase,
         layout_json: layout,
-        formato_propuesto: categoria === "frases" ? "tipo2" : null,
-        formato_confirmado: categoria === "frases" ? "tipo2" : null,
+        // Tipo de edicion que se marca solo segun el tipo de la cuenta: hablado = tipo1 (subtitulos), frases con musica = tipo2
+        formato_propuesto: categoria === "hablado" ? "tipo1" : categoria === "frases" ? "tipo2" : null,
+        formato_confirmado: categoria === "hablado" ? "tipo1" : categoria === "frases" ? "tipo2" : null,
         fecha_publicacion: reel.fecha ? new Date(reel.fecha).toISOString() : null,
         estado_triaje: "pendiente",
       });

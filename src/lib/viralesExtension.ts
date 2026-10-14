@@ -151,4 +151,9 @@ export function ajustesDe(body: { dias?: unknown; factor?: unknown; max?: unknow
   };
 }
 
+/** Tipo de edicion que se marca solo segun el tipo de la cuenta de referencia: hablado = 1 Subtitulos, frases con musica = 2 Gesto + frase. */
+export function tipoAutomatico(categoria: string | null | undefined): "tipo1" | "tipo2" | null {
+  return categoria === "hablado" ? "tipo1" : categoria === "frases" ? "tipo2" : null;
+}
+
 export const CATEGORIAS_REFERENCIA = ["frases", "hablado", "referencia", "general"];

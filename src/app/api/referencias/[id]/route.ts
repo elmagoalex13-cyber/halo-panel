@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { tipoAutomatico } from "@/lib/viralesExtension";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -16,6 +17,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const supabase = createAdminClient();
     const { data, error } = await supabase.from("referencias_cuentas").update(payload).eq("id", id).select().single();
     if (error) throw error;
+    // Al marcar la cuenta como hablado / frases, sus videos que aun no tienen tipo de edicion lo reciben solos (sin ir marcandolos uno a uno)
+    const tipo = "categoria" in payload ? tipoAutomatico(payload.categoria as string | null) : null;
+    if (tipo) {
+      await supabase.from("referencias_videos").update({ formato_propuesto: tipo, formato_confirmado: tipo }).eq("cuenta_id", id).eq("estado_triaje", "pendiente").is("formato_confirmado", null);
+    }
     return NextResponse.json({ data });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
