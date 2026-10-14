@@ -10,6 +10,8 @@ const fechaLarga = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).to
 
 export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firmado: yaFirmado, firmadoAt }: { token: string; nombre: string; fechaInicio: string; firmaAgencia: string | null; firmado: boolean; firmadoAt: string | null }) {
   const [firmado, setFirmado] = useState(yaFirmado);
+  const [portal, setPortal] = useState<{ url: string; usuario: string; password: string } | null>(null);
+  const [copiado, setCopiado] = useState<string | null>(null);
   const [nombreFirmante, setNombreFirmante] = useState(nombre);
   const [dni, setDni] = useState("");
   const [firma, setFirma] = useState<string | null>(null);
@@ -48,8 +50,9 @@ export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firm
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nombre_firmante: nombreFirmante, dni, firma, acepta }),
       });
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      const j = (await res.json().catch(() => ({}))) as { error?: string; portal?: { url: string; usuario: string; password: string } };
       if (!res.ok) throw new Error(j.error ?? "No se pudo firmar. Inténtalo otra vez.");
+      if (j.portal) setPortal(j.portal);
       setFirmado(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
@@ -72,6 +75,28 @@ export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firm
             ⬇ Descargar mi contrato firmado (PDF)
           </a>
         </div>
+        {portal ? (
+          <div className="mt-5 rounded-3xl border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 p-6">
+            <h2 className="font-display text-xl font-semibold text-white">Tu portal ya está listo</h2>
+            <p className="mt-1 text-sm text-white/65">Desde aquí subirás tus videos, scripts y contenido. <b className="text-white">Haz una captura de pantalla o copia estos datos ahora</b>: la contraseña solo se muestra esta vez.</p>
+            <dl className="mt-4 space-y-3 text-left text-sm">
+              {([["Enlace", portal.url], ["Usuario", portal.usuario], ["Contraseña", portal.password]] as const).map(([etiqueta, valor]) => (
+                <div key={etiqueta} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/25 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <dt className="text-[11px] uppercase tracking-wider text-white/40">{etiqueta}</dt>
+                    <dd className="mt-0.5 break-all font-mono text-white">{valor}</dd>
+                  </div>
+                  <button type="button" onClick={() => { void navigator.clipboard.writeText(valor); setCopiado(etiqueta); setTimeout(() => setCopiado(null), 1600); }} className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">
+                    {copiado === etiqueta ? "✓ Copiado" : "Copiar"}
+                  </button>
+                </div>
+              ))}
+            </dl>
+            <a href={portal.url} className="btn-primary mt-4 inline-flex min-h-12 w-full items-center justify-center px-6 text-base">
+              Entrar a mi portal
+            </a>
+          </div>
+        ) : null}
       </main>
     );
   }

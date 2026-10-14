@@ -4,6 +4,7 @@ import { uploadToR2 } from "@/lib/r2";
 import { generarPdfContrato } from "@/lib/contratoPdf";
 import { enviarCopiaFirmada } from "@/lib/contratos";
 import { encolarTelegram } from "@/lib/telegramCola";
+import { crearPortalTrasFirma } from "@/lib/contratoPortal";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     console.error("[contratos] pdf firmado:", e instanceof Error ? e.message : e);
   }
   if (pdf) await enviarCopiaFirmada({ nombre: c.nombre, email: c.email }, pdf).catch(() => undefined);
-  await encolarTelegram("contrato_firmado", null, { nombre: c.nombre, enviado_por: c.enviado_por ?? null });
+  // Ficha + portal de la modelo, al momento: usuario y contraseña se le enseñan en la pantalla de «contrato firmado»
+  const portal = await crearPortalTrasFirma({ id: c.id as string, nombre: c.nombre as string }, nombreFirmante);
+  const creado = portal && "slug" in portal ? portal : null;
+  await encolarTelegram("contrato_firmado", null, {
+    nombre: c.nombre,
+    enviado_por: c.enviado_por ?? null,
+    ...(portal ? { modelo_id: portal.modelo_id } : {}),
+    ...(creado ? { portal_slug: creado.slug, portal_usuario: creado.usuario, modelo_nueva: creado.modeloNueva } : {}),
+  });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    ...(creado ? { portal: { url: `${req.nextUrl.origin}/m/${creado.slug}`, usuario: creado.usuario, password: creado.password } } : {}),
+  });
 }

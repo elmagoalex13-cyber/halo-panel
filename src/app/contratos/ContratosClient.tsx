@@ -33,7 +33,7 @@ const ESTADO: Record<Contrato["estado"], { texto: string; clase: string }> = {
 const mensajeWhatsApp = (nombre: string, enlace: string) => {
   const n = nombre.trim().split(/\s+/)[0] ?? "";
   const pila = n ? n.charAt(0).toLocaleUpperCase("es-ES") + n.slice(1) : "";
-  return `Hola${pila ? `, ${pila}` : ""}. Te enviamos tu contrato con Halo Models. Léelo con calma y fírmalo desde el móvil en este enlace:\n\n${enlace}\n\nSi tienes cualquier duda, escríbenos antes de firmar.`;
+  return `Hola${pila ? `, ${pila}` : ""}. Aquí te dejo tu contrato con Halo Models. Léelo tranquilamente y fírmalo desde el móvil en este enlace:\n\n${enlace}\n\nCualquier cosa me escribes.`;
 };
 
 const hoy = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }); // YYYY-MM-DD
