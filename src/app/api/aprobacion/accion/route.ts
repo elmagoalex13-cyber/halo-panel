@@ -4,20 +4,20 @@ import { programarPieza } from "@/lib/publer";
 import { aplicarAjusteRecorte, parseNotaRecorte } from "@/lib/notaRecorte";
 import type { VideoEstado } from "@/types";
 import { exigirFila } from "@/lib/alcance";
-import { OPCIONES_VELOCIDAD, ponerVelocidad } from "@/lib/velocidadHablados";
+import { OPCIONES_VELOCIDAD, OPCIONES_VOLUMEN, leerVelocidad, leerVolumen, ponerAjustes } from "@/lib/velocidadHablados";
 
 const ESTADO_MAP: Record<string, string> = {
   aprobar: "aprobado",
   rehacer: "editando",
   nueva_frase: "editando",
   recorte: "editando",
-  velocidad: "editando",
+  ajustes: "editando",
   descartar: "rechazado",
 };
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin, velocidad } = (await req.json()) as {
+    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin, velocidad, volumen } = (await req.json()) as {
       id?: string;
       accion?: string;
       caption?: string;
@@ -26,6 +26,7 @@ export async function PATCH(req: NextRequest) {
       recorte_inicio?: number | null;
       recorte_fin?: number | null;
       velocidad?: number;
+      volumen?: number;
     };
 
     if (!id || !accion || !ESTADO_MAP[accion]) {
@@ -109,16 +110,18 @@ export async function PATCH(req: NextRequest) {
       update.frase_quemada = null;
       update.layout_json = null;
     }
-    if (accion === "velocidad") {
-      // Velocidad del video hablado (1.1x, 1.2x...): se guarda en las notas y se reencola para que el editor lo rehaga con ella
-      if (typeof velocidad !== "number" || !(OPCIONES_VELOCIDAD as readonly number[]).includes(velocidad)) {
-        return NextResponse.json({ error: "Velocidad no valida" }, { status: 400 });
+    if (accion === "ajustes") {
+      // Velocidad (1.1x, 1.2x...) y volumen del video hablado: se guardan en las notas y se reencola para que el editor lo rehaga con ellos
+      const vel = velocidad ?? leerVelocidad(actual.notas_editor);
+      const vol = volumen ?? leerVolumen(actual.notas_editor);
+      if (!(OPCIONES_VELOCIDAD as readonly number[]).includes(vel) || !(OPCIONES_VOLUMEN as readonly number[]).includes(vol)) {
+        return NextResponse.json({ error: "Velocidad o volumen no validos" }, { status: 400 });
       }
       update.estado_procesamiento = "pendiente";
       update.error_mensaje = null;
       update.aprobado_at = null;
       update.publicado_at = null;
-      update.notas_editor = ponerVelocidad(actual.notas_editor, velocidad);
+      update.notas_editor = ponerAjustes(actual.notas_editor, { velocidad: vel, volumen: vol });
     }
     if (accion === "recorte") {
       // Guarda el recorte manual (segundos sobre el video bruto, marcados en

@@ -85,7 +85,8 @@ export async function procesarPieza(pieza) {
       .update({
         estado: "en_aprobacion",
         estado_procesamiento: "listo",
-        video_procesado_url: publicUrl(outKey),
+        // ?v=...: el archivo se sobreescribe en cada rehacer y sin esto el navegador (y la Mesa) siguen ensenando el video anterior
+        video_procesado_url: `${publicUrl(outKey)}?v=${Date.now()}`,
         r2_key_original: pieza.r2_key_original ?? rawKey,
         frase_quemada: fraseQuemada,
         // Se guarda el recorte REALMENTE usado (automatico o manual) para que

@@ -7,7 +7,7 @@ import { urlR2, videoBrutoAlternativas, videoEditado } from "@/lib/media";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
-import { OPCIONES_VELOCIDAD, leerVelocidad, textoVelocidad } from "@/lib/velocidadHablados";
+import { OPCIONES_VELOCIDAD, OPCIONES_VOLUMEN, leerVelocidad, leerVolumen, textoVelocidad, textoVolumen } from "@/lib/velocidadHablados";
 
 export interface VideoRow {
   id: string;
@@ -163,14 +163,17 @@ function formatearSegundos(s: number | null) {
   return `${m}:${sec.padStart(5, "0")}`;
 }
 
-/** Velocidad del video hablado (como en Edits de Instagram: 1.1x, 1.2x...). Al aplicarla, el editor rehace el video con esa velocidad. */
-function VelocidadEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => void }) {
-  const actual = leerVelocidad(row.notas_editor);
-  const [velocidad, setVelocidad] = useState<number>(actual);
+/** Velocidad (como en Edits de Instagram: 1.1x, 1.2x...) y volumen del video hablado. Al aplicarlos, el editor rehace el video. */
+function AjustesEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => void }) {
+  const velActual = leerVelocidad(row.notas_editor);
+  const volActual = leerVolumen(row.notas_editor);
+  const [velocidad, setVelocidad] = useState<number>(velActual);
+  const [volumen, setVolumen] = useState<number>(volActual);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   useEffect(() => {
     setVelocidad(leerVelocidad(row.notas_editor));
+    setVolumen(leerVolumen(row.notas_editor));
     setMensaje(null);
   }, [row.id, row.notas_editor]);
 
@@ -178,47 +181,49 @@ function VelocidadEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () =>
     setGuardando(true);
     setMensaje(null);
     try {
-      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, accion: "velocidad", velocidad }) });
+      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, accion: "ajustes", velocidad, volumen }) });
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-        setMensaje(payload?.error ?? "No se pudo aplicar la velocidad.");
+        setMensaje(payload?.error ?? "No se pudo aplicar.");
         setGuardando(false);
         return;
       }
       onGuardado();
     } catch {
-      setMensaje("No se pudo aplicar la velocidad.");
+      setMensaje("No se pudo aplicar.");
       setGuardando(false);
     }
   }
 
+  const boton = (activo: boolean) => `rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${activo ? "border-[#8B5CF6] bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-black/20 text-white/60 hover:text-white"}`;
+  const sinCambios = velocidad === velActual && volumen === volActual;
+
   return (
     <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
-      <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/40">Velocidad del video hablado (voz y subtítulos van a la vez)</p>
+      <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/40">Velocidad (voz y subtítulos van a la vez)</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {OPCIONES_VELOCIDAD.map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setVelocidad(v)}
-            className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${velocidad === v ? "border-[#8B5CF6] bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-black/20 text-white/60 hover:text-white"}`}
-          >
+          <button key={v} type="button" onClick={() => setVelocidad(v)} className={boton(velocidad === v)}>
             {v === 1 ? "Normal" : textoVelocidad(v)}
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => void aplicar()}
-          disabled={guardando || velocidad === actual}
-          className="btn-primary ml-auto px-3 py-1.5 text-xs disabled:opacity-40"
-          title={velocidad === actual ? "Elige otra velocidad" : undefined}
-        >
-          {guardando ? "Enviando…" : `Aplicar ${velocidad === 1 ? "velocidad normal" : textoVelocidad(velocidad)} y rehacer`}
-        </button>
       </div>
-      <p className="mt-1.5 text-[11px] text-white/35">
-        {actual > 1 ? `Ahora está a ${textoVelocidad(actual)}. ` : "Ahora está a velocidad normal. "}El editor lo vuelve a hacer con la velocidad elegida y vuelve a la Mesa en unos minutos.
-      </p>
+      <p className="mb-2 mt-3 text-[10px] uppercase tracking-[0.14em] text-white/40">Volumen (sube la voz sin que se sature)</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {OPCIONES_VOLUMEN.map((v) => (
+          <button key={v} type="button" onClick={() => setVolumen(v)} className={boton(volumen === v)}>
+            {textoVolumen(v)}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => void aplicar()} disabled={guardando || sinCambios} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-40" title={sinCambios ? "Elige otra velocidad o volumen" : undefined}>
+          {guardando ? "Enviando…" : "Aplicar y rehacer"}
+        </button>
+        <p className="text-[11px] text-white/35">
+          Ahora: velocidad {velActual === 1 ? "normal" : textoVelocidad(velActual)} · volumen {volActual === 1 ? "normal" : textoVolumen(volActual)}. El editor lo rehace y vuelve a la Mesa en unos minutos.
+        </p>
+      </div>
       {mensaje ? <p className="mt-1 text-xs text-red-300">{mensaje}</p> : null}
     </div>
   );
@@ -1266,11 +1271,11 @@ export function MesaClient({
 
                 {selected.tipo_video === "tipo1" ? (
                   <div className="mt-3">
-                    <VelocidadEditor
+                    <AjustesEditor
                       row={selected}
                       onGuardado={() => {
                         setRows((prev) => prev.filter((row) => row.id !== selected.id));
-                        setActionMessage("Video enviado a rehacer con la velocidad elegida.");
+                        setActionMessage("Video enviado a rehacer con la velocidad y el volumen elegidos.");
                         router.refresh();
                         closePopup();
                       }}
