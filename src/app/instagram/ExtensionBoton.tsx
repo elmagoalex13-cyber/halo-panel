@@ -261,6 +261,8 @@ export function ExtensionBoton({
           className="input-base py-1.5 text-xs"
         >
           <option value={0}>Periodo: automático</option>
+          <option value={7}>Últimos 7 días</option>
+          <option value={14}>Últimos 14 días</option>
           <option value={30}>Últimos 30 días</option>
           <option value={90}>Últimos 90 días</option>
           <option value={180}>Últimos 6 meses</option>
