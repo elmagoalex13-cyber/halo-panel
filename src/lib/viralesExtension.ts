@@ -104,15 +104,16 @@ export function analizarCuenta(
     .filter((r) => categoria !== "frases" || r.estiloScore >= 0.45)
     .sort((a, b) => b.viralScore - a.viralScore)
     .slice(0, max);
-  // Si ninguno supera el umbral y se pide «ranking» (busqueda manual o cuenta nueva), se sacan igualmente los N mas vistos del periodo:
-  // una cuenta cuyos reels son todos parecidos (o todos muy vistos) nunca supera «mediana x factor» y se quedaba siempre en cero.
-  if (!virales.length && ranking > 0) {
-    const masVistos = validos
-      .filter((r) => !conocidos.has(r.codigo) && (!r.fecha || new Date(r.fecha).getTime() >= desde))
+  // «ranking» = minimo de videos que se quieren por cuenta en una busqueda manual: si los que superan el umbral son menos, se completan
+  // con los mas vistos del periodo (una cuenta cuyos reels son todos parecidos, o todos muy vistos, nunca supera «mediana x factor»).
+  if (virales.length < ranking) {
+    const ya = new Set(virales.map((v) => v.codigo));
+    const extra = validos
+      .filter((r) => !conocidos.has(r.codigo) && !ya.has(r.codigo) && (!r.fecha || new Date(r.fecha).getTime() >= desde))
       .sort((a, b) => b.vistas - a.vistas)
-      .slice(0, ranking)
+      .slice(0, ranking - virales.length)
       .map((r) => ({ ...r, viralScore: scoreViralidad(r, med), estiloScore: scoreEstiloFraseMusica(r) }));
-    return { mediana: med, umbral, analizados: validos.length, virales: masVistos, porRanking: true };
+    return { mediana: med, umbral, analizados: validos.length, virales: [...virales, ...extra], porRanking: virales.length === 0 && extra.length > 0 };
   }
   return { mediana: med, umbral, analizados: validos.length, virales, porRanking: false };
 }
