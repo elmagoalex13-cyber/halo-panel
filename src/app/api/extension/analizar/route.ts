@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const body = (await req.json().catch(() => null)) as {
-    modo?: string; cuenta_id?: string; reels?: unknown; dias?: unknown; factor?: unknown; max?: unknown; fase?: string;
+    modo?: string; cuenta_id?: string; reels?: unknown; dias?: unknown; factor?: unknown; max?: unknown; fase?: string; origen?: string; ranking?: unknown;
   } | null;
   if (!body?.cuenta_id || (body.modo !== "referencias" && body.modo !== "propias")) {
     return NextResponse.json({ error: "Faltan modo o cuenta_id" }, { status: 400 });
@@ -40,8 +40,13 @@ export async function POST(req: NextRequest) {
   // asi que aqui solo se aplica el umbral de vistas; fecha y estilo se aplican en la pasada definitiva.
   const candidatos = body.fase === "candidatos";
   const ajustes = ajustesDe(body);
+  // Busqueda manual: si ninguno supera el umbral se sacan los mas vistos (pedido a mano para esas cuentas, o cuenta sin ningun video guardado todavia).
+  // La ronda automatica del lunes no lo hace: ahi solo entran los que de verdad destacan.
+  const pedido = Math.min(5, Math.max(0, Math.round(Number(body.ranking) || 0)));
+  const ranking = body.origen === "lunes" ? 0 : pedido || (conocidos.size === 0 ? 3 : 0);
   const r = analizarCuenta(reels, {
     ...ajustes,
+    ranking,
     max: candidatos ? Math.max(ajustes.max, 20) : ajustes.max,
     categoria: candidatos ? null : categoria,
     conocidos,
@@ -50,6 +55,7 @@ export async function POST(req: NextRequest) {
     analizados: r.analizados,
     mediana: r.mediana,
     umbral: r.umbral,
+    por_ranking: r.porRanking,
     subir: r.virales.map((v) => ({ codigo: v.codigo, vistas: v.vistas, viralScore: v.viralScore })),
   });
 }

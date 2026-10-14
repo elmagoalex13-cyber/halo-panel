@@ -51,6 +51,7 @@ export function ExtensionBoton({
   const [detectada, setDetectada] = useState<boolean | null>(null);
   const [estado, setEstado] = useState<EstadoExt | null>(null);
   const [categoria, setCategoria] = useState("todas");
+  const [periodo, setPeriodo] = useState(0); // dias de los reels a mirar (0 = automatico: 14 dias referencias, 6 meses mis modelos)
   const [version, setVersion] = useState<string | null>(null);
   const antes = useRef(false);
   const [ultima, setUltima] = useState<string | null>(null); // ultima version de la extension que ofrece el panel
@@ -173,7 +174,7 @@ export function ExtensionBoton({
 
   function lanzar() {
     window.postMessage(
-      { source: "halo-panel", type: "scan", modo, categoria: modo === "referencias" && !nElegidas ? categoria : null, ids: nElegidas ? elegidas : undefined },
+      { source: "halo-panel", type: "scan", modo, categoria: modo === "referencias" && !nElegidas ? categoria : null, ids: nElegidas ? elegidas : undefined, dias: periodo || undefined },
       window.location.origin,
     );
   }
@@ -252,6 +253,19 @@ export function ExtensionBoton({
             </div>
           ) : null}
         </div>
+        <select
+          value={periodo}
+          onChange={(e) => setPeriodo(Number(e.target.value))}
+          disabled={corriendo}
+          title="Hasta dónde atrás se miran los reels de cada cuenta. Si una cuenta tiene virales más antiguos, elige un periodo mayor."
+          className="input-base py-1.5 text-xs"
+        >
+          <option value={0}>Periodo: automático</option>
+          <option value={30}>Últimos 30 días</option>
+          <option value={90}>Últimos 90 días</option>
+          <option value={180}>Últimos 6 meses</option>
+          <option value={365}>Último año</option>
+        </select>
         <button
           onClick={lanzar}
           disabled={detectada !== true || corriendo || desactualizada}

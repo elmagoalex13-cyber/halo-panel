@@ -287,9 +287,11 @@ async function ejecutar({ modo, categoria, dias, ids, origen }) {
   const aj = await ajustes();
   // Referencias: reels recientes (14 dias, 36 ultimos). Modelos: sus mejores de los ultimos 6 meses (hasta 120 reels).
   const diasUsados = Number(dias) > 0 ? Number(dias) : modo === "propias" ? 180 : aj.dias;
-  const maximoReels = modo === "propias" ? 120 : 36;
+  // Cuantos mas dias se piden, mas reels hay que leer para llegar tan atras (con 14 dias bastan los 36 ultimos)
+  const maximoReels = modo === "propias" ? 120 : diasUsados <= 14 ? 36 : diasUsados <= 30 ? 60 : diasUsados <= 90 ? 90 : 120;
   const maxPorCuenta = modo === "propias" ? 15 : 8;
   const resumen = { nuevos: 0, analizados: 0, errores: 0, cuentas: 0 };
+  const eligioCuentas = Array.isArray(ids) && ids.length > 0; // cuentas elegidas a mano: si ninguno supera el umbral, se sacan sus mas vistos
   let tabInfo = null;
   const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
 
@@ -407,7 +409,7 @@ async function ejecutar({ modo, categoria, dias, ids, origen }) {
         // 1) Con solo las metricas de la cuadricula, el panel dice que reels superan el umbral.
         const previo = await panel("/api/extension/analizar", {
           method: "POST",
-          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: lectura.reels.map(sinMedios), dias: diasUsados, max: maxPorCuenta, fase: "candidatos" }),
+          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: lectura.reels.map(sinMedios), dias: diasUsados, max: maxPorCuenta, fase: "candidatos", origen: origen ?? "manual", ranking: eligioCuentas ? 3 : 0 }),
         });
         if (cancelar) {
           await marcar({ estado: "cancelado" });
@@ -434,7 +436,7 @@ async function ejecutar({ modo, categoria, dias, ids, origen }) {
         // 3) El panel decide los definitivos (fecha, estilo...) y se suben.
         const analisis = await panel("/api/extension/analizar", {
           method: "POST",
-          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: [...reelsPorCodigo.values()].map(sinMedios), dias: diasUsados, max: maxPorCuenta }),
+          body: JSON.stringify({ modo, cuenta_id: cuenta.id, reels: [...reelsPorCodigo.values()].map(sinMedios), dias: diasUsados, max: maxPorCuenta, origen: origen ?? "manual", ranking: eligioCuentas ? 3 : 0 }),
         });
         resumen.analizados += analisis.analizados;
         let subidos = 0;
@@ -455,7 +457,7 @@ async function ejecutar({ modo, categoria, dias, ids, origen }) {
         }
         resumen.nuevos += subidos;
         resumen.cuentas++;
-        await log(`@${cuenta.username}: ${analisis.analizados} reels leídos (el más visto: ${Math.max(0, ...lectura.reels.map((r) => r.vistas)).toLocaleString("es-ES")}), mediana ${analisis.mediana.toLocaleString("es-ES")}, ${subidos} viral(es) nuevo(s)`, subidos ? "ok" : "info");
+        await log(`@${cuenta.username}: ${analisis.analizados} reels leídos (el más visto: ${Math.max(0, ...lectura.reels.map((r) => r.vistas)).toLocaleString("es-ES")}), mediana ${analisis.mediana.toLocaleString("es-ES")}, umbral ${analisis.umbral.toLocaleString("es-ES")}, últimos ${diasUsados} días, ${subidos} viral(es) nuevo(s)${analisis.por_ranking ? " (los más vistos: ninguno superaba el umbral)" : ""}`, subidos ? "ok" : "info");
         await marcar({ estado: "hecho", nuevos: subidos, analizados: analisis.analizados });
       } catch (e) {
         if (e instanceof ErrorPanel) {
