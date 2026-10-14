@@ -1109,8 +1109,8 @@ export function MesaClient({
       )}
 
       {selected ? (
-        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/75 p-2 backdrop-blur-md sm:items-center sm:p-5" role="dialog" aria-modal="true">
-          <div className="relative grid h-[calc(100dvh-1rem)] w-full max-w-6xl grid-cols-1 overflow-hidden rounded-2xl border border-white/[0.14] bg-[#0b0912]/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.65)] backdrop-blur-2xl sm:h-[94dvh] sm:rounded-3xl lg:grid-cols-[minmax(260px,420px)_1fr]">
+        <div className="sin-blur fixed inset-0 z-50 flex items-stretch justify-center bg-black/85 p-2 sm:items-center sm:p-5" role="dialog" aria-modal="true">
+          <div className="relative grid h-[calc(100dvh-1rem)] w-full max-w-6xl grid-cols-1 overflow-hidden rounded-2xl border border-white/[0.14] bg-[#0b0912] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.65)] sm:h-[94dvh] sm:rounded-3xl lg:grid-cols-[minmax(260px,420px)_1fr]">
             <button
               onClick={closePopup}
               className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-black/40 text-sm text-white/55 transition hover:border-white/20 hover:text-white"
@@ -1138,7 +1138,7 @@ export function MesaClient({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-t border-white/[0.08] bg-white/[0.04] p-3 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:p-4 lg:border-l lg:border-t-0">
+            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-t border-white/[0.08] bg-white/[0.04] p-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-4 lg:border-l lg:border-t-0">
               <div className="pr-10">
                 <p className="font-mono text-[10px] text-white/40">
                   {selected.modelo_nombre}
@@ -1453,7 +1453,7 @@ export function MesaClient({
       ) : null}
 
       {quickRehacer ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+        <div className="sin-blur fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true">
           <div className="glass-card w-full max-w-lg p-5">
             <div className="flex items-start justify-between gap-4">
               <div>

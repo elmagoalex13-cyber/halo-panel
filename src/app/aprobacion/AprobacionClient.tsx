@@ -74,7 +74,7 @@ export function AprobacionClient({ videos, modelos }: { videos: LibraryContent[]
       </div>
 
       {rejecting ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="sin-blur fixed inset-0 z-50 grid place-items-center bg-black/75 p-4">
           <div className="glass-card w-full max-w-lg p-5">
             <h2 className="font-display text-2xl font-semibold text-white">Motivo de rechazo</h2>
             <textarea className="input mt-4 min-h-32 w-full p-3 text-sm" value={motivo} onChange={(event) => setMotivo(event.target.value)} />

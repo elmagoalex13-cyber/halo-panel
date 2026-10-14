@@ -368,7 +368,7 @@ export function OriginalesClient({
       </p>
 
       {confirmando ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+        <div className="sin-blur fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" role="dialog" aria-modal="true">
           <GlassCard className="w-full max-w-md space-y-4 p-5">
             <div>
               <h3 className="font-display text-lg font-semibold text-white">

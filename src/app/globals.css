@@ -132,6 +132,14 @@ a {
   width: 220px;
 }
 
+/* Ventanas con video: sin desenfoque en nada de lo que contienen. Varios desenfoques apilados sobre un video en reproduccion hacen que
+   Chrome dibuje franjas blancas verticales; sin ellos (fondos solidos) no pasa. */
+.sin-blur,
+.sin-blur * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 /* ---------- Botones ---------- */
 /* Morado apagado y mate: sin degradados brillantes ni halos, solo un tinte plano translucido */
 .btn-primary {

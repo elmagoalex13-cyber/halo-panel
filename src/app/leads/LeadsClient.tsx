@@ -306,7 +306,7 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
       </div>
 
       {viewer && currentAdjunto ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+        <div className="sin-blur fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true">
           <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/[0.14] bg-[#0b0912]/92 shadow-2xl backdrop-blur-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
               <div className="min-w-0">

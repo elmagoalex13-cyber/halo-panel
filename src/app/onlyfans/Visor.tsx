@@ -47,7 +47,7 @@ export function Visor({ items, indice, onCambio, onCerrar }: { items: ItemVisor[
 
   if (!a) return null;
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-md" role="dialog" aria-modal="true" onClick={onCerrar}>
+    <div className="sin-blur fixed inset-0 z-50 flex flex-col bg-black/90" role="dialog" aria-modal="true" onClick={onCerrar}>
       <div className="flex items-center gap-3 px-4 py-3 text-white" onClick={(e) => e.stopPropagation()}>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{a.nombre_original ?? (a.tipo_archivo === "video" ? "Vídeo" : "Foto")}</p>
