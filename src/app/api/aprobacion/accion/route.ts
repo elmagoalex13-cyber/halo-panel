@@ -4,18 +4,20 @@ import { programarPieza } from "@/lib/publer";
 import { aplicarAjusteRecorte, parseNotaRecorte } from "@/lib/notaRecorte";
 import type { VideoEstado } from "@/types";
 import { exigirFila } from "@/lib/alcance";
+import { OPCIONES_VELOCIDAD, ponerVelocidad } from "@/lib/velocidadHablados";
 
 const ESTADO_MAP: Record<string, string> = {
   aprobar: "aprobado",
   rehacer: "editando",
   nueva_frase: "editando",
   recorte: "editando",
+  velocidad: "editando",
   descartar: "rechazado",
 };
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin } = (await req.json()) as {
+    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin, velocidad } = (await req.json()) as {
       id?: string;
       accion?: string;
       caption?: string;
@@ -23,6 +25,7 @@ export async function PATCH(req: NextRequest) {
       frase_quemada?: string;
       recorte_inicio?: number | null;
       recorte_fin?: number | null;
+      velocidad?: number;
     };
 
     if (!id || !accion || !ESTADO_MAP[accion]) {
@@ -105,6 +108,17 @@ export async function PATCH(req: NextRequest) {
       update.publicado_at = null;
       update.frase_quemada = null;
       update.layout_json = null;
+    }
+    if (accion === "velocidad") {
+      // Velocidad del video hablado (1.1x, 1.2x...): se guarda en las notas y se reencola para que el editor lo rehaga con ella
+      if (typeof velocidad !== "number" || !(OPCIONES_VELOCIDAD as readonly number[]).includes(velocidad)) {
+        return NextResponse.json({ error: "Velocidad no valida" }, { status: 400 });
+      }
+      update.estado_procesamiento = "pendiente";
+      update.error_mensaje = null;
+      update.aprobado_at = null;
+      update.publicado_at = null;
+      update.notas_editor = ponerVelocidad(actual.notas_editor, velocidad);
     }
     if (accion === "recorte") {
       // Guarda el recorte manual (segundos sobre el video bruto, marcados en

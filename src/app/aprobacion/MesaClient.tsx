@@ -7,6 +7,7 @@ import { urlR2, videoBrutoAlternativas, videoEditado } from "@/lib/media";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
+import { OPCIONES_VELOCIDAD, leerVelocidad, textoVelocidad } from "@/lib/velocidadHablados";
 
 export interface VideoRow {
   id: string;
@@ -27,6 +28,7 @@ export interface VideoRow {
   correcciones: string;
   recorte_inicio?: number | null;
   recorte_fin?: number | null;
+  notas_editor?: string | null;
   modelo_nombre: string;
   cuenta_username: string | null;
   programado_at?: string | null;
@@ -159,6 +161,67 @@ function formatearSegundos(s: number | null) {
   const m = Math.floor(s / 60);
   const sec = (s % 60).toFixed(2);
   return `${m}:${sec.padStart(5, "0")}`;
+}
+
+/** Velocidad del video hablado (como en Edits de Instagram: 1.1x, 1.2x...). Al aplicarla, el editor rehace el video con esa velocidad. */
+function VelocidadEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => void }) {
+  const actual = leerVelocidad(row.notas_editor);
+  const [velocidad, setVelocidad] = useState<number>(actual);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+  useEffect(() => {
+    setVelocidad(leerVelocidad(row.notas_editor));
+    setMensaje(null);
+  }, [row.id, row.notas_editor]);
+
+  async function aplicar() {
+    setGuardando(true);
+    setMensaje(null);
+    try {
+      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, accion: "velocidad", velocidad }) });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        setMensaje(payload?.error ?? "No se pudo aplicar la velocidad.");
+        setGuardando(false);
+        return;
+      }
+      onGuardado();
+    } catch {
+      setMensaje("No se pudo aplicar la velocidad.");
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+      <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/40">Velocidad del video hablado (voz y subtítulos van a la vez)</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {OPCIONES_VELOCIDAD.map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setVelocidad(v)}
+            className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${velocidad === v ? "border-[#8B5CF6] bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-black/20 text-white/60 hover:text-white"}`}
+          >
+            {v === 1 ? "Normal" : textoVelocidad(v)}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => void aplicar()}
+          disabled={guardando || velocidad === actual}
+          className="btn-primary ml-auto px-3 py-1.5 text-xs disabled:opacity-40"
+          title={velocidad === actual ? "Elige otra velocidad" : undefined}
+        >
+          {guardando ? "Enviando…" : `Aplicar ${velocidad === 1 ? "velocidad normal" : textoVelocidad(velocidad)} y rehacer`}
+        </button>
+      </div>
+      <p className="mt-1.5 text-[11px] text-white/35">
+        {actual > 1 ? `Ahora está a ${textoVelocidad(actual)}. ` : "Ahora está a velocidad normal. "}El editor lo vuelve a hacer con la velocidad elegida y vuelve a la Mesa en unos minutos.
+      </p>
+      {mensaje ? <p className="mt-1 text-xs text-red-300">{mensaje}</p> : null}
+    </div>
+  );
 }
 
 function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => void }) {
@@ -1200,6 +1263,20 @@ export function MesaClient({
                     />
                   </div>
                 </div>
+
+                {selected.tipo_video === "tipo1" ? (
+                  <div className="mt-3">
+                    <VelocidadEditor
+                      row={selected}
+                      onGuardado={() => {
+                        setRows((prev) => prev.filter((row) => row.id !== selected.id));
+                        setActionMessage("Video enviado a rehacer con la velocidad elegida.");
+                        router.refresh();
+                        closePopup();
+                      }}
+                    />
+                  </div>
+                ) : null}
 
                 {["tipo1", "tipo4"].includes(selected.tipo_video ?? "") ? (
                   <div className="mt-3">

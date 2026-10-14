@@ -296,17 +296,21 @@ Dialogue: 0,0:00:00.00,${formatAssTime(duration)},Bloque,,0,0,0,,{\\an5\\pos(${C
  * @param {string} outputPath
  * @param {object} [opts]
  * @param {{ start?: number, end?: number }} [opts.trim]
+ * @param {number} [opts.velocidad] 1 = normal; 1.1, 1.2... acelera video y voz (los subtitulos se queman ANTES de acelerar, asi siguen sincronizados)
  */
-export async function renderTipo1(inputPath, assPath, outputPath, { trim } = {}) {
+export async function renderTipo1(inputPath, assPath, outputPath, { trim, velocidad = 1 } = {}) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   const hdr = await needsHdrTonemap(inputPath);
+  velocidad = Number(velocidad);
+  const rapido = Number.isFinite(velocidad) && velocidad > 1 && velocidad <= 2;
   const buildArgs = (useHdr) => {
     const vf = [
       buildVideoTrimFilter(trim),
       buildVideoFilter({ hdr: useHdr }),
       assPath ? `ass='${assPath.replace(/'/g, "\\'")}'` : null,
+      rapido ? `setpts=PTS/${velocidad}` : null,
     ].filter(Boolean).join(",");
-    const af = buildAudioTrimFilter(trim);
+    const af = [buildAudioTrimFilter(trim), rapido ? `atempo=${velocidad}` : null].filter(Boolean).join(",");
     const args = ["-y", "-i", inputPath, "-vf", vf];
     if (af) args.push("-af", af);
     pushEncodeArgs(args);

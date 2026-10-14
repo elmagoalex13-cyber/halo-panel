@@ -137,7 +137,10 @@ export async function procesarTipo(tipo, pieza) {
 
     if (tipo === 1) {
       const subs = await subtitulos(rawPath, workDir, pieza.frase_quemada ?? "", recorteManual);
-      await renderTipo1(rawPath, subs?.assPath, outPath, { trim: subs?.trim });
+      // Velocidad elegida en la Mesa para este video hablado ([velocidad=1.2] en notas_editor); sin marca = normal
+      const v = Number(/\[velocidad=([0-9.]+)\]/.exec(pieza.notas_editor ?? "")?.[1]);
+      const velocidad = Number.isFinite(v) && v >= 1 && v <= 1.5 ? v : 1;
+      await renderTipo1(rawPath, subs?.assPath, outPath, { trim: subs?.trim, velocidad });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
       trimUsado = subs?.trim ?? null;
       trimManual = Boolean(subs?.manual);
