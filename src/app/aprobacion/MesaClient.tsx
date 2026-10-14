@@ -635,6 +635,21 @@ export function MesaClient({
     );
   }
 
+  // Descarga rapida: uno o varios videos editados. Con varios, se lanzan seguidos (el navegador puede pedir permiso una vez para «descargar varios archivos»).
+  function descargarEditados(ids: string[]) {
+    ids.forEach((id, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = `/api/descargar?id=${id}&tipo=editado`;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, i * 900);
+    });
+    setActionMessage(ids.length > 1 ? `Descargando ${ids.length} vídeos…` : "Descargando el vídeo…");
+  }
+
   async function marcarPublicado(ids: string[], publicado: boolean) {
     if (!ids.length) return;
     setPublicando(true);
@@ -840,6 +855,14 @@ export function MesaClient({
             </button>
             <button
               type="button"
+              disabled={seleccionVisible.filter((row) => videoEditado(row)).length === 0}
+              onClick={() => descargarEditados(seleccionVisible.filter((row) => videoEditado(row)).map((row) => row.id))}
+              className="rounded-lg border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-3 py-1.5 text-xs font-semibold text-[#C4B5FD] transition hover:bg-[#8B5CF6]/20 disabled:opacity-40"
+            >
+              {`↓ Descargar ${seleccionVisible.filter((row) => videoEditado(row)).length || ""} vídeos`.replace("  ", " ")}
+            </button>
+            <button
+              type="button"
               disabled={borrandoArchivos || seleccionVisible.length === 0}
               onClick={() => pedirBorrado(seleccionVisible.map((row) => row.id))}
               className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-40"
@@ -979,6 +1002,16 @@ export function MesaClient({
                         </button>
                       ) : null}
                     </>
+                  ) : null}
+                  {(row.estado === "aprobado" || row.estado === "publicado") && videoEditado(row) ? (
+                    <a
+                      href={`/api/descargar?id=${row.id}&tipo=editado`}
+                      download
+                      title="Descarga el video editado"
+                      className="rounded-lg border border-[#8B5CF6]/35 bg-[#8B5CF6]/10 px-3 py-1.5 text-xs font-semibold text-[#C4B5FD] transition hover:border-[#8B5CF6]/70 hover:bg-[#8B5CF6]/20"
+                    >
+                      ↓ Descargar
+                    </a>
                   ) : null}
                   {row.estado === "aprobado" ? (
                     <button
