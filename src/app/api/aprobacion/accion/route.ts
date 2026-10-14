@@ -48,7 +48,10 @@ export async function PATCH(req: NextRequest) {
       .maybeSingle();
     if (actualError) throw actualError;
     if (!actual) return NextResponse.json({ error: "Video no encontrado" }, { status: 404 });
-    if (actual.estado !== "en_aprobacion") {
+    // Rehacer (y sus variantes: nueva frase, recorte, velocidad/volumen) tambien vale para un video ya aprobado; aprobar/descartar solo para los que esperan
+    const REHACER = ["rehacer", "nueva_frase", "recorte", "ajustes"];
+    const permitidos = REHACER.includes(accion) ? ["en_aprobacion", "aprobado"] : ["en_aprobacion"];
+    if (!permitidos.includes(actual.estado as string)) {
       return NextResponse.json({ ok: true, estado: actual.estado, skipped: true });
     }
 
@@ -143,7 +146,7 @@ export async function PATCH(req: NextRequest) {
       .from("library_content")
       .update(update)
       .eq("id", id)
-      .eq("estado", "en_aprobacion")
+      .eq("estado", actual.estado as string)
       .select("id");
     if (error) throw error;
     if (!updated?.length) return NextResponse.json({ ok: true, estado: actual.estado, skipped: true });

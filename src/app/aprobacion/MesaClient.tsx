@@ -635,6 +635,35 @@ export function MesaClient({
     );
   }
 
+  // Rehacer un video que ya estaba aprobado. Si ya esta programado en Publer, esa publicacion vieja hay que borrarla a mano alli.
+  function avisoProgramados(filas: VideoRow[]) {
+    const prog = filas.filter((r) => r.programado_at);
+    if (!prog.length) return "";
+    return `\n\n⚠ ${prog.length === 1 ? "Este video ya está programado" : `${prog.length} de ellos ya están programados`} en Publer: al rehacerlo, borra la publicación antigua en Publer para que no salga el vídeo viejo.`;
+  }
+
+  function pedirRehacer(row: VideoRow) {
+    if (row.programado_at && !confirm(`¿Rehacer «${row.titulo ?? "este vídeo"}»?${avisoProgramados([row])}`)) return;
+    setQuickRehacer({ row, nota: "" });
+  }
+
+  async function rehacerVarios(filas: VideoRow[]) {
+    if (!filas.length) return;
+    if (!confirm(`¿Mandar ${filas.length} vídeos a rehacer? Volverán a la cola del editor y aparecerán en «En aprobación» cuando estén listos.${avisoProgramados(filas)}`)) return;
+    setPublicando(true);
+    let fallos = 0;
+    for (const row of filas) {
+      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, accion: "rehacer", caption: row.caption, correcciones: "", frase_quemada: row.frase_quemada }) });
+      if (!res.ok) fallos++;
+    }
+    const idsOk = new Set(filas.map((r) => r.id));
+    setRows((prev) => (fallos ? prev : prev.filter((r) => !idsOk.has(r.id))));
+    setSeleccion(new Set());
+    setPublicando(false);
+    setActionMessage(fallos ? `${filas.length - fallos} enviados a rehacer; ${fallos} no se pudieron enviar.` : `${filas.length} vídeos enviados a rehacer.`);
+    router.refresh();
+  }
+
   // Descarga rapida: uno o varios videos editados. Con varios, se lanzan seguidos (el navegador puede pedir permiso una vez para «descargar varios archivos»).
   function descargarEditados(ids: string[]) {
     ids.forEach((id, i) => {
@@ -861,6 +890,16 @@ export function MesaClient({
             >
               {`↓ Descargar ${seleccionVisible.filter((row) => videoEditado(row)).length || ""} vídeos`.replace("  ", " ")}
             </button>
+            {currentEstado === "aprobado" ? (
+              <button
+                type="button"
+                disabled={publicando || seleccionVisible.length === 0}
+                onClick={() => void rehacerVarios(seleccionVisible)}
+                className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-40"
+              >
+                {`↺ Rehacer ${seleccionVisible.length || ""} vídeos`.replace("  ", " ")}
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={borrandoArchivos || seleccionVisible.length === 0}
@@ -1012,6 +1051,17 @@ export function MesaClient({
                     >
                       ↓ Descargar
                     </a>
+                  ) : null}
+                  {row.estado === "aprobado" ? (
+                    <button
+                      type="button"
+                      onClick={() => pedirRehacer(row)}
+                      disabled={Boolean(quickLoadingId)}
+                      title="Vuelve a mandar este vídeo al editor"
+                      className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:border-amber-300/70 hover:bg-amber-400/20 disabled:opacity-40"
+                    >
+                      ↺ Rehacer
+                    </button>
                   ) : null}
                   {row.estado === "aprobado" ? (
                     <button
@@ -1375,6 +1425,18 @@ export function MesaClient({
                 >
                   ↓ Editar yo <span className="text-[9px] font-normal opacity-60">(descarga original)</span>
                 </a>
+                {selected.estado === "aprobado" ? (
+                  <button
+                    onClick={() => {
+                      const fila = selected;
+                      closePopup();
+                      pedirRehacer(fila);
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/35 bg-amber-400/10 py-2.5 text-sm font-semibold text-amber-200 transition-all hover:bg-amber-400/20"
+                  >
+                    ↺ Rehacer este vídeo
+                  </button>
+                ) : null}
                 {selected.estado === "en_aprobacion" ? (
                   <button
                     onClick={() => saveAndAct("descartar")}
