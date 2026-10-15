@@ -63,28 +63,26 @@ function Galeria({ items }: { items: ReferenciaVista[] }) {
   );
 }
 
-/** Esquemas sencillos de como tienen que ir encuadradas la foto de perfil y la del banner (no son fotos de nadie). */
-function EsquemaPerfil() {
+/** Foto de referencia de perfil/banner: se ve pequeña y al tocarla se amplia (para verla bien). */
+function FotoEjemplo({ src, alt, clase }: { src: string; alt: string; clase: string }) {
+  const [grande, setGrande] = useState(false);
   return (
-    <svg viewBox="0 0 120 160" className="h-40 w-auto shrink-0 rounded-lg border border-white/15 bg-white/[0.04]" role="img" aria-label="Foto de perfil: vertical, cara grande y centrada">
-      <ellipse cx="60" cy="62" rx="26" ry="32" fill="none" stroke="#A78BFA" strokeWidth="2.5" />
-      <path d="M8 160 C8 118 34 104 60 104 C86 104 112 118 112 160" fill="none" stroke="#A78BFA" strokeWidth="2.5" strokeDasharray="4 3" />
-      <circle cx="49" cy="58" r="2.5" fill="#A78BFA" />
-      <circle cx="71" cy="58" r="2.5" fill="#A78BFA" />
-      <text x="60" y="152" textAnchor="middle" fontSize="8" fill="#ffffff99">vertical · cara grande</text>
-    </svg>
-  );
-}
-
-function EsquemaBanner() {
-  return (
-    <svg viewBox="0 0 240 120" className="h-28 w-auto max-w-full shrink-0 rounded-lg border border-white/15 bg-white/[0.04]" role="img" aria-label="Banner: horizontal, cara a un lado y cuerpo hacia el otro">
-      <ellipse cx="62" cy="52" rx="20" ry="25" fill="none" stroke="#A78BFA" strokeWidth="2.5" />
-      <circle cx="54" cy="49" r="2.2" fill="#A78BFA" />
-      <circle cx="70" cy="49" r="2.2" fill="#A78BFA" />
-      <path d="M96 78 C130 62 170 60 232 74 L232 120 L40 120 C60 100 80 88 96 78 Z" fill="none" stroke="#A78BFA" strokeWidth="2.5" strokeDasharray="4 3" />
-      <text x="120" y="14" textAnchor="middle" fontSize="8" fill="#ffffff99">horizontal · cara a un lado, sin cortarla</text>
-    </svg>
+    <>
+      <button type="button" onClick={() => setGrande(true)} aria-label={`Ampliar: ${alt}`} className={`group relative shrink-0 cursor-zoom-in overflow-hidden rounded-xl border border-white/15 bg-black/30 ${clase}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={alt} loading="lazy" className="h-full w-full object-cover" />
+        <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-semibold text-white/85">🔍 Ampliar</span>
+      </button>
+      {grande ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/90 p-3" onClick={() => setGrande(false)} role="dialog" aria-modal="true">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={alt} className="max-h-full max-w-full rounded-lg object-contain" />
+          <button type="button" onClick={() => setGrande(false)} aria-label="Cerrar" className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-xl text-white">
+            ✕
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -106,37 +104,37 @@ export function GuiaOF({ packs, posts, referencias }: { packs: string; posts: st
 
       <Bloque titulo="🤳 Foto de perfil y foto de banner" abierto>
         <p className="text-[15px] leading-relaxed text-white/80">
-          Para montar tu perfil necesitamos <span className="font-semibold text-white">dos fotos tuyas con muchísima calidad</span>: una de perfil y una horizontal para el banner. Tienen que verse{" "}
-          <span className="font-semibold text-white">nítidas, bien iluminadas y profesionales</span>, y sobre todo se tiene que ver tu cara muy bien.
+          Necesitamos <span className="font-semibold text-white">dos fotos tuyas</span> para tu perfil: una de perfil y una horizontal para el banner. Tienen que verse{" "}
+          <span className="font-semibold text-white">con mucha calidad y que se te vea muy bien la cara</span>. Tienen que ser{" "}
+          <span className="font-semibold text-white">como estas de ejemplo</span> (toca cada foto para verla en grande).
         </p>
 
-        <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-4">
+        <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
           <p className="font-display text-base font-semibold text-white">1 · Foto de perfil</p>
           <div className="flex flex-wrap items-start gap-4">
-            <EsquemaPerfil />
-            <div className="min-w-0 flex-1 basis-60">
+            <FotoEjemplo src="/guia/foto-perfil-ejemplo.jpg" alt="Foto de perfil de ejemplo" clase="aspect-[3/4] w-40 sm:w-48" />
+            <div className="min-w-0 flex-1 basis-56">
               <Lista
                 puntos={[
-                  "Vertical (tipo selfie o retrato), con la cara grande y centrada: cabeza y hombros, mirando a la cámara.",
-                  "La cara tiene que verse perfecta: de frente o casi de frente, sin gafas de sol, gorra, filtros ni el pelo tapándote la cara.",
-                  "Luz natural suave de frente (junto a una ventana). Nada de contraluz ni sombras duras en la cara.",
-                  "Look coqueto y cuidado, con la misma cercanía y naturalidad de un selfie bien hecho.",
+                  "Vertical, tipo selfie, con tu cara grande y bien centrada.",
+                  "Se tiene que ver muy bien la cara: de frente, mirando a la cámara.",
+                  "Con buena luz, mejor luz natural de frente (junto a una ventana).",
                 ]}
               />
             </div>
           </div>
         </div>
 
-        <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-4">
+        <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
           <p className="font-display text-base font-semibold text-white">2 · Foto horizontal para el banner</p>
           <div className="flex flex-wrap items-start gap-4">
-            <EsquemaBanner />
-            <div className="min-w-0 flex-1 basis-60">
+            <FotoEjemplo src="/guia/foto-banner-ejemplo.jpg" alt="Foto de banner de ejemplo" clase="aspect-[4/3] w-full max-w-sm" />
+            <div className="min-w-0 flex-1 basis-56">
               <Lista
                 puntos={[
-                  "Horizontal (apaisada), de al menos 2000 píxeles de ancho. Con el móvil en horizontal y la cámara trasera sale perfecta.",
-                  "Tu cara bien visible y mirando a la cámara, colocada hacia un lado de la foto (no cortada por los bordes) y el resto de la foto con tu pose, tumbada o apoyada.",
-                  "Fondo ordenado y luz buena. Que se vea cuidada, como una foto de portada.",
+                  "Horizontal (con el móvil tumbado).",
+                  "Tu cara bien visible y mirando a la cámara, sin que se corte por los bordes.",
+                  "Con buena luz y el fondo ordenado.",
                 ]}
               />
             </div>
@@ -144,12 +142,11 @@ export function GuiaOF({ packs, posts, referencias }: { packs: string; posts: st
         </div>
 
         <div className="space-y-2">
-          <h4 className="text-base font-semibold text-[#C4B5FD]">Las dos, con la máxima calidad</h4>
+          <h4 className="text-base font-semibold text-[#C4B5FD]">Las dos tienen que verse con mucha calidad</h4>
           <Lista
             puntos={[
-              "Haz las fotos con la cámara trasera del móvil, bien enfocadas y sin zoom digital.",
-              "Sin filtros, sin retoque y sin capturas de pantalla: queremos la foto original.",
-              "Cuando las envíes a la agencia, mándalas como archivo o documento (no como foto normal de WhatsApp), para que no pierdan calidad por la compresión.",
+              "Hechas con el móvil, bien enfocadas, sin filtros y sin capturas de pantalla.",
+              "Cuando las envíes a la agencia, mándalas como archivo o documento (no como foto normal de WhatsApp), para que no pierdan calidad.",
             ]}
           />
         </div>
