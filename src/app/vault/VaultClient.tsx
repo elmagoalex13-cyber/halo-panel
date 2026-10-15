@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Copy, Eye, Loader2, Lock, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import type { VaultCategoria, VaultEntry } from "@/types";
 import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
+import type { CampoCheck, ChecksEntrada } from "@/lib/vaultChecks";
 
 const categories: Array<{ id: VaultCategoria; label: string; icon: string }> = [
   { id: "of_credentials", label: "OF credentials", icon: "🔑" },
@@ -23,15 +24,19 @@ export function VaultClient({
   esDueno,
   ambitoListo,
   papelera = [],
+  checks: checksIniciales = {},
 }: {
   papelera?: VaultEntry[];
+  checks?: Record<string, ChecksEntrada>;
   entries: VaultEntry[];
   modelos: { id: string; nombre: string }[];
   esDueno: boolean;
   ambitoListo: boolean;
 }) {
   const router = useRouter();
-  const [revealed, setRevealed] = useState<{ title: string; value: string } | null>(null);
+  const [revealed, setRevealed] = useState<{ id: string; title: string; value: string } | null>(null);
+  const [checks, setChecks] = useState<Record<string, ChecksEntrada>>(checksIniciales);
+  const [copiado, setCopiado] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editando, setEditando] = useState<VaultEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +77,22 @@ export function VaultClient({
       return;
     }
     setError(null);
-    setRevealed({ title: entry.nombre, value: data.value });
+    setRevealed({ id: entry.id, title: entry.nombre, value: data.value });
+  }
+
+  // Check interno de una credencial («hemos podido acceder», «las credenciales son validas»): lo marcamos nosotros, la modelo no lo ve
+  async function marcar(id: string, campo: CampoCheck, valor: boolean) {
+    const res = await fetch("/api/vault/checks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, campo, valor }) });
+    const j = (await res.json().catch(() => ({}))) as { error?: string; checks?: ChecksEntrada };
+    if (!res.ok) return setError(j.error ?? "No se pudo guardar el check");
+    setError(null);
+    setChecks((prev) => ({ ...prev, [id]: j.checks ?? {} }));
+  }
+
+  function copiar(clave: string, texto: string) {
+    void navigator.clipboard.writeText(texto);
+    setCopiado(clave);
+    setTimeout(() => setCopiado((c) => (c === clave ? null : c)), 1500);
   }
 
   async function addEntry(e: React.FormEvent<HTMLFormElement>) {
@@ -215,6 +235,7 @@ export function VaultClient({
                       <p className="truncate text-xs text-[color:var(--text-secondary)]">
                         {[nombreModelo(entry.modelo_id), entry.descripcion].filter(Boolean).join(" · ") || "Sin descripción"}
                       </p>
+                      <ChipsChecks checks={checks[entry.id]} />
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <button
@@ -267,14 +288,14 @@ export function VaultClient({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <pre className="mt-4 overflow-auto rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 font-code text-sm text-white">
-              {revealed.value}
-            </pre>
-            <button
-              className="btn-primary mt-4 flex h-10 items-center gap-2 px-4 text-sm"
-              onClick={() => navigator.clipboard.writeText(revealed.value)}
-            >
-              <Copy className="h-4 w-4" /> Copiar
+            <CamposCopiables valor={revealed.value} copiado={copiado} onCopiar={copiar} />
+            <div className="mt-4 space-y-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Checks internos (la modelo no los ve)</p>
+              <ToggleCheck etiqueta="Hemos podido acceder" check={checks[revealed.id]?.acceso} onCambio={(v) => void marcar(revealed.id, "acceso", v)} />
+              <ToggleCheck etiqueta="Las credenciales son válidas" check={checks[revealed.id]?.valida} onCambio={(v) => void marcar(revealed.id, "valida", v)} />
+            </div>
+            <button className="btn-secondary mt-4 flex h-10 items-center gap-2 px-4 text-sm" onClick={() => copiar("todo", revealed.value)}>
+              <Copy className="h-4 w-4" /> {copiado === "todo" ? "✓ Copiado" : "Copiar todo"}
             </button>
           </div>
         </div>
@@ -416,5 +437,63 @@ export function VaultClient({
         onCancelar={() => setBorrarDef(null)}
       />
     </div>
+  );
+}
+
+const cuando = (iso: string) => new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
+
+/** Etiquetas pequeñas de la tarjeta: ✓ acceso / ✓ válidas (con quien y cuando al pasar el raton). */
+function ChipsChecks({ checks }: { checks?: ChecksEntrada }) {
+  const chip = (activo: boolean, texto: string, check?: { por: string; at: string }) => (
+    <span
+      title={check ? `${texto}: ${check.por}, ${cuando(check.at)}` : `${texto}: sin comprobar`}
+      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${activo ? "bg-emerald-400/15 text-emerald-300" : "bg-white/[0.06] text-white/35"}`}
+    >
+      {activo ? "✓" : "○"} {texto}
+    </span>
+  );
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {chip(Boolean(checks?.acceso), "Acceso", checks?.acceso)}
+      {chip(Boolean(checks?.valida), "Válidas", checks?.valida)}
+    </div>
+  );
+}
+
+function ToggleCheck({ etiqueta, check, onCambio }: { etiqueta: string; check?: { por: string; at: string }; onCambio: (v: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 text-sm text-white/85">
+      <input type="checkbox" checked={Boolean(check)} onChange={(e) => onCambio(e.target.checked)} className="h-5 w-5 accent-emerald-500" />
+      <span className="flex-1">{etiqueta}</span>
+      {check ? <span className="text-[11px] text-white/40">{check.por} · {cuando(check.at)}</span> : null}
+    </label>
+  );
+}
+
+/** El valor descifrado campo a campo («Correo: …», «Contraseña: …»): cada uno con su boton de copiar. Si no tiene ese formato, se enseña tal cual. */
+function CamposCopiables({ valor, copiado, onCopiar }: { valor: string; copiado: string | null; onCopiar: (clave: string, texto: string) => void }) {
+  const lineas = valor.split("\n").filter((l) => l.trim());
+  const campos = lineas.map((l) => /^([^:]{1,60}):\s*(.+)$/.exec(l)).filter((m): m is RegExpExecArray => Boolean(m));
+  if (!campos.length || campos.length < lineas.length) {
+    return (
+      <pre className="mt-4 overflow-auto rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 font-code text-sm text-white">
+        {valor}
+      </pre>
+    );
+  }
+  return (
+    <ul className="mt-4 space-y-2">
+      {campos.map((m, i) => (
+        <li key={i} className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] uppercase tracking-wider text-white/40">{m[1]}</p>
+            <p className="break-all font-code text-sm text-white">{m[2]}</p>
+          </div>
+          <button type="button" onClick={() => onCopiar(`campo${i}`, m[2])} className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">
+            {copiado === `campo${i}` ? "✓ Copiado" : "Copiar"}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

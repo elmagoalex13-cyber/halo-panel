@@ -120,7 +120,7 @@ export function OnboardingForm({
   onCambio,
   accesos,
 }: {
-  accesos?: { modo: "of" | "completo"; dado: boolean };
+  accesos?: { modo: "of" | "completo"; dado: boolean; faltaPin?: boolean };
   slug: string;
   datosIniciales: DatosOnboarding;
   estadoInicial: Estado;
@@ -137,7 +137,7 @@ export function OnboardingForm({
   // Acceso de OnlyFans (modelos privadas): va cifrado a la agencia por su propia via, nunca dentro de las respuestas del perfil
   const [accDado, setAccDado] = useState(accesos?.dado ?? false);
   const [accCambiando, setAccCambiando] = useState(false);
-  const [acc, setAcc] = useState({ of_correo: "", of_password: "", sk_correo: "", sk_password_correo: "", sk_password: "" });
+  const [acc, setAcc] = useState({ of_correo: "", of_password: "", sk_correo: "", sk_password_correo: "", sk_password: "", sk_pin: "" });
   const [accVer, setAccVer] = useState(false);
   const accCompleto = accesos?.modo === "completo";
   const sucio = useRef(false);
@@ -259,7 +259,7 @@ export function OnboardingForm({
       const campos = accCompleto ? Object.values(acc) : [acc.of_correo, acc.of_password];
       if (campos.some((v) => !v.trim())) {
         setEnviando(false);
-        setMensajeEnvio({ ok: false, texto: accCompleto ? "Faltan tus accesos de OnlyFans y Skrill en este último paso." : "Falta tu acceso de OnlyFans (correo y contraseña) en este último paso." });
+        setMensajeEnvio({ ok: false, texto: accCompleto ? "Faltan tus accesos de OnlyFans y Skrill (con su PIN) en este último paso." : "Falta tu acceso de OnlyFans (correo y contraseña) en este último paso." });
         return;
       }
       try {
@@ -276,7 +276,7 @@ export function OnboardingForm({
         }
         setAccDado(true);
         setAccCambiando(false);
-        setAcc({ of_correo: "", of_password: "", sk_correo: "", sk_password_correo: "", sk_password: "" });
+        setAcc({ of_correo: "", of_password: "", sk_correo: "", sk_password_correo: "", sk_password: "", sk_pin: "" });
       } catch {
         setEnviando(false);
         setMensajeEnvio({ ok: false, texto: "No se pudieron guardar tus accesos. Revisa tu conexión e inténtalo otra vez." });
@@ -452,6 +452,7 @@ export function OnboardingForm({
                           <input type="email" value={acc.sk_correo} onChange={(e) => setAcc({ ...acc, sk_correo: e.target.value })} placeholder="Correo de Skrill" autoComplete="off" autoCapitalize="none" className="input-base h-12 w-full text-base" />
                           <input type={accVer ? "text" : "password"} value={acc.sk_password_correo} onChange={(e) => setAcc({ ...acc, sk_password_correo: e.target.value })} placeholder="Contraseña de ese correo" autoComplete="off" autoCapitalize="none" className="input-base h-12 w-full text-base" />
                           <input type={accVer ? "text" : "password"} value={acc.sk_password} onChange={(e) => setAcc({ ...acc, sk_password: e.target.value })} placeholder="Contraseña de Skrill" autoComplete="off" autoCapitalize="none" className="input-base h-12 w-full text-base" />
+                          <input type={accVer ? "text" : "password"} inputMode="numeric" value={acc.sk_pin} onChange={(e) => setAcc({ ...acc, sk_pin: e.target.value.replace(/\D/g, "").slice(0, 8) })} placeholder="PIN de Skrill (4 a 8 números)" autoComplete="off" className="input-base h-12 w-full text-base" />
                         </>
                       ) : null}
                       <button type="button" onClick={() => setAccVer((v) => !v)} className="text-xs font-semibold text-white/45 hover:text-white/70">{accVer ? "Ocultar contraseñas" : "Ver contraseñas"}</button>

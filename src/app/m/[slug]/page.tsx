@@ -3,7 +3,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { urlR2 } from "@/lib/media";
 import { LoginForm } from "./LoginForm";
-import { accesosCompletos } from "@/lib/accesosModelo";
+import { accesosCompletos, faltaPinSkrill } from "@/lib/accesosModelo";
 import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
 import { sanearDatos } from "@/lib/onboarding";
 import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
@@ -60,7 +60,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
   // El portal NUNCA se bloquea. Los accesos se piden dentro del formulario de su perfil (se guardan cifrados en el Vault):
   // modelos PRIVADAS (del dueño) -> solo OnlyFans; modelos COMPARTIDAS (con el socio) -> OnlyFans y Skrill.
   const modoAccesos: "of" | "completo" = modelo.ambito === "compartido" ? "completo" : "of";
-  const accesos = { modo: modoAccesos, dado: await accesosCompletos(modelo.id as string, modoAccesos) };
+  const accesos = { modo: modoAccesos, dado: await accesosCompletos(modelo.id as string, modoAccesos), faltaPin: modoAccesos === "completo" ? await faltaPinSkrill(modelo.id as string) : false };
 
   // Contenido de OnlyFans de esta modelo (si las tablas aun no existen, la pestaña no aparece)
   const [ofColRes, ofArcRes] = await Promise.all([

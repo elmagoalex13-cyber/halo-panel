@@ -19,7 +19,7 @@ import { avisosActividad } from "@/lib/actividad";
 import { ahoraMadrid, estadoSemanal } from "@/lib/rondaVirales";
 import { avisosSistema, leerSistema } from "@/lib/sistema";
 import { avisosCaptacion, resumenCaptacion } from "@/lib/captacion";
-import { modelosSinAccesos } from "@/lib/accesosModelo";
+import { modelosSinAccesos, modelosSinPin } from "@/lib/accesosModelo";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -123,7 +123,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal, avisosContrato] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null), avisosContratos()]);
+  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal, avisosContrato, sinPin] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null), avisosContratos(), modelosSinPin(await alcanceActual(grupo))]);
   const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
@@ -225,6 +225,10 @@ export default async function DashboardPage({
       : []),
     ...(sinAccesos.some((m) => !m.compartida)
       ? [{ id: `acc|privadas|${sinAccesos.filter((m) => !m.compartida).map((m) => m.nombre).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Falta el acceso de OnlyFans (en el formulario de su perfil) de: ${sinAccesos.filter((m) => !m.compartida).map((m) => m.nombre).join(", ")}`, href: "/modelos" }]
+      : []),
+    // Su Skrill ya esta pero sin el PIN (ahora se pide en el formulario; en su portal les sale un aviso)
+    ...(sinPin.length
+      ? [{ id: `pin|${sinPin.map((m) => m.nombre).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Falta el PIN de Skrill (en su portal ya les sale el aviso) de: ${sinPin.map((m) => m.nombre).join(", ")}`, href: "/vault" }]
       : []),
     ...(contenidoBajo.length > 0
       ? [

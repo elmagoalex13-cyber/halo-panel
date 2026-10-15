@@ -5,6 +5,7 @@ import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { alcanceActual, soloVisibles } from "@/lib/alcance";
 import type { VaultEntry } from "@/types";
 import { VaultClient } from "./VaultClient";
+import { leerChecks } from "@/lib/vaultChecks";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export default async function VaultPage() {
   const sesion = await sesionPanelActual();
   const esDueno = sesion?.dueno ?? false;
   const [{ entries, ambitoListo, papelera }, modelos] = await Promise.all([loadVaultEntries(esDueno), loadModelos()]);
+  const checks = await leerChecks(entries.map((e) => e.id)).catch(() => ({}));
 
   return (
     <PanelLayout>
@@ -59,7 +61,7 @@ export default async function VaultPage() {
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Vault</h1>
       </div>
       <GlassCard className="p-5">
-        <VaultClient entries={entries} modelos={modelos} esDueno={esDueno} ambitoListo={ambitoListo} papelera={papelera} />
+        <VaultClient entries={entries} modelos={modelos} esDueno={esDueno} ambitoListo={ambitoListo} papelera={papelera} checks={checks} />
       </GlassCard>
     </PanelLayout>
   );

@@ -9,6 +9,7 @@ import type { ColeccionOF } from "@/lib/onlyfans";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 import { GuiaOF, type ReferenciaVista } from "./GuiaOF";
 import { AvisosEquipo } from "./AvisosEquipo";
+import { AvisoPinSkrill } from "./AvisoPinSkrill";
 import { HistoriasIG } from "./HistoriasIG";
 import type { ProgresoCaptacion } from "@/lib/captacion";
 
@@ -264,7 +265,7 @@ export function PortalClient({
   telegram: { vinculado: boolean; url: string | null };
   guia: { packs: string; posts: string; referencias: ReferenciaVista[] };
   captacion: { progreso: ProgresoCaptacion; reelsAbiertos: boolean } | null;
-  accesos: { modo: "of" | "completo"; dado: boolean };
+  accesos: { modo: "of" | "completo"; dado: boolean; faltaPin?: boolean };
   nombre: string;
   slug: string;
   pendientes: Pendiente[];
@@ -402,6 +403,8 @@ export function PortalClient({
           </a>
         </section>
       ) : null}
+
+      {accesos.faltaPin ? <AvisoPinSkrill /> : null}
 
       <TarjetaOnboarding datos={onboardingDatos} estado={onboardingEstado} onAbrir={() => setOnboardingAbierto(true)} />
 

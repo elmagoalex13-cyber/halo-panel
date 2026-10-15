@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
-import { accesosCompletos, guardarAccesoOF, guardarAccesosModelo, validarAccesos } from "@/lib/accesosModelo";
+import { accesosCompletos, anadirPinSkrill, faltaPinSkrill, guardarAccesoOF, guardarAccesosModelo, PIN_VALIDO, validarAccesos } from "@/lib/accesosModelo";
 import { encolarTelegram } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,24 @@ export async function GET() {
   const sesion = await sesionActual();
   if (!sesion) return NextResponse.json({ error: "Sesion caducada" }, { status: 401 });
   const [completo, of] = await Promise.all([accesosCompletos(sesion.modeloId), accesosCompletos(sesion.modeloId, "of")]);
-  return NextResponse.json({ completo, of });
+  return NextResponse.json({ completo, of, faltaPin: await faltaPinSkrill(sesion.modeloId) });
+}
+
+// PATCH { sk_pin }: la modelo que ya envio su Skrill sin PIN lo añade ahora
+export async function PATCH(req: NextRequest) {
+  const sesion = await sesionActual();
+  if (!sesion) return NextResponse.json({ error: "Sesion caducada" }, { status: 401 });
+  if (!canUseSupabase()) return NextResponse.json({ error: "Servicio no disponible" }, { status: 503 });
+  const raw = (await req.json().catch(() => null)) as { sk_pin?: unknown } | null;
+  const pin = typeof raw?.sk_pin === "string" ? raw.sk_pin.replace(/\s/g, "") : "";
+  if (!PIN_VALIDO.test(pin)) return NextResponse.json({ error: "El PIN de Skrill son entre 4 y 8 números" }, { status: 400 });
+  try {
+    await anadirPinSkrill(sesion.modeloId, pin);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo guardar el PIN" }, { status: 400 });
+  }
+  await encolarTelegram("accesos", sesion.modeloId, { actualizacion: true, pin: true });
+  return NextResponse.json({ ok: true });
 }
 
 export async function PUT(req: NextRequest) {

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { soloVisibles, type Alcance } from "@/lib/alcance";
-import { encryptVaultValue } from "@/lib/vault/crypto";
+import { decryptVaultValue, encryptVaultValue } from "@/lib/vault/crypto";
 
 // ACCESOS de cada modelo (OnlyFans y Skrill): los rellena ella en su portal (obligatorio) y se guardan CIFRADOS en el Vault:
 // en el baul compartido si la modelo es compartida, y en el del dueño si es privada. No pasan por el onboarding (que guarda
@@ -8,6 +8,7 @@ import { encryptVaultValue } from "@/lib/vault/crypto";
 
 export const PREFIJO_OF = "OnlyFans · ";
 export const PREFIJO_SKRILL = "Skrill · ";
+const LINEA_PIN = "PIN de Skrill: ";
 
 export type DatosAccesos = {
   of_correo: string;
@@ -15,10 +16,12 @@ export type DatosAccesos = {
   sk_correo: string;
   sk_password_correo: string;
   sk_password: string;
+  sk_pin: string;
 };
 
 const limpiar = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const PIN_VALIDO = /^\d{4,8}$/;
 
 /** Valida y limpia lo que envia la modelo. `modo: "of"` = solo OnlyFans (las modelos privadas); si no, OnlyFans y Skrill (compartidas). */
 export function validarAccesos(raw: unknown, modo: "completo" | "of" = "completo"): { datos?: DatosAccesos; error?: string } {
@@ -29,6 +32,7 @@ export function validarAccesos(raw: unknown, modo: "completo" | "of" = "completo
     sk_correo: limpiar(s.sk_correo),
     sk_password_correo: limpiar(s.sk_password_correo),
     sk_password: limpiar(s.sk_password),
+    sk_pin: limpiar(s.sk_pin, 12).replace(/\s/g, ""),
   };
   if (!CORREO.test(d.of_correo)) return { error: "El correo de OnlyFans no es válido" };
   if (!d.of_password) return { error: "Falta la contraseña de OnlyFans" };
@@ -36,6 +40,7 @@ export function validarAccesos(raw: unknown, modo: "completo" | "of" = "completo
   if (!CORREO.test(d.sk_correo)) return { error: "El correo de Skrill no es válido" };
   if (!d.sk_password_correo) return { error: "Falta la contraseña del correo de Skrill" };
   if (!d.sk_password) return { error: "Falta la contraseña de Skrill" };
+  if (!PIN_VALIDO.test(d.sk_pin)) return { error: "El PIN de Skrill son entre 4 y 8 números" };
   return { datos: d };
 }
 
@@ -50,6 +55,7 @@ async function guardarEntrada(modeloId: string, nombre: string, categoria: strin
     let r = await db.from("vault_panel").update({ ...fila, ambito, eliminada_at: null, eliminada_por: null, updated_at: new Date().toISOString() }).eq("id", existente.id);
     if (r.error) r = await db.from("vault_panel").update({ ...fila, updated_at: new Date().toISOString() }).eq("id", existente.id);
     if (r.error) throw new Error(r.error.message);
+    await db.from("panel_config").delete().eq("key", `vault_checks:${existente.id}`); // datos nuevos: hay que volver a comprobar el acceso
   } else {
     let r = await db.from("vault_panel").insert({ ...fila, ambito });
     if (r.error) r = await db.from("vault_panel").insert(fila);
@@ -71,8 +77,63 @@ export async function guardarAccesosModelo(modeloId: string, nombreModelo: strin
     "banco",
     "Enviado por la modelo desde su portal",
     ambito,
-    `Correo de Skrill: ${d.sk_correo}\nContraseña del correo: ${d.sk_password_correo}\nContraseña de Skrill: ${d.sk_password}`,
+    `Correo de Skrill: ${d.sk_correo}\nContraseña del correo: ${d.sk_password_correo}\nContraseña de Skrill: ${d.sk_password}\n${LINEA_PIN}${d.sk_pin}`,
   );
+}
+
+async function entradaSkrill(modeloId: string) {
+  const { data } = await createAdminClient().from("vault_panel").select("id, encrypted_blob, iv").eq("modelo_id", modeloId).like("nombre", `${PREFIJO_SKRILL}%`).is("eliminada_at", null).limit(1).maybeSingle();
+  return data as { id: string; encrypted_blob: string; iv: string } | null;
+}
+
+/** Añade (o cambia) el PIN de Skrill en la entrada de Skrill que la modelo ya habia enviado sin el. */
+export async function anadirPinSkrill(modeloId: string, pin: string) {
+  const e = await entradaSkrill(modeloId);
+  if (!e) throw new Error("Primero hacen falta tus accesos de Skrill");
+  const texto = decryptVaultValue(e.encrypted_blob, e.iv)
+    .split("\n")
+    .filter((l) => !l.startsWith(LINEA_PIN))
+    .join("\n")
+    .trimEnd();
+  const cifrado = encryptVaultValue(`${texto}\n${LINEA_PIN}${pin}`);
+  const { error } = await createAdminClient().from("vault_panel").update({ ...cifrado, updated_at: new Date().toISOString() }).eq("id", e.id);
+  if (error) throw new Error(error.message);
+}
+
+const lineaTienePin = (texto: string) => texto.split("\n").some((l) => l.startsWith(LINEA_PIN) && l.slice(LINEA_PIN.length).trim().length > 0);
+
+/** Skrill ya enviado pero sin PIN? (true = falta el PIN; false = lo tiene o aun no hay Skrill). */
+export async function faltaPinSkrill(modeloId: string): Promise<boolean> {
+  try {
+    const e = await entradaSkrill(modeloId);
+    return e ? !lineaTienePin(decryptVaultValue(e.encrypted_blob, e.iv)) : false;
+  } catch {
+    return false;
+  }
+}
+
+/** Modelos compartidas que ya enviaron su Skrill pero NO el PIN (se les avisa en su portal y en el dashboard). */
+export async function modelosSinPin(alcance: Alcance): Promise<Array<{ id: string; nombre: string }>> {
+  try {
+    const db = createAdminClient();
+    const { data: modelos } = await soloVisibles(db.from("modelos").select("id, nombre").eq("activa", true).eq("ambito", "compartido").not("portal_token", "is", null), alcance, "id");
+    if (!modelos?.length) return [];
+    const { data: entradas } = await db.from("vault_panel").select("modelo_id, encrypted_blob, iv").in("modelo_id", modelos.map((m) => m.id)).like("nombre", `${PREFIJO_SKRILL}%`).is("eliminada_at", null);
+    const conSkrill = new Map((entradas ?? []).map((e) => [e.modelo_id as string, e]));
+    return modelos
+      .filter((m) => {
+        const e = conSkrill.get(m.id as string);
+        if (!e) return false; // aun no ha dado el Skrill: ya sale en «faltan los accesos»
+        try {
+          return !lineaTienePin(decryptVaultValue(e.encrypted_blob as string, e.iv as string));
+        } catch {
+          return false;
+        }
+      })
+      .map((m) => ({ id: m.id as string, nombre: m.nombre as string }));
+  } catch {
+    return [];
+  }
 }
 
 /** ¿Ha dado ya sus accesos? `solo: "of"` = basta con OnlyFans. Si la tabla/columna no esta lista, se da por completo para no bloquear a nadie. */
