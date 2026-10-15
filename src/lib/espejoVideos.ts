@@ -1,13 +1,15 @@
-// «Vídeos al día»: una modelo marcada así (las nuevas, al firmar el contrato) recibe automaticamente en su portal los ULTIMOS 40 videos que se hayan
-// asignado a las demas modelos y, a partir de ahi, cada video nuevo que se les asigne. El trabajo lo hace el editor (runner/src/espejo.mjs) cada minuto;
-// aqui solo se apunta quien esta en la lista. Vive en panel_config (clave modelos_espejo), con «comparar y cambiar» para no pisarse.
+// «Vídeos de bienvenida»: UNA SOLA VEZ, una hora despues de firmar el contrato, a la modelo nueva se le asignan en su portal los ULTIMOS 40 videos que se hayan
+// asignado a las demas modelos EN ESE MOMENTO. Despues no se le copia nada mas (lo que se asigne luego a otras no le llega). El trabajo lo hace el editor
+// (runner/src/espejo.mjs); aqui solo se apunta a la modelo y la hora a la que le toca. Vive en panel_config (clave modelos_espejo) con «comparar y cambiar».
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const CLAVE_ESPEJO = "modelos_espejo";
 export const ULTIMOS_VIDEOS = 40;
+export const RETRASO_MIN = 60; // una hora despues de firmar
 
-/** desde = hasta que asignacion ya se ha copiado (null = aun no); inicial = falta copiar los ultimos 40. */
-export type EntradaEspejo = { id: string; desde: string | null; inicial: boolean };
+/** due = cuando le toca; hecho_at / n = cuando se le asignaron y cuantos (cuando ya esta hecho). */
+export type EntradaEspejo = { id: string; due: string; hecho_at?: string | null; n?: number | null };
+export type EstadoEspejo = { estado: "pendiente" | "hecho" | null; due?: string; hecho_at?: string | null; n?: number | null };
 
 async function leer(): Promise<{ entradas: EntradaEspejo[]; updated_at: string | null }> {
   const { data } = await createAdminClient().from("panel_config").select("value, updated_at").eq("key", CLAVE_ESPEJO).maybeSingle();
@@ -34,19 +36,23 @@ async function cambiar(fn: (e: EntradaEspejo[]) => EntradaEspejo[] | null): Prom
   return false;
 }
 
-export async function enEspejo(modeloId: string): Promise<boolean> {
+export async function estadoEspejo(modeloId: string): Promise<EstadoEspejo> {
   try {
-    return (await leer()).entradas.some((e) => e.id === modeloId);
+    const e = (await leer()).entradas.find((x) => x.id === modeloId);
+    if (!e) return { estado: null };
+    return e.hecho_at ? { estado: "hecho", due: e.due, hecho_at: e.hecho_at, n: e.n ?? null } : { estado: "pendiente", due: e.due };
   } catch {
-    return false;
+    return { estado: null };
   }
 }
 
-/** Apunta a la modelo: en menos de un minuto tendra los ultimos 40 videos asignados a las demas, y despues los nuevos. */
-export async function registrarEspejo(modeloId: string): Promise<boolean> {
-  return cambiar((l) => (l.some((e) => e.id === modeloId) ? null : [...l, { id: modeloId, desde: null, inicial: true }]));
+/** Apunta a la modelo: pasados `minutos`, se le asignan los ultimos 40 videos asignados a las demas (una sola vez). Si ya estaba apuntada y hecha, se vuelve a programar. */
+export async function registrarEspejo(modeloId: string, minutos = RETRASO_MIN): Promise<boolean> {
+  const due = new Date(Date.now() + minutos * 60000).toISOString();
+  return cambiar((l) => [...l.filter((e) => e.id !== modeloId), { id: modeloId, due }]);
 }
 
+/** Cancela lo pendiente (no toca lo que ya se le asigno). */
 export async function quitarEspejo(modeloId: string): Promise<boolean> {
-  return cambiar((l) => (l.some((e) => e.id === modeloId) ? l.filter((e) => e.id !== modeloId) : null));
+  return cambiar((l) => (l.some((e) => e.id === modeloId && !e.hecho_at) ? l.filter((e) => !(e.id === modeloId && !e.hecho_at)) : null));
 }

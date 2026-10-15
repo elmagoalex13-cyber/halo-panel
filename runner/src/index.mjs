@@ -92,9 +92,9 @@ setTimeout(() => cicloFrasesReferencia(supabase), 20000);
 setInterval(() => cicloFrasesReferencia(supabase), 30000);
 setTimeout(() => cicloPedidosMusica(supabase), 25000);
 setInterval(() => cicloPedidosMusica(supabase), 20000);
-// Modelos «videos al dia» (las nuevas al firmar): los ultimos 40 asignados a las demas y, despues, cada video nuevo que se les asigne
+// Videos de bienvenida: una hora despues de firmar, a la modelo nueva se le asignan (una sola vez) los ultimos 40 videos asignados a las demas
 setTimeout(() => cicloEspejo(supabase), 35000);
-setInterval(() => cicloEspejo(supabase), 60000);
+setInterval(() => cicloEspejo(supabase), 300000);
 
 // Vistas previas (miniatura + copia ligera) de los originales de las modelos, para la pagina Originales del panel
 setTimeout(() => cicloPreviews(supabase), 25000);
