@@ -37,6 +37,8 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   const [progreso, setProgreso] = useState("");
   const [elegidas, setElegidas] = useState<string[]>([]);
   const [nota, setNota] = useState("");
+  const [rapidoN, setRapidoN] = useState(30); // asignacion rapida: cuantos de los ultimos aprobados
+  const [rapidoA, setRapidoA] = useState("todas"); // ... y a quien: una modelo o «todas»
   const [cargando, setCargando] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
@@ -129,11 +131,12 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   }
 
   // Asigna los videos elegidos a las modelos elegidas, en tandas pequenas (cada video con el tipo que ya tiene)
-  async function aprobar() {
-    if (!enviando?.length) return;
+  async function aprobar(listaArg?: ReferenciaVideo[], modelosArg?: string[]) {
+    const lista = listaArg ?? enviando;
+    const destino = modeloIdsArg(modelosArg);
+    if (!lista?.length || !destino.length) return;
     setCargando(true);
     setMsg(null);
-    const lista = enviando;
     let videosOk = 0;
     let encargos = 0;
     let yaTenian = 0;
@@ -145,7 +148,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
         const res = await fetch("/api/referencias/videos/asignar-lote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ video_ids: tanda.map((v) => v.id), modelo_ids: elegidas, instrucciones: nota }),
+          body: JSON.stringify({ video_ids: tanda.map((v) => v.id), modelo_ids: destino, instrucciones: listaArg ? "" : nota }),
         });
         const j = (await res.json().catch(() => ({}))) as { error?: string; videos?: number; ok_ids?: string[]; encargos?: number; ya_tenian?: number; fallos?: Array<{ error: string }> };
         if (!res.ok) throw new Error(j.error ?? "No se pudo enviar");
@@ -168,6 +171,30 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
       setProgreso("");
       setCargando(false);
     }
+  }
+
+  // Si no se pasan modelos se usan las elegidas en el dialogo
+  function modeloIdsArg(arg?: string[]) {
+    return arg ?? elegidas;
+  }
+
+  // Los ultimos aprobados que se pueden asignar (los de frases con musica solo van al banco), del mas reciente al mas antiguo
+  const ultimosAprobados = useMemo(
+    () =>
+      videos
+        .filter((v) => estadoDe(v) === "aprobado" && tipoDe(v) && metricasDe(v).categoria !== "frases")
+        .sort((a, b) => new Date(b.confirmado_at ?? 0).getTime() - new Date(a.confirmado_at ?? 0).getTime()),
+    [videos],
+  );
+
+  // Asignacion rapida: los ultimos N aprobados a una modelo o a todas (a quien ya tenga un video no se le repite)
+  function asignarRapido() {
+    const lista = ultimosAprobados.slice(0, rapidoN);
+    const destino = rapidoA === "todas" ? modelos.map((m) => m.id) : [rapidoA];
+    if (!lista.length || !destino.length) return;
+    const quien = rapidoA === "todas" ? `a las ${destino.length} modelos` : `a ${nombreModelo.get(rapidoA) ?? "esa modelo"}`;
+    if (!window.confirm(`¿Asignar los últimos ${lista.length} vídeos aprobados ${quien}? A quien ya tenga alguno no se le repite.`)) return;
+    void aprobar(lista, destino);
   }
 
   // Videos de «frases con musica»: aprobarlos NO es asignarlos a una modelo, es guardar su frase (con su colocacion) y su musica en el banco de frases.
@@ -237,6 +264,32 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
           </select>
         </div>
       </div>
+      {vista === "aprobado" && ultimosAprobados.length ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.05] px-3 py-2 text-xs">
+          <span className="font-semibold text-emerald-300">⚡ Asignar rápido</span>
+          <span className="text-white/45">los últimos</span>
+          <select value={rapidoN} onChange={(e) => setRapidoN(Number(e.target.value))} disabled={cargando} className="input-base py-1 text-xs">
+            {[20, 30, 40].map((n) => (
+              <option key={n} value={n}>
+                {n} vídeos aprobados
+              </option>
+            ))}
+          </select>
+          <span className="text-white/45">a</span>
+          <select value={rapidoA} onChange={(e) => setRapidoA(e.target.value)} disabled={cargando} className="input-base py-1 text-xs">
+            <option value="todas">Todas las modelos ({modelos.length})</option>
+            {modelos.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nombre}
+              </option>
+            ))}
+          </select>
+          <button onClick={asignarRapido} disabled={cargando || !modelos.length} className="rounded-lg bg-emerald-500/20 px-3 py-1.5 font-semibold text-emerald-200 transition hover:bg-emerald-500/30 disabled:opacity-40">
+            {cargando ? progreso || "Asignando…" : "Asignar"}
+          </button>
+          <span className="text-white/30">Si ya los tiene no se repiten; solo se envía lo que le falte.</span>
+        </div>
+      ) : null}
       {vista !== "descartado" && seleccionables.length ? (
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <button
@@ -487,7 +540,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
               <button onClick={() => setEnviando(null)} className="btn-secondary px-4 py-2 text-sm">
                 Cancelar
               </button>
-              <button onClick={aprobar} disabled={cargando || !elegidas.length} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">
+              <button onClick={() => void aprobar()} disabled={cargando || !elegidas.length} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">
                 {cargando ? progreso || "Enviando..." : `Aprobar y enviar a ${elegidas.length || ""}`}
               </button>
             </div>
