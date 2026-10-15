@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import { GUIA_SCRIPT } from "@/lib/guiaOF";
-import { SubirFotoPerfil, type FotoSubida } from "./SubirFotoPerfil";
 
 export type ReferenciaVista = { id: string; categoria: "post" | "pack" | "script_ejemplo"; titulo: string | null; tipo_archivo: "foto" | "video"; vista: string | null };
 
@@ -65,7 +64,7 @@ function Galeria({ items }: { items: ReferenciaVista[] }) {
 }
 
 /** Foto de referencia de perfil/banner: se ve pequeña y al tocarla se amplia (para verla bien). */
-function FotoEjemplo({ src, alt, clase }: { src: string; alt: string; clase: string }) {
+export function FotoEjemplo({ src, alt, clase }: { src: string; alt: string; clase: string }) {
   const [grande, setGrande] = useState(false);
   return (
     <>
@@ -90,8 +89,7 @@ function FotoEjemplo({ src, alt, clase }: { src: string; alt: string; clase: str
 const lineas = (t: string) => t.split("\n").map((l) => l.replace(/^[-•]\s*/, "").trim()).filter(Boolean);
 
 /** Guía para las modelos: scripts (texto fijo, tal cual el documento), packs y posts (textos que edita la agencia) y fotos/vídeos de ejemplo. */
-export function GuiaOF({ packs, posts, referencias, fotosPerfil }: { packs: string; posts: string; referencias: ReferenciaVista[]; fotosPerfil: { perfil: FotoSubida | null; banner: FotoSubida | null } }) {
-  const [fotos, setFotos] = useState(fotosPerfil);
+export function GuiaOF({ packs, posts, referencias, onIrASubirFotos }: { packs: string; posts: string; referencias: ReferenciaVista[]; onIrASubirFotos?: () => void }) {
   const g = GUIA_SCRIPT;
   const de = (c: ReferenciaVista["categoria"]) => referencias.filter((r) => r.categoria === c);
   const textoPacks = lineas(packs);
@@ -104,7 +102,7 @@ export function GuiaOF({ packs, posts, referencias, fotosPerfil }: { packs: stri
         <span className="font-semibold text-white">exactamente como está escrita</span>: la duración de los vídeos y la cantidad de fotos y vídeos de cada fase tienen que ser las que se piden, sin cambiar nada.
       </p>
 
-      <Bloque titulo={`🤳 Foto de perfil y foto de banner${fotos.perfil && fotos.banner ? " ✓" : " · te falta subirlas"}`}>
+      <Bloque titulo="🤳 Foto de perfil y foto de banner">
         <p className="text-[15px] leading-relaxed text-white/80">
           Necesitamos <span className="font-semibold text-white">dos fotos tuyas</span> para tu perfil: una de perfil y una horizontal para el banner. Tienen que verse{" "}
           <span className="font-semibold text-white">con mucha calidad y que se te vea muy bien la cara</span>. Tienen que ser{" "}
@@ -123,9 +121,6 @@ export function GuiaOF({ packs, posts, referencias, fotosPerfil }: { packs: stri
                   "Hecha con el aro de luz, de frente, para que se te vea la cara muy bien iluminada.",
                 ]}
               />
-              <div className="mt-3">
-                <SubirFotoPerfil tipo="perfil" actual={fotos.perfil} onSubida={(f) => setFotos((p) => ({ ...p, perfil: f }))} />
-              </div>
             </div>
           </div>
         </div>
@@ -142,9 +137,6 @@ export function GuiaOF({ packs, posts, referencias, fotosPerfil }: { packs: stri
                   "Hecha también con el aro de luz y con el fondo ordenado.",
                 ]}
               />
-              <div className="mt-3">
-                <SubirFotoPerfil tipo="banner" actual={fotos.banner} onSubida={(f) => setFotos((p) => ({ ...p, banner: f }))} />
-              </div>
             </div>
           </div>
         </div>
@@ -154,9 +146,14 @@ export function GuiaOF({ packs, posts, referencias, fotosPerfil }: { packs: stri
           <Lista
             puntos={[
               "Hechas con el móvil, bien enfocadas, sin filtros y sin capturas de pantalla.",
-              "Súbelas aquí mismo: llegan tal cual las hiciste, sin perder calidad. Si te equivocas, puedes cambiarlas cuando quieras.",
+              "Las subes en la pestaña «Contenido OnlyFans»: llegan tal cual las hiciste, sin perder calidad. Si te equivocas, puedes cambiarlas cuando quieras.",
             ]}
           />
+          {onIrASubirFotos ? (
+            <button type="button" onClick={onIrASubirFotos} className="mt-1 flex min-h-11 w-full items-center justify-center rounded-xl bg-[#8B5CF6] px-4 text-sm font-semibold text-white transition hover:bg-[#7C3AED]">
+              Ir a subir mis fotos
+            </button>
+          ) : null}
         </div>
       </Bloque>
 

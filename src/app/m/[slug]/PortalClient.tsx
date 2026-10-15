@@ -8,7 +8,7 @@ import { OnlyFansPortal, type ArchivoVista } from "./OnlyFansPortal";
 import type { ColeccionOF } from "@/lib/onlyfans";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 import { GuiaOF, type ReferenciaVista } from "./GuiaOF";
-import type { FotoSubida } from "./SubirFotoPerfil";
+import { FotosPerfilSubida, type FotosPerfilEstado } from "./FotosPerfilSubida";
 import { AvisosEquipo } from "./AvisosEquipo";
 import { AvisoPinSkrill } from "./AvisoPinSkrill";
 import { AvisoAccesosInvalidos } from "./AvisoAccesosInvalidos";
@@ -267,7 +267,7 @@ export function PortalClient({
   avisosEquipo: Array<{ id: string; items: Array<{ tipo: string; cantidad?: number }>; texto: string | null; created_at: string }>;
   telegram: { vinculado: boolean; url: string | null };
   guia: { packs: string; posts: string; referencias: ReferenciaVista[] };
-  fotosPerfil: { perfil: FotoSubida | null; banner: FotoSubida | null };
+  fotosPerfil: FotosPerfilEstado;
   captacion: { progreso: ProgresoCaptacion; reelsAbiertos: boolean } | null;
   accesos: { modo: "of" | "completo"; dado: boolean; faltaPin?: boolean; invalidos?: Array<"of" | "skrill"> };
   nombre: string;
@@ -289,6 +289,12 @@ export function PortalClient({
   }, []);
 
   const [pestana, setPestana] = useState<Pestana>("grabar");
+  const [fotos, setFotos] = useState<FotosPerfilEstado>(fotosPerfil);
+  const fotosCompletas = Boolean(fotos.perfil && fotos.banner);
+  const irAFotos = () => {
+    setPestana(contenidoOF ? "contenido" : "subir");
+    setTimeout(() => document.getElementById("fotos-perfil")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  };
   const [filtroTipo, setFiltroTipo] = useState<number | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState(false);
   const [videoAbierto, setVideoAbierto] = useState<Pendiente | null>(null);
@@ -332,9 +338,9 @@ export function PortalClient({
         <section className="rounded-2xl border border-[#8B5CF6]/35 bg-[#8B5CF6]/10 p-4">
           <p className="font-display text-lg font-semibold text-white">🎯 Para empezar a trabajar contigo</p>
           <p className="mt-1 text-sm leading-relaxed text-white/60">
-            {captacion.progreso.cumplido
+            {captacion.progreso.cumplido && fotosCompletas
               ? "¡Ya cumples todo lo que necesitamos! Lo estamos revisando y pronto te contamos los siguientes pasos."
-              : "Antes de crearte la cuenta de Instagram necesitamos estas dos cosas de ti:"}
+              : "Antes de crearte la cuenta de Instagram necesitamos estas cosas de ti:"}
           </p>
 
           {(() => {
@@ -377,6 +383,15 @@ export function PortalClient({
                     <p className="text-xs text-white/45">Mira la pestaña «Guía OnlyFans»: explica cómo hacerlos y tienes que seguirla exactamente. Se suben en «Contenido OnlyFans».</p>
                   </div>
                 ) : null}
+                <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                  <p className="text-sm font-semibold text-[#C4B5FD]">📸 {p.reels.obj !== null && hayOF ? "3" : hayOF || p.reels.obj !== null ? "2" : "1"}. Foto de perfil y foto de banner</p>
+                  <Barra nombre="Fotos subidas" n={Number(Boolean(fotos.perfil)) + Number(Boolean(fotos.banner))} obj={2} />
+                  {fotosCompletas ? null : (
+                    <button type="button" onClick={irAFotos} className="flex min-h-11 w-full items-center justify-center rounded-xl bg-[#8B5CF6] px-4 text-sm font-semibold text-white transition hover:bg-[#7C3AED]">
+                      Subir mis fotos
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })()}
@@ -405,6 +420,18 @@ export function PortalClient({
           <a href={telegram.url} target="_blank" rel="noreferrer" className="btn-primary shrink-0 px-4 py-2.5 text-sm">
             Activar avisos en Telegram
           </a>
+        </section>
+      ) : null}
+
+      {!captacion && !fotosCompletas ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#8B5CF6]/35 bg-[#8B5CF6]/10 p-4">
+          <div className="min-w-0">
+            <p className="font-semibold text-white">📸 Te falta subir tu foto de perfil y tu banner</p>
+            <p className="text-sm text-white/55">Son dos fotos tuyas con mucha calidad, como las de ejemplo.</p>
+          </div>
+          <button type="button" onClick={irAFotos} className="btn-primary shrink-0 px-4 py-2.5 text-sm">
+            Subir mis fotos
+          </button>
         </section>
       ) : null}
 
@@ -582,7 +609,7 @@ export function PortalClient({
         </section>
       ) : null}
 
-      {pestana === "guia" ? <GuiaOF packs={guia.packs} posts={guia.posts} referencias={guia.referencias} fotosPerfil={fotosPerfil} /> : null}
+      {pestana === "guia" ? <GuiaOF packs={guia.packs} posts={guia.posts} referencias={guia.referencias} onIrASubirFotos={irAFotos} /> : null}
 
       {pestana === "historias" ? <HistoriasIG /> : null}
 
@@ -591,6 +618,7 @@ export function PortalClient({
           🔞 <b>Contenido de OnlyFans</b>: aquí subes tus scripts, packs de fotos y posts para OnlyFans, siguiendo la pestaña «Guía OnlyFans». Las fotos de historias de Instagram van en «Historias IG» y los reels en «Subir vídeos».
         </p>
       ) : null}
+      {pestana === "contenido" || (pestana === "subir" && !contenidoOF) ? <FotosPerfilSubida fotos={fotos} onCambio={setFotos} /> : null}
       {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} /> : null}
 
       {reelAbierto?.preview ? (
