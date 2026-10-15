@@ -5,7 +5,8 @@ import Link from "next/link";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { ETIQUETA_TIPO, formatoTamano, type TipoColeccion } from "@/lib/onlyfans";
 import type { ResumenColeccion } from "@/lib/ofResumen";
-import type { FotoPerfilVista } from "@/lib/fotosPerfil";
+import type { FotosPerfilVistas } from "@/lib/fotosPerfil";
+import { FotosPerfilModelo } from "@/components/FotosPerfilPanel";
 import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 export function OnlyFansClient({
@@ -15,7 +16,7 @@ export function OnlyFansClient({
   tipoInicial,
   estadoInicial,
   ambitoInicial,
-  fotosPerfil,
+  fotosPerfil: fotosPerfilInicial,
   sinFiltroModelo = false,
   esDueno = false,
   ambitos = {},
@@ -28,11 +29,12 @@ export function OnlyFansClient({
   tipoInicial?: string;
   estadoInicial?: string;
   ambitoInicial?: string;
-  fotosPerfil?: Record<string, { perfil: FotoPerfilVista | null; banner: FotoPerfilVista | null }>; // si viene, sale la pestaña «Perfil y banner»
+  fotosPerfil?: Record<string, FotosPerfilVistas>; // si viene, sale la pestaña «Perfil y banner»
   sinFiltroModelo?: boolean; // dentro de la ficha de una modelo ya esta filtrado
 }) {
   // La lista vive en el cliente: borrar, renombrar, marcar o anotar actualiza la tarjeta en su sitio, sin recargar nada
   const [lista, setLista] = useState<ResumenColeccion[]>(coleccionesTodas);
+  const [fotosPerfil, setFotosPerfil] = useState(fotosPerfilInicial);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [panel, setPanel] = useState<{ id: string; tipo: "renombrar" | "nota"; texto: string } | null>(null);
@@ -185,7 +187,7 @@ export function OnlyFansClient({
       </div>
 
       {verPerfil && fotosPerfil ? (
-        <PerfilYBanner modelos={modelos.filter((m) => modeloActivo === "todas" || m.id === modeloActivo)} fotos={fotosPerfil} />
+        <PerfilYBanner modelos={modelos.filter((m) => modeloActivo === "todas" || m.id === modeloActivo)} fotos={fotosPerfil} onCambio={(id, f) => setFotosPerfil((p) => ({ ...(p ?? {}), [id]: f }))} />
       ) : visibles.length === 0 ? (
         <div className="grid min-h-[30vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 text-center text-sm text-white/35">
           {colecciones.length === 0 ? "Todavía no han subido nada. Las modelos lo hacen desde su portal, en la pestaña «Contenido OnlyFans»." : "Nada con esos filtros."}
@@ -283,35 +285,19 @@ export function OnlyFansClient({
   );
 }
 
-const fechaCorta = (iso: string) => new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "Europe/Madrid" });
-const tamano = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
-
-function FotoUna({ titulo, foto, clase }: { titulo: string; foto: FotoPerfilVista | null | undefined; clase: string }) {
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">{titulo}</p>
-      {foto ? (
-        <>
-          <a href={foto.vista} target="_blank" rel="noreferrer" title="Ver en grande" className={`block overflow-hidden rounded-lg border border-white/10 bg-black/30 ${clase}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={foto.vista} alt={titulo} loading="lazy" className="h-full w-full object-cover" />
-          </a>
-          <p className="text-[11px] text-white/40">{fechaCorta(foto.at)} · {tamano(foto.size)}</p>
-          <div className="flex gap-3 text-xs font-semibold">
-            <a href={foto.vista} target="_blank" rel="noreferrer" className="text-[#A78BFA] hover:underline">Ver en grande</a>
-            <a href={foto.descarga} className="text-[#A78BFA] hover:underline">Descargar original</a>
-          </div>
-        </>
-      ) : (
-        <div className={`grid place-items-center rounded-lg border border-dashed border-white/10 px-2 text-center text-xs text-white/30 ${clase}`}>Pendiente de subir</div>
-      )}
-    </div>
-  );
-}
-
 /** Foto de perfil y banner que ha subido cada modelo desde su portal: las que ya las tienen primero, las pendientes al final. */
-function PerfilYBanner({ modelos, fotos }: { modelos: Array<{ id: string; nombre: string; foto: number | null }>; fotos: Record<string, { perfil: FotoPerfilVista | null; banner: FotoPerfilVista | null }> }) {
-  const n = (id: string) => Number(Boolean(fotos[id]?.perfil)) + Number(Boolean(fotos[id]?.banner));
+function PerfilYBanner({
+  modelos,
+  fotos,
+  onCambio,
+}: {
+  modelos: Array<{ id: string; nombre: string; foto: number | null }>;
+  fotos: Record<string, FotosPerfilVistas>;
+  onCambio: (id: string, f: FotosPerfilVistas) => void;
+}) {
+  const vacias: FotosPerfilVistas = { perfil: null, banner: null, pedir: { perfil: null, banner: null } };
+  const de = (id: string) => fotos[id] ?? vacias;
+  const n = (id: string) => Number(Boolean(de(id).perfil)) + Number(Boolean(de(id).banner));
   const ordenadas = [...modelos].sort((a, b) => n(b.id) - n(a.id) || a.nombre.localeCompare(b.nombre, "es"));
   if (!ordenadas.length) return <div className="grid min-h-[20vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] text-sm text-white/35">No hay modelos.</div>;
   return (
@@ -325,10 +311,7 @@ function PerfilYBanner({ modelos, fotos }: { modelos: Array<{ id: string; nombre
               {n(m.id) === 2 ? "Completas" : n(m.id) === 1 ? "Falta 1" : "Sin subir"}
             </span>
           </div>
-          <div className="grid grid-cols-[6.5rem_1fr] gap-3">
-            <FotoUna titulo="Perfil" foto={fotos[m.id]?.perfil} clase="aspect-[3/4] w-[6.5rem]" />
-            <FotoUna titulo="Banner" foto={fotos[m.id]?.banner} clase="aspect-[4/3] w-full max-w-[13rem]" />
-          </div>
+          <FotosPerfilModelo modeloId={m.id} fotos={de(m.id)} onCambio={(f) => onCambio(m.id, f)} />
         </div>
       ))}
     </div>

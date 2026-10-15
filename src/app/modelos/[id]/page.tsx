@@ -179,7 +179,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion, encargos, porEstado, totalVideos, onboarding, onboardingHistorial, fotoVersion } = data;
   const onboardingDatos = sanearDatos(onboarding?.datos ?? {});
   const bienvenida = await estadoEspejo(modelo.id);
-  const fotosPerfil = await vistasFotosPerfil(modelo.id).catch(() => ({ perfil: null, banner: null }));
+  const fotosPerfil = await vistasFotosPerfil(modelo.id).catch(() => ({ perfil: null, banner: null, pedir: { perfil: null, banner: null } }));
   const notasModelo = ordenarNotas((await leerNotas(modelo.id).catch(() => ({ notas: [] }))).notas);
   const pendientes = encargos.filter((e) => e.estado !== "entregado");
   const facturacionMes = facturacion[0];
@@ -221,7 +221,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
 
       <div className="space-y-4">
         <NotasModelo modeloId={modelo.id} nombre={modelo.nombre} iniciales={notasModelo} />
-        <FotosPerfilModelo perfil={fotosPerfil.perfil} banner={fotosPerfil.banner} />
+        <FotosPerfilModelo modeloId={modelo.id} inicial={fotosPerfil} />
         <EspejoVideos modeloId={modelo.id} inicial={bienvenida} />
         <a href="#onboarding" className="card block !p-4 transition hover:border-[#8B5CF6]/40">
           <div className="mb-2 flex items-center justify-between">

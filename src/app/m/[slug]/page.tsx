@@ -181,10 +181,11 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
       vista: await urlVista(r.storage_key as string, (r.bucket as string | null) ?? undefined).catch(() => null),
     })),
   );
-  const vf = await vistasFotosPerfil(modelo.id as string).catch(() => ({ perfil: null, banner: null }));
+  const vf = await vistasFotosPerfil(modelo.id as string).catch(() => null);
   const fotosPerfil = {
-    perfil: vf.perfil ? { nombre: vf.perfil.nombre, at: vf.perfil.at, vista: vf.perfil.vista } : null,
-    banner: vf.banner ? { nombre: vf.banner.nombre, at: vf.banner.at, vista: vf.banner.vista } : null,
+    perfil: vf?.perfil ? { nombre: vf.perfil.nombre, at: vf.perfil.at, vista: vf.perfil.vista } : null,
+    banner: vf?.banner ? { nombre: vf.banner.nombre, at: vf.banner.at, vista: vf.banner.vista } : null,
+    pedir: { perfil: vf?.pedir.perfil ? { motivo: vf.pedir.perfil.motivo } : null, banner: vf?.pedir.banner ? { motivo: vf.pedir.banner.motivo } : null },
   };
   const guia = { packs: textoGuia(CLAVE_GUIA.pack), posts: textoGuia(CLAVE_GUIA.post), referencias };
   // Avisos del equipo ("necesitamos ..."): los ultimos 30 dias

@@ -3,7 +3,8 @@
 import { FotoEjemplo } from "./GuiaOF";
 import { SubirFotoPerfil, type FotoSubida } from "./SubirFotoPerfil";
 
-export type FotosPerfilEstado = { perfil: FotoSubida | null; banner: FotoSubida | null };
+export type PedidaFoto = { motivo: string | null };
+export type FotosPerfilEstado = { perfil: FotoSubida | null; banner: FotoSubida | null; pedir: { perfil: PedidaFoto | null; banner: PedidaFoto | null } };
 
 /** Foto de perfil y foto del banner (pestaña «Fotos» de Contenido OnlyFans): foto de ejemplo ampliable + boton de subir. */
 export function FotosPerfilSubida({ fotos, onCambio }: { fotos: FotosPerfilEstado; onCambio: (f: FotosPerfilEstado) => void }) {
@@ -16,7 +17,7 @@ export function FotosPerfilSubida({ fotos, onCambio }: { fotos: FotosPerfilEstad
         <div className="flex items-start gap-3">
           <FotoEjemplo src="/guia/foto-perfil-ejemplo.jpg" alt="Foto de perfil de ejemplo" clase="aspect-[3/4] w-20" />
           <div className="min-w-0 flex-1">
-            <SubirFotoPerfil tipo="perfil" actual={fotos.perfil} onSubida={(f) => onCambio({ ...fotos, perfil: f })} />
+            <SubirFotoPerfil tipo="perfil" actual={fotos.perfil} pedida={fotos.pedir.perfil} onSubida={(f) => onCambio({ ...fotos, perfil: f, pedir: { ...fotos.pedir, perfil: null } })} />
           </div>
         </div>
       </div>
@@ -26,7 +27,7 @@ export function FotosPerfilSubida({ fotos, onCambio }: { fotos: FotosPerfilEstad
         <div className="flex items-start gap-3">
           <FotoEjemplo src="/guia/foto-banner-ejemplo.jpg" alt="Foto de banner de ejemplo" clase="aspect-[4/3] w-28" />
           <div className="min-w-0 flex-1">
-            <SubirFotoPerfil tipo="banner" actual={fotos.banner} onSubida={(f) => onCambio({ ...fotos, banner: f })} />
+            <SubirFotoPerfil tipo="banner" actual={fotos.banner} pedida={fotos.pedir.banner} onSubida={(f) => onCambio({ ...fotos, banner: f, pedir: { ...fotos.pedir, banner: null } })} />
           </div>
         </div>
       </div>

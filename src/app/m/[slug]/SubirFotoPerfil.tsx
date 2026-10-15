@@ -17,7 +17,7 @@ function put(url: string, file: File, contentType: string, onProgress: (p: numbe
 }
 
 /** Subir (o cambiar) la foto de perfil o la del banner: se sube tal cual, sin recomprimir. */
-export function SubirFotoPerfil({ tipo, actual, onSubida }: { tipo: "perfil" | "banner"; actual: FotoSubida | null; onSubida: (f: FotoSubida) => void }) {
+export function SubirFotoPerfil({ tipo, actual, pedida, onSubida }: { tipo: "perfil" | "banner"; actual: FotoSubida | null; pedida?: { motivo: string | null } | null; onSubida: (f: FotoSubida) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [progreso, setProgreso] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +57,11 @@ export function SubirFotoPerfil({ tipo, actual, onSubida }: { tipo: "perfil" | "
             <span className="block truncate text-xs text-white/45">{actual.nombre}</span>
           </p>
         </div>
+      ) : pedida ? (
+        <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+          Necesitamos que vuelvas a subir tu {etiqueta}.
+          {pedida.motivo ? <span className="mt-0.5 block text-amber-100/80">💬 {pedida.motivo}</span> : null}
+        </p>
       ) : (
         <p className="text-sm text-white/70">Aún no has subido tu {etiqueta}.</p>
       )}
