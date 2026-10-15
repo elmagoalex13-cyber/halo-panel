@@ -26,6 +26,17 @@ export function fraseDeLayout(layout) {
   return texto.length >= 6 ? texto.slice(0, 300) : null;
 }
 
+/** Frase sacada de la descripcion de Instagram (solo si el video no tiene texto legible): sin hashtags, enlaces ni emojis. */
+export function limpiarFrase(texto) {
+  const limpio = String(texto ?? "")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/#[\p{L}\p{N}_]+/gu, " ")
+    .replace(/[\p{Extended_Pictographic}‍️]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return limpio.length >= 6 && limpio.length <= 200 ? limpio : null;
+}
+
 async function frasesDelBanco(supabase) {
   const filas = [];
   for (let desde = 0; ; desde += 1000) {
@@ -62,7 +73,7 @@ export async function cicloFrasesReferencia(supabase) {
           await downloadFromR2(key, mp4);
           layout = await analizarLayoutTexto(mp4);
         }
-        const frase = fraseDeLayout(layout) ?? (v.frase_detectada?.trim() || null);
+        const frase = fraseDeLayout(layout) ?? limpiarFrase(v.frase_detectada);
 
         // 1) La frase al banco (si no estaba ya), con la cancion del video
         let enBanco = null;
