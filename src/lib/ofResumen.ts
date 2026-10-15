@@ -1,4 +1,5 @@
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { leerTodasNotasOF } from "@/lib/notasOF";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { alcanceActual, soloVisibles, type GrupoAmbito } from "@/lib/alcance";
 import { NOMBRE_CARPETA_POSTS, progresoScript, type ArchivoOF, type ColeccionOF, type TipoColeccion } from "@/lib/onlyfans";
@@ -19,6 +20,7 @@ export type ResumenColeccion = {
   sinDescargar: number;
   subidosOF: number;
   fasesCompletas: number | null;
+  nota: string | null; // nota interna (solo la ven la agencia y el socio)
   nuevo: boolean; // la modelo ha subido algo desde la ultima vez que lo abriste
 };
 
@@ -37,11 +39,12 @@ export async function cargarResumenOF(modeloId?: string) {
       qc = qc.eq("modelo_id", modeloId);
       qa = qa.eq("modelo_id", modeloId);
     }
-    const [cols, arcs, mods, fotos] = await Promise.all([
+    const [cols, arcs, mods, fotos, notas] = await Promise.all([
       soloVisibles(qc, alcance),
       soloVisibles(qa, alcance),
       soloVisibles(supabase.from("modelos").select("id, nombre").order("nombre"), alcance, "id"),
       versionesFotos(),
+      leerTodasNotasOF().catch(() => ({})),
     ]);
     if (cols.error || arcs.error) return vacio;
 
@@ -71,6 +74,7 @@ export async function cargarResumenOF(modeloId?: string) {
         sinDescargar: as.filter((a) => !a.descargado_at).length,
         subidosOF: as.filter((a) => a.subido_of_at).length,
         fasesCompletas: pr?.fasesCompletas ?? null,
+        nota: (notas as Record<string, { texto: string }>)[c.id]?.texto ?? null,
         nuevo: Boolean(ultimo) && (!c.visto_at || ultimo > c.visto_at),
       };
     });

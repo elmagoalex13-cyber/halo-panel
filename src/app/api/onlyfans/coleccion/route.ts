@@ -9,11 +9,19 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // PATCH  { id, accion: "reabrir" }  -> la modelo puede volver a subir/quitar archivos
+// PATCH  { id, accion: "renombrar", nombre }  -> cambia el nombre (tambien lo ve la modelo en su portal)
 export async function PATCH(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
-  const body = (await req.json().catch(() => null)) as { id?: string; accion?: string } | null;
-  if (!body?.id || !UUID.test(body.id) || body.accion !== "reabrir") return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
+  const body = (await req.json().catch(() => null)) as { id?: string; accion?: string; nombre?: unknown } | null;
+  if (!body?.id || !UUID.test(body.id) || (body.accion !== "reabrir" && body.accion !== "renombrar")) return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
   { const g = await exigirFila("of_colecciones", body.id); if (g) return g; }
+  if (body.accion === "renombrar") {
+    const nombre = typeof body.nombre === "string" ? body.nombre.trim().slice(0, 120) : "";
+    if (!nombre) return NextResponse.json({ error: "Escribe el nombre" }, { status: 400 });
+    const { error: e2 } = await createAdminClient().from("of_colecciones").update({ nombre, updated_at: new Date().toISOString() }).eq("id", body.id);
+    if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
+    return NextResponse.json({ ok: true, nombre });
+  }
   const { error } = await createAdminClient().from("of_colecciones").update({ estado: "en_curso", entregado_at: null, updated_at: new Date().toISOString() }).eq("id", body.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

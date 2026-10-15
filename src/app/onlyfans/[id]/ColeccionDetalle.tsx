@@ -171,11 +171,16 @@ export function ColeccionDetalle({
     } else setAviso({ ok: false, texto: "No se pudo reabrir" });
   }
 
+  // Tras borrar, a la lista de esa modelo y esa pestaña (nunca a «Todas las modelos»); replace para que no quede la ficha borrada en el historial
+  function volver() {
+    router.replace(`/onlyfans?modelo=${coleccion.modelo_id}${coleccion.tipo === "script" ? "" : `&tipo=${coleccion.tipo}`}`);
+  }
+
   async function borrar() {
     if (!window.confirm(`¿Borrar «${coleccion.nombre}» y sus ${archivos.length} archivos (${formatoTamano(bytes) || "0 MB"})? No se puede deshacer.`)) return;
     setBorrando(true);
     const res = await fetch(`/api/onlyfans/coleccion?id=${coleccion.id}`, { method: "DELETE" });
-    if (res.ok) router.push("/onlyfans");
+    if (res.ok) volver();
     else {
       setBorrando(false);
       setAviso({ ok: false, texto: ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo borrar" });
@@ -187,7 +192,18 @@ export function ColeccionDetalle({
 
   return (
     <div className="space-y-5">
-      <Link href="/onlyfans" className="text-sm text-white/50 hover:text-white">← OnlyFans</Link>
+      <Link
+        href={`/onlyfans?modelo=${coleccion.modelo_id}${coleccion.tipo === "script" ? "" : `&tipo=${coleccion.tipo}`}`}
+        onClick={(e) => {
+          if (window.history.length > 1 && document.referrer.startsWith(window.location.origin)) {
+            e.preventDefault();
+            router.back();
+          }
+        }}
+        className="text-sm text-white/50 hover:text-white"
+      >
+        ← OnlyFans
+      </Link>
 
       <GlassCard className="space-y-3 p-5">
         <div className="flex flex-wrap items-start gap-3">
