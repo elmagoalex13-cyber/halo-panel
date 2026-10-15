@@ -100,7 +100,10 @@ async function colaInmediata(supabase) {
     else if (e.tipo === "accesos") texto = `🔑 <b>${nombre}</b> ha ${e.datos?.actualizacion ? "actualizado" : "enviado"} ${e.datos?.parcial ? "su acceso de OnlyFans" : "sus accesos de OnlyFans y Skrill"} (está en el Vault${m?.ambito === "compartido" ? " compartido" : ""}).${enlace("/vault")}`;
     else if (e.tipo === "contrato_firmado") {
       const d = e.datos ?? {};
-      const portalTxt = d.portal_slug
+      const portalTxt = d.portal_existente
+        ? `
+ℹ️ Ya existía la ficha <b>${esc(d.modelo_nombre ?? "")}</b> con su portal: el contrato se ha ligado a ella y NO se ha creado otro portal ni cambiado su contraseña.${d.modelo_id ? enlace(`/modelos/${d.modelo_id}`) : ""}`
+        : d.portal_slug
         ? `\n🔑 ${d.modelo_nueva ? "Se ha creado su ficha y su portal" : "Se ha creado su portal"} (usuario: <code>${esc(d.portal_usuario ?? d.portal_slug)}</code>). Ella ha visto la contraseña en pantalla; si la pierde, genérale otra desde su ficha.${d.modelo_id ? enlace(`/modelos/${d.modelo_id}`) : ""}`
         : "";
       texto = `✍️ <b>${esc(d.nombre ?? "Una modelo nueva")}</b> ha firmado el contrato.${portalTxt}${enlace("/contratos")}`;

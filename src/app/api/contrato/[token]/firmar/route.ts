@@ -58,6 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     nombre: c.nombre,
     enviado_por: c.enviado_por ?? null,
     ...(portal ? { modelo_id: portal.modelo_id } : {}),
+    ...(portal && "yaTenia" in portal ? { portal_existente: true, modelo_nombre: portal.modelo_nombre } : {}),
     ...(creado ? { portal_slug: creado.slug, portal_usuario: creado.usuario, modelo_nueva: creado.modeloNueva } : {}),
   });
 
