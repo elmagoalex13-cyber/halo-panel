@@ -8,6 +8,7 @@ import { OnlyFansPortal, type ArchivoVista } from "./OnlyFansPortal";
 import type { ColeccionOF } from "@/lib/onlyfans";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 import { GuiaOF, type ReferenciaVista } from "./GuiaOF";
+import type { FotoSubida } from "./SubirFotoPerfil";
 import { AvisosEquipo } from "./AvisosEquipo";
 import { AvisoPinSkrill } from "./AvisoPinSkrill";
 import { AvisoAccesosInvalidos } from "./AvisoAccesosInvalidos";
@@ -259,12 +260,14 @@ export function PortalClient({
   accesos,
   captacion,
   guia,
+  fotosPerfil,
   telegram,
   avisosEquipo,
 }: {
   avisosEquipo: Array<{ id: string; items: Array<{ tipo: string; cantidad?: number }>; texto: string | null; created_at: string }>;
   telegram: { vinculado: boolean; url: string | null };
   guia: { packs: string; posts: string; referencias: ReferenciaVista[] };
+  fotosPerfil: { perfil: FotoSubida | null; banner: FotoSubida | null };
   captacion: { progreso: ProgresoCaptacion; reelsAbiertos: boolean } | null;
   accesos: { modo: "of" | "completo"; dado: boolean; faltaPin?: boolean; invalidos?: Array<"of" | "skrill"> };
   nombre: string;
@@ -579,7 +582,7 @@ export function PortalClient({
         </section>
       ) : null}
 
-      {pestana === "guia" ? <GuiaOF packs={guia.packs} posts={guia.posts} referencias={guia.referencias} /> : null}
+      {pestana === "guia" ? <GuiaOF packs={guia.packs} posts={guia.posts} referencias={guia.referencias} fotosPerfil={fotosPerfil} /> : null}
 
       {pestana === "historias" ? <HistoriasIG /> : null}
 

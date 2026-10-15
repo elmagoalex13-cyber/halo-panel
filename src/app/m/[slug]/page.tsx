@@ -14,6 +14,7 @@ import { modeloEliminada } from "@/lib/papelera";
 import { progresoCaptacion } from "@/lib/captacion";
 import { CLAVE_GUIA } from "@/lib/guiaOF";
 import type { ReferenciaVista } from "./GuiaOF";
+import { vistasFotosPerfil } from "@/lib/fotosPerfil";
 import { estadoTelegramModelo } from "@/lib/telegramModelo";
 import { createHash } from "node:crypto";
 import { listarClavesR2 } from "@/lib/r2";
@@ -180,6 +181,11 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
       vista: await urlVista(r.storage_key as string, (r.bucket as string | null) ?? undefined).catch(() => null),
     })),
   );
+  const vf = await vistasFotosPerfil(modelo.id as string).catch(() => ({ perfil: null, banner: null }));
+  const fotosPerfil = {
+    perfil: vf.perfil ? { nombre: vf.perfil.nombre, at: vf.perfil.at, vista: vf.perfil.vista } : null,
+    banner: vf.banner ? { nombre: vf.banner.nombre, at: vf.banner.at, vista: vf.banner.vista } : null,
+  };
   const guia = { packs: textoGuia(CLAVE_GUIA.pack), posts: textoGuia(CLAVE_GUIA.post), referencias };
   // Avisos del equipo ("necesitamos ..."): los ultimos 30 dias
   const avisosRes = await supabase
@@ -197,5 +203,5 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
     estado: (onboardingRes.data?.estado === "enviado" ? "enviado" : "borrador") as "borrador" | "enviado",
   };
 
-  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} captacion={captacion} guia={guia} telegram={telegram} avisosEquipo={avisosEquipo} />;
+  return <PortalClient nombre={modelo.nombre} slug={slug} pendientes={pendientes} entregas={entregas} onboarding={onboarding} contenidoOF={contenidoOF} accesos={accesos} captacion={captacion} guia={guia} fotosPerfil={fotosPerfil} telegram={telegram} avisosEquipo={avisosEquipo} />;
 }
