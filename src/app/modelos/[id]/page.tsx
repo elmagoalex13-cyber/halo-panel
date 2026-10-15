@@ -174,6 +174,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
 
   const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion, encargos, porEstado, totalVideos, onboarding, onboardingHistorial, fotoVersion } = data;
   const onboardingDatos = sanearDatos(onboarding?.datos ?? {});
+  const notasModelo = ordenarNotas((await leerNotas(modelo.id).catch(() => ({ notas: [] }))).notas);
   const pendientes = encargos.filter((e) => e.estado !== "entregado");
   const facturacionMes = facturacion[0];
 
@@ -213,6 +214,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
       </div>
 
       <div className="space-y-4">
+        <NotasModelo modeloId={modelo.id} nombre={modelo.nombre} iniciales={notasModelo} />
         <a href="#onboarding" className="card block !p-4 transition hover:border-[#8B5CF6]/40">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-halo-subtle">Onboarding</h2>
@@ -357,7 +359,6 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
     ]);
     if (!e1) contratosFicha = { propios: (propios ?? []) as ContratoFicha[], disponibles: (libres ?? []) as ContratoFicha[] };
   }
-  const notasModelo = ordenarNotas((await leerNotas(modelo.id).catch(() => ({ notas: [] }))).notas);
   const of = await cargarResumenOF(modelo.id);
   const ofNuevos = of.resumen.filter((c) => c.nuevo).length;
 
@@ -401,13 +402,6 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
       aviso: ofNuevos ? `${ofNuevos} nuevo${ofNuevos === 1 ? "" : "s"}` : null,
       contenido: <ContenidoModelo modelo={{ id: modelo.id, nombre: modelo.nombre, foto: of.modelos[0]?.foto ?? null }} instagram={instagram} onlyfans={of.resumen} />,
     },
-    {
-      id: "notas",
-      label: "Notas",
-      icono: "📝",
-      aviso: notasModelo.length ? String(notasModelo.length) : null,
-      contenido: <NotasModelo modeloId={modelo.id} nombre={modelo.nombre} iniciales={notasModelo} />,
-    },
     ...(contratosFicha
       ? [
           {
@@ -447,20 +441,6 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
             </div>
           ))}
         </div>
-
-        {notasModelo.some((n) => n.fijada) ? (
-          <div className="rounded-2xl border border-amber-300/30 bg-amber-300/[0.07] p-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-amber-200">📌 Ojo con {modelo.nombre}</p>
-            <ul className="mt-1.5 space-y-1">
-              {notasModelo.filter((n) => n.fijada).map((n) => (
-                <li key={n.id} className="whitespace-pre-line text-sm text-halo-text">
-                  {n.texto} <span className="text-xs text-halo-subtle">— {n.autor}</span>
-                </li>
-              ))}
-            </ul>
-            <a href="#notas" className="mt-1.5 inline-block text-xs font-semibold text-amber-200 hover:underline">Ver todas las notas</a>
-          </div>
-        ) : null}
 
         <FichaTabs pestanas={pestanas} inicial="resumen" />
       </div>

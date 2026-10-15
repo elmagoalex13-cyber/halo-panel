@@ -44,13 +44,13 @@ export function NotasModelo({ modeloId, nombre, iniciales }: { modeloId: string;
     <div className="space-y-4">
       <div className="card !p-4">
         <p className="text-sm font-semibold text-halo-text">Notas internas de {nombre}</p>
-        <p className="mt-0.5 text-xs text-halo-subtle">Solo las veis tu socio y tú (ella no). Ideal para lo del grupo de WhatsApp, acuerdos y cosas a tener en cuenta antes de escribirle.</p>
+        <p className="mt-0.5 text-xs text-halo-subtle">Solo las veis tu socio y tú (ella no).</p>
         <textarea
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
-          rows={3}
+          rows={2}
           maxLength={2000}
-          placeholder="Escribe una nota: «Grupo de WhatsApp creado el 15/10», «No le mandes scripts de…», «Prefiere que le escriba Alex»…"
+          placeholder="Nueva nota: grupo de WhatsApp, acuerdos, cosas a tener en cuenta…"
           className="input-base mt-3 w-full resize-y text-sm"
         />
         <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -59,7 +59,7 @@ export function NotasModelo({ modeloId, nombre, iniciales }: { modeloId: string;
           </button>
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-halo-subtle">
             <input type="checkbox" checked={fijar} onChange={(e) => setFijar(e.target.checked)} className="h-4 w-4 accent-[#8B5CF6]" />
-            📌 Fijarla arriba (se ve también en la cabecera de la ficha)
+            📌 Fijarla arriba del todo
           </label>
         </div>
         {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
