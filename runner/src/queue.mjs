@@ -76,7 +76,7 @@ export async function procesarPieza(pieza) {
       pieza.layout_json = asignado?.layout_json ?? null;
     }
     // La frase del banco trae su musica (la del video scrapeado de donde salio): el video sale ya editado con la cancion
-    if (tipo === 2 && !pieza.audio_referencia_url) {
+    if (tipo === 2 && !pieza.audio_referencia_url && !/\[sin-musica\]/.test(pieza.notas_editor ?? "")) {
       const audio = await audioDeFraseDePieza(supabase, pieza).catch(() => null);
       if (audio) {
         pieza.audio_referencia_url = audio;

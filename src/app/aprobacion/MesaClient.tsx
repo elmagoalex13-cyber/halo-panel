@@ -29,6 +29,7 @@ export interface VideoRow {
   recorte_inicio?: number | null;
   recorte_fin?: number | null;
   notas_editor?: string | null;
+  audio_referencia_url?: string | null;
   modelo_nombre: string;
   cuenta_username: string | null;
   programado_at?: string | null;
@@ -183,6 +184,13 @@ function AjustesEditor({ row, velocidad, onCambio }: { row: VideoRow; velocidad:
       </p>
     </div>
   );
+}
+
+/** Musica que lleva ahora un video de gesto: el id de la frase de la que sale, «none» si se le quito, o «auto» (la de su frase). */
+function musicaActualDe(row: VideoRow): string {
+  const m = /frases-audio\/([0-9a-f-]{36})\.m4a/i.exec(row.audio_referencia_url ?? "");
+  if (m) return m[1];
+  return /\[sin-musica\]/.test(row.notas_editor ?? "") ? "none" : "auto";
 }
 
 function RecorteManualEditor({ row, inicio, fin, onCambio }: { row: VideoRow; inicio: number | null; fin: number | null; onCambio: (inicio: number | null, fin: number | null) => void }) {
@@ -369,6 +377,9 @@ export function MesaClient({
   const [frase, setFrase] = useState("");
   // Cambios pendientes de la ventana: se aplican TODOS juntos con un solo «Rehacer con los cambios»
   const [velocidadSel, setVelocidadSel] = useState(1);
+  // Musica del video de gesto: "auto" (la de su frase), "none" (el audio de la modelo) o el id de una frase con musica
+  const [musicaSel, setMusicaSel] = useState("auto");
+  const [frasesMusica, setFrasesMusica] = useState<Array<{ id: string; frase: string; cancion: string | null }> | null>(null);
   const [recorteSel, setRecorteSel] = useState<{ inicio: number | null; fin: number | null }>({ inicio: null, fin: null });
   const [loading, setLoading] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
@@ -441,6 +452,7 @@ export function MesaClient({
     setCorrecciones(row.correcciones);
     setFrase(row.frase_quemada);
     setVelocidadSel(leerVelocidad(row.notas_editor));
+    setMusicaSel(musicaActualDe(row));
     setRecorteSel({ inicio: row.recorte_inicio ?? null, fin: row.recorte_fin ?? null });
     // Tipo 4: auto-expandir referencia y original para comparativa de 3 paneles
     const esTipo4 = row.tipo_video === "tipo4";
@@ -465,6 +477,7 @@ export function MesaClient({
             frase_quemada: frase,
             ...(accion === "rehacer" || accion === "nueva_frase"
               ? {
+                  ...(musicaSel !== musicaActualDe(selected) ? { musica: musicaSel } : {}),
                   ...(velocidadSel !== leerVelocidad(selected.notas_editor) ? { velocidad: velocidadSel } : {}),
                   ...(recorteSel.inicio !== (selected.recorte_inicio ?? null) || recorteSel.fin !== (selected.recorte_fin ?? null)
                     ? { recorte_cambiado: true, recorte_inicio: recorteSel.inicio, recorte_fin: recorteSel.fin }
@@ -503,7 +516,7 @@ export function MesaClient({
         setLoading(false);
       }
     },
-    [selected, caption, correcciones, frase, velocidadSel, recorteSel, currentEstado, router, closePopup],
+    [selected, caption, correcciones, frase, velocidadSel, recorteSel, musicaSel, currentEstado, router, closePopup],
   );
 
   const quickAct = useCallback(
@@ -560,8 +573,23 @@ export function MesaClient({
     if (velocidadSel !== leerVelocidad(selected.notas_editor)) cambiosPendientes.push(`velocidad ${velocidadSel === 1 ? "normal" : textoVelocidad(velocidadSel)}`);
     if (recorteSel.inicio !== (selected.recorte_inicio ?? null) || recorteSel.fin !== (selected.recorte_fin ?? null)) cambiosPendientes.push("recorte");
     if (frase !== (selected.frase_quemada ?? "")) cambiosPendientes.push("frase");
+    if (selected.tipo_video === "tipo2" && musicaSel !== musicaActualDe(selected)) cambiosPendientes.push("música");
     if (correcciones.trim() !== (selected.correcciones ?? "").trim()) cambiosPendientes.push("nota");
   }
+
+  // Frases con musica para el selector (solo se piden al abrir un video de gesto)
+  const abiertoGesto = selected?.tipo_video === "tipo2";
+  useEffect(() => {
+    if (!abiertoGesto || frasesMusica) return;
+    let vivo = true;
+    fetch("/api/frases/con-musica", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { frases: [] }))
+      .then((j: { frases?: Array<{ id: string; frase: string; cancion: string | null }> }) => vivo && setFrasesMusica(j.frases ?? []))
+      .catch(() => vivo && setFrasesMusica([]));
+    return () => {
+      vivo = false;
+    };
+  }, [abiertoGesto, frasesMusica]);
 
   const puedeMarcar = currentEstado === "aprobado" || currentEstado === "publicado";
   const seleccionVisible = filteredRows.filter((row) => seleccion.has(row.id));
@@ -1160,6 +1188,24 @@ export function MesaClient({
                   juntos al pulsar «Rehacer con los cambios».
                 </p>
               </div>
+
+              {selected.tipo_video === "tipo2" ? (
+                <div>
+                  <label className="mb-1 block text-[9px] font-semibold uppercase tracking-widest text-white/35">
+                    Música del vídeo <span className="font-normal normal-case text-white/20">- si la frase no tiene, elige la de otra</span>
+                  </label>
+                  <select value={musicaSel} onChange={(event) => setMusicaSel(event.target.value)} className="input-base w-full text-xs">
+                    <option value="auto">Automática: la de su frase (si la tiene)</option>
+                    <option value="none">Sin música: el audio de la modelo</option>
+                    {(frasesMusica ?? []).map((f) => (
+                      <option key={f.id} value={f.id}>
+                        🎵 {f.frase.slice(0, 50)}{f.cancion ? ` — ${f.cancion}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {frasesMusica && !frasesMusica.length ? <p className="mt-1 text-[10px] text-white/30">Todavía no hay frases con música.</p> : null}
+                </div>
+              ) : null}
 
               <div>
                 <label className="mb-1 block text-[9px] font-semibold uppercase tracking-widest text-white/35">

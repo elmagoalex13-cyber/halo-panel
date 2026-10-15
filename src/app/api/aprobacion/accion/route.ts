@@ -4,6 +4,7 @@ import { programarPieza } from "@/lib/publer";
 import { aplicarAjusteRecorte, parseNotaRecorte } from "@/lib/notaRecorte";
 import type { VideoEstado } from "@/types";
 import { exigirFila } from "@/lib/alcance";
+import { existeEnR2 } from "@/lib/r2";
 import { OPCIONES_VELOCIDAD, leerVelocidad, ponerAjustes } from "@/lib/velocidadHablados";
 
 const ESTADO_MAP: Record<string, string> = {
@@ -17,7 +18,7 @@ const ESTADO_MAP: Record<string, string> = {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin, velocidad, recorte_cambiado } = (await req.json()) as {
+    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin, velocidad, recorte_cambiado, musica } = (await req.json()) as {
       id?: string;
       accion?: string;
       caption?: string;
@@ -27,6 +28,7 @@ export async function PATCH(req: NextRequest) {
       recorte_fin?: number | null;
       velocidad?: number;
       recorte_cambiado?: boolean;
+      musica?: string;
     };
 
     if (!id || !accion || !ESTADO_MAP[accion]) {
@@ -137,6 +139,22 @@ export async function PATCH(req: NextRequest) {
         update.recorte_inicio = typeof recorte_inicio === "number" ? recorte_inicio : null;
         update.recorte_fin = typeof recorte_fin === "number" ? recorte_fin : null;
         update.notas_editor = conMarcaManual(notas);
+      }
+    }
+    // Musica del video de gesto: «auto» = la de su frase; «none» = el audio de la modelo; un id de frase = la musica de ESA frase (para frases sin musica)
+    if ((accion === "rehacer" || accion === "nueva_frase") && typeof musica === "string" && musica) {
+      const sinMarca = ((update.notas_editor as string | null | undefined) ?? (actual.notas_editor as string | null) ?? "").replace(/\[sin-musica\]/g, "").trim();
+      if (musica === "none") {
+        update.audio_referencia_url = null;
+        update.notas_editor = [sinMarca, "[sin-musica]"].filter(Boolean).join("\n");
+      } else if (musica === "auto") {
+        update.audio_referencia_url = null;
+        update.notas_editor = sinMarca || null;
+      } else if (/^[0-9a-f-]{36}$/i.test(musica)) {
+        const clave = `frases-audio/${musica}.m4a`;
+        if (!(await existeEnR2(clave))) return NextResponse.json({ error: "Esa frase no tiene música" }, { status: 400 });
+        update.audio_referencia_url = clave;
+        update.notas_editor = sinMarca || null;
       }
     }
     if (accion === "ajustes") {
