@@ -18,8 +18,8 @@ const NAV = [
     ofBadge: true,
     sub: [
       { href: "/onlyfans", label: "Contenido" },
-      { href: "/posts-of", label: "Por programar" },
-      { href: "/captions", label: "Captions" },
+      { href: "/posts-of", label: "Programar posts" },
+      { href: "/captions", label: "Banco de captions" },
     ],
   },
   { href: "/leads", label: "Leads", icon: "◇", leadsBadge: true },

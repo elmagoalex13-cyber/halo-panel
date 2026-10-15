@@ -161,7 +161,7 @@ export function CaptionsClient() {
             </button>
           </div>
 
-          <p className="text-xs text-white/40">Cada caption tiene un <b className="text-white/60">tema</b> (cada pestaña de tu documento: Culo, Tetas, Mañana, Noche, Fitness, Piscina/Playa…): en «Posts por programar» eliges el tema de la foto y el caption sale de ese tema. {visibles.length} {visibles.length === 1 ? "caption" : "captions"} · se usan para programar posts solo los <b className="text-white/60">activos de tipo «Para foto»</b> (los que piden propina, las encuestas y las plantillas se reservan).</p>
+          <p className="text-xs text-white/40">Cada caption tiene un <b className="text-white/60">tema</b> (cada pestaña de tu documento: Culo, Tetas, Mañana, Noche, Fitness, Piscina/Playa…): en «Programar posts» eliges el tema de la foto y el caption sale de ese tema. {visibles.length} {visibles.length === 1 ? "caption" : "captions"} · se usan para programar posts solo los <b className="text-white/60">activos de tipo «Para foto»</b> (los que piden propina, las encuestas y las plantillas se reservan).</p>
 
           <ul className="space-y-2">
             {pagActual.map((c) => (
