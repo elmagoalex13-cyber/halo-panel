@@ -33,7 +33,12 @@ export async function POST(request: Request) {
     nuevo[campo] = { por: sesion.nombre || sesion.usuario, at: new Date().toISOString() };
     if (campo === "valida") delete nuevo.invalida;
     if (campo === "invalida") delete nuevo.valida;
-  } else delete nuevo[campo];
+    delete nuevo.acceso; // el check «acceso» ya no existe: «válidas» significa que hemos podido acceder (los antiguos cuentan como válidas)
+  } else {
+    delete nuevo[campo];
+    if (campo === "valida") delete nuevo.acceso;
+  }
+  if (campo === "invalida" && b.valor) delete nuevo.acceso;
   const { error } = await db.from("panel_config").upsert({ key: claveChecks(id), value: nuevo, updated_at: new Date().toISOString() });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // Marcada como NO valida (y no lo estaba ya): aviso a la modelo para que vuelva a enviar ese acceso

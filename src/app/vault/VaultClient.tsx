@@ -82,7 +82,7 @@ export function VaultClient({
     setRevealed({ id: entry.id, title: entry.nombre, value: data.value });
   }
 
-  // Check interno de una credencial («hemos podido acceder», «las credenciales son validas»): lo marcamos nosotros, la modelo no lo ve
+  // Check interno de una credencial («credenciales válidas» = hemos podido acceder, o «no válidas»): lo marcamos nosotros, la modelo no lo ve
   async function marcar(id: string, campo: CampoCheck, valor: boolean) {
     const res = await fetch("/api/vault/checks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, campo, valor }) });
     const j = (await res.json().catch(() => ({}))) as { error?: string; checks?: ChecksEntrada; avisada?: boolean };
@@ -294,8 +294,7 @@ export function VaultClient({
             <CamposCopiables valor={revealed.value} copiado={copiado} onCopiar={copiar} />
             <div className="mt-4 space-y-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Checks internos (la modelo no los ve)</p>
-              <ToggleCheck etiqueta="Hemos podido acceder" check={checks[revealed.id]?.acceso} onCambio={(v) => void marcar(revealed.id, "acceso", v)} />
-              <ToggleCheck etiqueta="Las credenciales son válidas" check={checks[revealed.id]?.valida} onCambio={(v) => void marcar(revealed.id, "valida", v)} />
+              <ToggleCheck etiqueta="Credenciales válidas (hemos podido acceder)" check={checks[revealed.id]?.valida ?? checks[revealed.id]?.acceso} onCambio={(v) => void marcar(revealed.id, "valida", v)} />
               <ToggleCheck
                 etiqueta="NO son válidas (avisar a la modelo)"
                 check={checks[revealed.id]?.invalida}
@@ -455,7 +454,7 @@ export function VaultClient({
 
 const cuando = (iso: string) => new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
 
-/** Etiquetas pequeñas de la tarjeta: ✓ acceso / ✓ válidas (con quien y cuando al pasar el raton). */
+/** Etiqueta pequeña de la tarjeta: ✓ válidas / ✗ no válidas (con quien y cuando al pasar el raton). */
 function ChipsChecks({ checks }: { checks?: ChecksEntrada }) {
   const chip = (activo: boolean, texto: string, check?: { por: string; at: string }) => (
     <span
@@ -467,13 +466,12 @@ function ChipsChecks({ checks }: { checks?: ChecksEntrada }) {
   );
   return (
     <div className="mt-1 flex flex-wrap gap-1">
-      {chip(Boolean(checks?.acceso), "Acceso", checks?.acceso)}
       {checks?.invalida ? (
         <span title={`No válidas: ${checks.invalida.por}, ${cuando(checks.invalida.at)}`} className="rounded-full bg-red-400/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">
           ✗ No válidas
         </span>
       ) : (
-        chip(Boolean(checks?.valida), "Válidas", checks?.valida)
+        chip(Boolean(checks?.valida ?? checks?.acceso), "Válidas", checks?.valida ?? checks?.acceso)
       )}
     </div>
   );
