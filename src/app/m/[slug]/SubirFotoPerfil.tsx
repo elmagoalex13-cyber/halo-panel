@@ -45,12 +45,12 @@ export function SubirFotoPerfil({ tipo, actual, onSubida }: { tipo: "perfil" | "
   }
 
   return (
-    <div className="space-y-2 rounded-xl border border-[#8B5CF6]/30 bg-[#8B5CF6]/[0.08] p-3">
+    <div className="space-y-2">
       {actual ? (
         <div className="flex items-center gap-3">
           {actual.vista ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={actual.vista} alt={`Tu ${etiqueta}`} className="h-16 w-16 shrink-0 rounded-lg object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+            <img src={actual.vista} alt={`Tu ${etiqueta}`} className="h-10 w-10 shrink-0 rounded-lg object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
           ) : null}
           <p className="min-w-0 text-sm text-emerald-300">
             ✓ Ya la hemos recibido
@@ -65,7 +65,7 @@ export function SubirFotoPerfil({ tipo, actual, onSubida }: { tipo: "perfil" | "
         type="button"
         disabled={progreso !== null}
         onClick={() => input.current?.click()}
-        className="flex min-h-11 w-full items-center justify-center rounded-xl bg-[#8B5CF6] px-4 text-sm font-semibold text-white transition hover:bg-[#7C3AED] disabled:opacity-60"
+        className="relative flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[#8B5CF6]/25 px-3 text-sm font-semibold text-white transition hover:bg-[#8B5CF6]/35 disabled:opacity-70"
       >
         {progreso !== null ? `Subiendo… ${progreso}%` : actual ? `Cambiar mi ${etiqueta}` : `Subir mi ${etiqueta}`}
       </button>

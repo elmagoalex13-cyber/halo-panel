@@ -3,12 +3,14 @@ import { cargarResumenOF } from "@/lib/ofResumen";
 import { ambitosModelos } from "@/lib/alcance";
 import { OnlyFansClient } from "./OnlyFansClient";
 import { GuiasPanel } from "./GuiasPanel";
+import { vistasFotosPerfilDe } from "@/lib/fotosPerfil";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnlyFansPage({ searchParams }: { searchParams: Promise<{ modelo?: string; tipo?: string; estado?: string; ambito?: string }> }) {
   const { modelo, tipo, estado, ambito } = await searchParams;
   const [{ listo, modelos, resumen }, { esDueno, porModelo }] = await Promise.all([cargarResumenOF(), ambitosModelos()]);
+  const fotosPerfil = await vistasFotosPerfilDe(modelos.map((m) => m.id));
   return (
     <PanelLayout>
       <div className="mb-6">
@@ -19,7 +21,7 @@ export default async function OnlyFansPage({ searchParams }: { searchParams: Pro
         </p>
       </div>
       {listo ? (
-        <OnlyFansClient modelos={modelos} colecciones={resumen} modeloInicial={modelo} tipoInicial={tipo} estadoInicial={estado} ambitoInicial={ambito} esDueno={esDueno} ambitos={porModelo} />
+        <OnlyFansClient modelos={modelos} colecciones={resumen} modeloInicial={modelo} tipoInicial={tipo} estadoInicial={estado} ambitoInicial={ambito} fotosPerfil={fotosPerfil} esDueno={esDueno} ambitos={porModelo} />
       ) : (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-sm text-amber-200">
           Falta activar esta sección: ejecuta el SQL <code>20261008_onlyfans_contenido.sql</code> en el SQL Editor de Supabase y recarga.

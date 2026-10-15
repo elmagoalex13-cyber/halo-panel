@@ -53,3 +53,33 @@ export async function vistasFotosPerfil(modeloId: string): Promise<Record<TipoFo
   const [perfil, banner] = await Promise.all([una("perfil"), una("banner")]);
   return { perfil, banner };
 }
+
+/** Las fotos de perfil y banner de varias modelos de una vez (una sola consulta), con enlaces temporales para verlas y descargarlas. */
+export async function vistasFotosPerfilDe(ids: string[]): Promise<Record<string, Record<TipoFotoPerfil, FotoPerfilVista | null>>> {
+  const salida: Record<string, Record<TipoFotoPerfil, FotoPerfilVista | null>> = {};
+  if (!ids.length) return salida;
+  try {
+    const { data } = await createAdminClient().from("panel_config").select("key, value").in("key", ids.map(claveFotosPerfil));
+    await Promise.all(
+      (data ?? []).map(async (f) => {
+        const id = String(f.key).slice("fotos_perfil:".length);
+        const v = (f.value as FotosPerfil | null) ?? {};
+        const una = async (tipo: TipoFotoPerfil): Promise<FotoPerfilVista | null> => {
+          const x = v[tipo];
+          if (!x) return null;
+          try {
+            const [vista, descarga] = await Promise.all([urlVista(x.key), urlDescarga(x.key, `${tipo === "perfil" ? "foto_perfil" : "banner"}_${x.nombre}`)]);
+            return { nombre: x.nombre, size: x.size, at: x.at, vista, descarga };
+          } catch {
+            return null;
+          }
+        };
+        const [perfil, banner] = await Promise.all([una("perfil"), una("banner")]);
+        salida[id] = { perfil, banner };
+      }),
+    );
+  } catch {
+    /* sin fotos: la pestaña sale vacia */
+  }
+  return salida;
+}

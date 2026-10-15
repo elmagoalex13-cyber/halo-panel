@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { ETIQUETA_TIPO, formatoTamano, type TipoColeccion } from "@/lib/onlyfans";
 import type { ResumenColeccion } from "@/lib/ofResumen";
+import type { FotoPerfilVista } from "@/lib/fotosPerfil";
 import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 export function OnlyFansClient({
@@ -14,6 +15,7 @@ export function OnlyFansClient({
   tipoInicial,
   estadoInicial,
   ambitoInicial,
+  fotosPerfil,
   sinFiltroModelo = false,
   esDueno = false,
   ambitos = {},
@@ -26,6 +28,7 @@ export function OnlyFansClient({
   tipoInicial?: string;
   estadoInicial?: string;
   ambitoInicial?: string;
+  fotosPerfil?: Record<string, { perfil: FotoPerfilVista | null; banner: FotoPerfilVista | null }>; // si viene, sale la pestaña «Perfil y banner»
   sinFiltroModelo?: boolean; // dentro de la ficha de una modelo ya esta filtrado
 }) {
   // La lista vive en el cliente: borrar, renombrar, marcar o anotar actualiza la tarjeta en su sitio, sin recargar nada
@@ -38,6 +41,7 @@ export function OnlyFansClient({
   const modelos = modelosTodas.filter((m) => ambitoCoincide(filtroAmbito, ambitos[m.id]));
   const colecciones = lista.filter((c) => ambitoCoincide(filtroAmbito, ambitos[c.modelo_id]));
   const [modelo, setModelo] = useState(modeloInicial && modelosTodas.some((m) => m.id === modeloInicial) ? modeloInicial : "todas");
+  const [verPerfil, setVerPerfil] = useState(Boolean(fotosPerfil) && tipoInicial === "perfil");
   const [tipo, setTipo] = useState<TipoColeccion>(tipoInicial === "pack" || tipoInicial === "post" ? tipoInicial : "script");
   const [estado, setEstado] = useState<"todos" | "entregado" | "en_curso" | "por_subir">(
     estadoInicial === "entregado" || estadoInicial === "en_curso" || estadoInicial === "por_subir" ? estadoInicial : "todos",
@@ -48,12 +52,13 @@ export function OnlyFansClient({
     if (sinFiltroModelo) return;
     const q = new URLSearchParams();
     if (modelo !== "todas") q.set("modelo", modelo);
-    if (tipo !== "script") q.set("tipo", tipo);
+    if (verPerfil) q.set("tipo", "perfil");
+    else if (tipo !== "script") q.set("tipo", tipo);
     if (estado !== "todos") q.set("estado", estado);
     if (filtroAmbito !== "todas") q.set("ambito", filtroAmbito);
     const url = `${window.location.pathname}${q.toString() ? `?${q}` : ""}`;
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, "", url);
-  }, [modelo, tipo, estado, filtroAmbito, sinFiltroModelo]);
+  }, [modelo, tipo, verPerfil, estado, filtroAmbito, sinFiltroModelo]);
 
   async function llamar(c: ResumenColeccion, url: string, init: RequestInit, alOk: (j: Record<string, unknown>) => void, fallo: string) {
     setOcupado(c.id);
@@ -154,13 +159,24 @@ export function OnlyFansClient({
         {(["script", "pack", "post"] as TipoColeccion[]).map((t) => (
           <button
             key={t}
-            onClick={() => setTipo(t)}
-            className={`px-4 py-2.5 text-sm font-semibold transition ${tipo === t ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"}`}
+            onClick={() => {
+              setVerPerfil(false);
+              setTipo(t);
+            }}
+            className={`px-4 py-2.5 text-sm font-semibold transition ${!verPerfil && tipo === t ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"}`}
           >
             {ETIQUETA_TIPO[t]} <span className="text-xs opacity-60">{conteoTipo(t)}</span>
           </button>
         ))}
-        <select value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)} className="input-base ml-auto py-1.5 text-xs">
+        {fotosPerfil ? (
+          <button
+            onClick={() => setVerPerfil(true)}
+            className={`px-4 py-2.5 text-sm font-semibold transition ${verPerfil ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"}`}
+          >
+            Perfil y banner <span className="text-xs opacity-60">{modelos.filter((m) => fotosPerfil[m.id]?.perfil && fotosPerfil[m.id]?.banner).length}/{modelos.length}</span>
+          </button>
+        ) : null}
+        <select value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)} className={`input-base ml-auto py-1.5 text-xs ${verPerfil ? "hidden" : ""}`}>
           <option value="todos">Cualquier estado</option>
           <option value="en_curso">En curso (la modelo lo está subiendo)</option>
           <option value="entregado">Entregados</option>
@@ -168,7 +184,9 @@ export function OnlyFansClient({
         </select>
       </div>
 
-      {visibles.length === 0 ? (
+      {verPerfil && fotosPerfil ? (
+        <PerfilYBanner modelos={modelos.filter((m) => modeloActivo === "todas" || m.id === modeloActivo)} fotos={fotosPerfil} />
+      ) : visibles.length === 0 ? (
         <div className="grid min-h-[30vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 text-center text-sm text-white/35">
           {colecciones.length === 0 ? "Todavía no han subido nada. Las modelos lo hacen desde su portal, en la pestaña «Contenido OnlyFans»." : "Nada con esos filtros."}
         </div>
@@ -261,6 +279,58 @@ export function OnlyFansClient({
         </div>
       )}
       {aviso ? <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">{aviso}</p> : null}
+    </div>
+  );
+}
+
+const fechaCorta = (iso: string) => new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "Europe/Madrid" });
+const tamano = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+
+function FotoUna({ titulo, foto, clase }: { titulo: string; foto: FotoPerfilVista | null | undefined; clase: string }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">{titulo}</p>
+      {foto ? (
+        <>
+          <a href={foto.vista} target="_blank" rel="noreferrer" title="Ver en grande" className={`block overflow-hidden rounded-lg border border-white/10 bg-black/30 ${clase}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={foto.vista} alt={titulo} loading="lazy" className="h-full w-full object-cover" />
+          </a>
+          <p className="text-[11px] text-white/40">{fechaCorta(foto.at)} · {tamano(foto.size)}</p>
+          <div className="flex gap-3 text-xs font-semibold">
+            <a href={foto.vista} target="_blank" rel="noreferrer" className="text-[#A78BFA] hover:underline">Ver en grande</a>
+            <a href={foto.descarga} className="text-[#A78BFA] hover:underline">Descargar original</a>
+          </div>
+        </>
+      ) : (
+        <div className={`grid place-items-center rounded-lg border border-dashed border-white/10 px-2 text-center text-xs text-white/30 ${clase}`}>Pendiente de subir</div>
+      )}
+    </div>
+  );
+}
+
+/** Foto de perfil y banner que ha subido cada modelo desde su portal: las que ya las tienen primero, las pendientes al final. */
+function PerfilYBanner({ modelos, fotos }: { modelos: Array<{ id: string; nombre: string; foto: number | null }>; fotos: Record<string, { perfil: FotoPerfilVista | null; banner: FotoPerfilVista | null }> }) {
+  const n = (id: string) => Number(Boolean(fotos[id]?.perfil)) + Number(Boolean(fotos[id]?.banner));
+  const ordenadas = [...modelos].sort((a, b) => n(b.id) - n(a.id) || a.nombre.localeCompare(b.nombre, "es"));
+  if (!ordenadas.length) return <div className="grid min-h-[20vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] text-sm text-white/35">No hay modelos.</div>;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {ordenadas.map((m) => (
+        <div key={m.id} className="space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+          <div className="flex items-center gap-2">
+            <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-7 w-7 text-[11px]" />
+            <p className="min-w-0 flex-1 truncate font-semibold text-white">{m.nombre}</p>
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${n(m.id) === 2 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : n(m.id) === 1 ? "border-amber-500/40 bg-amber-500/10 text-amber-300" : "border-white/10 text-white/40"}`}>
+              {n(m.id) === 2 ? "Completas" : n(m.id) === 1 ? "Falta 1" : "Sin subir"}
+            </span>
+          </div>
+          <div className="grid grid-cols-[6.5rem_1fr] gap-3">
+            <FotoUna titulo="Perfil" foto={fotos[m.id]?.perfil} clase="aspect-[3/4] w-[6.5rem]" />
+            <FotoUna titulo="Banner" foto={fotos[m.id]?.banner} clase="aspect-[4/3] w-full max-w-[13rem]" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

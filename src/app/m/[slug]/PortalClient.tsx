@@ -291,9 +291,11 @@ export function PortalClient({
   const [pestana, setPestana] = useState<Pestana>("grabar");
   const [fotos, setFotos] = useState<FotosPerfilEstado>(fotosPerfil);
   const fotosCompletas = Boolean(fotos.perfil && fotos.banner);
+  const [abrirFotos, setAbrirFotos] = useState(0);
   const irAFotos = () => {
     setPestana(contenidoOF ? "contenido" : "subir");
-    setTimeout(() => document.getElementById("fotos-perfil")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    setAbrirFotos((n) => n + 1);
+    setTimeout(() => document.getElementById("fotos-perfil")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
   };
   const [filtroTipo, setFiltroTipo] = useState<number | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState(false);
@@ -618,8 +620,8 @@ export function PortalClient({
           🔞 <b>Contenido de OnlyFans</b>: aquí subes tus scripts, packs de fotos y posts para OnlyFans, siguiendo la pestaña «Guía OnlyFans». Las fotos de historias de Instagram van en «Historias IG» y los reels en «Subir vídeos».
         </p>
       ) : null}
-      {pestana === "contenido" || (pestana === "subir" && !contenidoOF) ? <FotosPerfilSubida fotos={fotos} onCambio={setFotos} /> : null}
-      {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} /> : null}
+      {pestana === "subir" && !contenidoOF ? <FotosPerfilSubida fotos={fotos} onCambio={setFotos} /> : null}
+      {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} fotos={fotos} onFotos={setFotos} abrirFotos={abrirFotos} /> : null}
 
       {reelAbierto?.preview ? (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/95 p-3" role="dialog" aria-modal="true" onClick={() => setReelAbierto(null)}>

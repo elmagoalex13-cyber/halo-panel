@@ -16,6 +16,7 @@ import {
 } from "@/lib/onlyfans";
 import { subirArchivoOF } from "./subidaOF";
 import { VisorFotos } from "@/components/VisorFotos";
+import { FotosPerfilSubida, type FotosPerfilEstado } from "./FotosPerfilSubida";
 
 export type ArchivoVista = ArchivoOF & { vista?: string | null };
 
@@ -167,10 +168,20 @@ function BotonSubida({
 export function OnlyFansPortal({
   colecciones: iniciales,
   archivos: archivosIniciales,
+  fotos,
+  onFotos,
+  abrirFotos = 0,
 }: {
   colecciones: ColeccionOF[];
   archivos: ArchivoVista[];
+  fotos: FotosPerfilEstado;
+  onFotos: (f: FotosPerfilEstado) => void;
+  abrirFotos?: number; // cada vez que cambia, abre la pestaña «Fotos» (desde la lista de cosas por hacer)
 }) {
+  const [verFotos, setVerFotos] = useState(false);
+  useEffect(() => {
+    if (abrirFotos > 0) setVerFotos(true);
+  }, [abrirFotos]);
   const [colecciones, setColecciones] = useState(iniciales);
   const [archivos, setArchivos] = useState(archivosIniciales);
   const [tipo, setTipo] = useState<TipoColeccion>("script");
@@ -394,24 +405,48 @@ export function OnlyFansPortal({
 
   /* ------------------------------------------------- listas ------------------------------------------------- */
   const lista = colecciones.filter((c) => c.tipo === tipo);
+  const nFotos = Number(Boolean(fotos.perfil)) + Number(Boolean(fotos.banner));
+  const barra = (
+    <div className="grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+      {(["script", "pack", "post"] as TipoColeccion[]).map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => {
+            setVerFotos(false);
+            setTipo(t);
+            setNuevo(null);
+            setAviso(null);
+          }}
+          className={`min-h-10 rounded-xl text-sm font-semibold transition ${!verFotos && tipo === t ? "bg-[#8B5CF6]/30 text-white" : "text-white/50"}`}
+        >
+          {ETIQUETA_TIPO[t]} <span className="text-xs opacity-60">{colecciones.filter((c) => c.tipo === t).length || ""}</span>
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          setVerFotos(true);
+          setNuevo(null);
+          setAviso(null);
+        }}
+        className={`min-h-10 rounded-xl text-sm font-semibold transition ${verFotos ? "bg-[#8B5CF6]/30 text-white" : "text-white/50"}`}
+      >
+        Fotos <span className={`text-xs ${nFotos === 2 ? "opacity-60" : "font-bold text-amber-300"}`}>{nFotos}/2</span>
+      </button>
+    </div>
+  );
+  if (verFotos) {
+    return (
+      <section className="space-y-3">
+        {barra}
+        <FotosPerfilSubida fotos={fotos} onCambio={onFotos} />
+      </section>
+    );
+  }
   return (
     <section className="space-y-3">
-      <div className="grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-        {(["script", "pack", "post"] as TipoColeccion[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => {
-              setTipo(t);
-              setNuevo(null);
-              setAviso(null);
-            }}
-            className={`min-h-10 rounded-xl text-sm font-semibold transition ${tipo === t ? "bg-[#8B5CF6]/30 text-white" : "text-white/50"}`}
-          >
-            {ETIQUETA_TIPO[t]} <span className="text-xs opacity-60">{colecciones.filter((c) => c.tipo === t).length || ""}</span>
-          </button>
-        ))}
-      </div>
+      {barra}
 
       <p className="text-sm text-white/45">
         {tipo === "script"
