@@ -63,6 +63,31 @@ function Galeria({ items }: { items: ReferenciaVista[] }) {
   );
 }
 
+/** Esquemas sencillos de como tienen que ir encuadradas la foto de perfil y la del banner (no son fotos de nadie). */
+function EsquemaPerfil() {
+  return (
+    <svg viewBox="0 0 120 160" className="h-40 w-auto shrink-0 rounded-lg border border-white/15 bg-white/[0.04]" role="img" aria-label="Foto de perfil: vertical, cara grande y centrada">
+      <ellipse cx="60" cy="62" rx="26" ry="32" fill="none" stroke="#A78BFA" strokeWidth="2.5" />
+      <path d="M8 160 C8 118 34 104 60 104 C86 104 112 118 112 160" fill="none" stroke="#A78BFA" strokeWidth="2.5" strokeDasharray="4 3" />
+      <circle cx="49" cy="58" r="2.5" fill="#A78BFA" />
+      <circle cx="71" cy="58" r="2.5" fill="#A78BFA" />
+      <text x="60" y="152" textAnchor="middle" fontSize="8" fill="#ffffff99">vertical · cara grande</text>
+    </svg>
+  );
+}
+
+function EsquemaBanner() {
+  return (
+    <svg viewBox="0 0 240 120" className="h-28 w-auto max-w-full shrink-0 rounded-lg border border-white/15 bg-white/[0.04]" role="img" aria-label="Banner: horizontal, cara a un lado y cuerpo hacia el otro">
+      <ellipse cx="62" cy="52" rx="20" ry="25" fill="none" stroke="#A78BFA" strokeWidth="2.5" />
+      <circle cx="54" cy="49" r="2.2" fill="#A78BFA" />
+      <circle cx="70" cy="49" r="2.2" fill="#A78BFA" />
+      <path d="M96 78 C130 62 170 60 232 74 L232 120 L40 120 C60 100 80 88 96 78 Z" fill="none" stroke="#A78BFA" strokeWidth="2.5" strokeDasharray="4 3" />
+      <text x="120" y="14" textAnchor="middle" fontSize="8" fill="#ffffff99">horizontal · cara a un lado, sin cortarla</text>
+    </svg>
+  );
+}
+
 const lineas = (t: string) => t.split("\n").map((l) => l.replace(/^[-•]\s*/, "").trim()).filter(Boolean);
 
 /** Guía para las modelos: scripts (texto fijo, tal cual el documento), packs y posts (textos que edita la agencia) y fotos/vídeos de ejemplo. */
@@ -78,6 +103,57 @@ export function GuiaOF({ packs, posts, referencias }: { packs: string; posts: st
         <span className="font-semibold text-white">Esta guía es solo para el contenido de OnlyFans</span> (scripts, packs de fotos y posts). Los reels de tu Instagram no siguen estas indicaciones. Síguela{" "}
         <span className="font-semibold text-white">exactamente como está escrita</span>: la duración de los vídeos y la cantidad de fotos y vídeos de cada fase tienen que ser las que se piden, sin cambiar nada.
       </p>
+
+      <Bloque titulo="🤳 Foto de perfil y foto de banner" abierto>
+        <p className="text-[15px] leading-relaxed text-white/80">
+          Para montar tu perfil necesitamos <span className="font-semibold text-white">dos fotos tuyas con muchísima calidad</span>: una de perfil y una horizontal para el banner. Tienen que verse{" "}
+          <span className="font-semibold text-white">nítidas, bien iluminadas y profesionales</span>, y sobre todo se tiene que ver tu cara muy bien.
+        </p>
+
+        <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-4">
+          <p className="font-display text-base font-semibold text-white">1 · Foto de perfil</p>
+          <div className="flex flex-wrap items-start gap-4">
+            <EsquemaPerfil />
+            <div className="min-w-0 flex-1 basis-60">
+              <Lista
+                puntos={[
+                  "Vertical (tipo selfie o retrato), con la cara grande y centrada: cabeza y hombros, mirando a la cámara.",
+                  "La cara tiene que verse perfecta: de frente o casi de frente, sin gafas de sol, gorra, filtros ni el pelo tapándote la cara.",
+                  "Luz natural suave de frente (junto a una ventana). Nada de contraluz ni sombras duras en la cara.",
+                  "Look coqueto y cuidado, con la misma cercanía y naturalidad de un selfie bien hecho.",
+                ]}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-4">
+          <p className="font-display text-base font-semibold text-white">2 · Foto horizontal para el banner</p>
+          <div className="flex flex-wrap items-start gap-4">
+            <EsquemaBanner />
+            <div className="min-w-0 flex-1 basis-60">
+              <Lista
+                puntos={[
+                  "Horizontal (apaisada), de al menos 2000 píxeles de ancho. Con el móvil en horizontal y la cámara trasera sale perfecta.",
+                  "Tu cara bien visible y mirando a la cámara, colocada hacia un lado de la foto (no cortada por los bordes) y el resto de la foto con tu pose, tumbada o apoyada.",
+                  "Fondo ordenado y luz buena. Que se vea cuidada, como una foto de portada.",
+                ]}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="text-base font-semibold text-[#C4B5FD]">Las dos, con la máxima calidad</h4>
+          <Lista
+            puntos={[
+              "Haz las fotos con la cámara trasera del móvil, bien enfocadas y sin zoom digital.",
+              "Sin filtros, sin retoque y sin capturas de pantalla: queremos la foto original.",
+              "Cuando las envíes a la agencia, mándalas como archivo o documento (no como foto normal de WhatsApp), para que no pierdan calidad por la compresión.",
+            ]}
+          />
+        </div>
+      </Bloque>
 
       <Bloque titulo="🎬 Guía de scripts">
         <h3 className="font-display text-xl font-semibold text-white">{g.titulo}</h3>
