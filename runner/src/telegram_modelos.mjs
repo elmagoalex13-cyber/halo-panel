@@ -156,6 +156,12 @@ export async function avisosModelos(sb) {
         await enviar(m.telegram_id, `${partes.join("\n")}${enlacePortal(m)}`);
         await marcar([e.id]);
       }
+      // Accesos que la agencia no ha podido usar: al momento
+      for (const e of lista.filter((x) => x.tipo === "modelo_accesos_invalidos")) {
+        const cual = e.datos?.cual === "skrill" ? "Skrill" : "OnlyFans";
+        await enviar(m.telegram_id, `⚠️ <b>${esc(m.nombre)}</b>, no hemos podido entrar con tus accesos de ${cual}.\nEntra en tu portal y vuelve a escribirlos (te sale un aviso arriba, con el formulario).${enlacePortal(m)}`);
+        await marcar([e.id]);
+      }
       // Revision de scripts, packs y posts
       for (const e of lista.filter((x) => x.tipo === "modelo_revision")) {
         const d = e.datos ?? {};

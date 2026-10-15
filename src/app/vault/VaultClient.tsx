@@ -37,6 +37,7 @@ export function VaultClient({
   const [revealed, setRevealed] = useState<{ id: string; title: string; value: string } | null>(null);
   const [checks, setChecks] = useState<Record<string, ChecksEntrada>>(checksIniciales);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [avisoCheck, setAvisoCheck] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editando, setEditando] = useState<VaultEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,16 +78,18 @@ export function VaultClient({
       return;
     }
     setError(null);
+    setAvisoCheck(null);
     setRevealed({ id: entry.id, title: entry.nombre, value: data.value });
   }
 
   // Check interno de una credencial («hemos podido acceder», «las credenciales son validas»): lo marcamos nosotros, la modelo no lo ve
   async function marcar(id: string, campo: CampoCheck, valor: boolean) {
     const res = await fetch("/api/vault/checks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, campo, valor }) });
-    const j = (await res.json().catch(() => ({}))) as { error?: string; checks?: ChecksEntrada };
+    const j = (await res.json().catch(() => ({}))) as { error?: string; checks?: ChecksEntrada; avisada?: boolean };
     if (!res.ok) return setError(j.error ?? "No se pudo guardar el check");
     setError(null);
     setChecks((prev) => ({ ...prev, [id]: j.checks ?? {} }));
+    setAvisoCheck(j.avisada ? "Aviso enviado a la modelo: le sale en su portal (y por Telegram si lo tiene) para que vuelva a enviar ese acceso." : null);
   }
 
   function copiar(clave: string, texto: string) {
@@ -293,6 +296,16 @@ export function VaultClient({
               <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Checks internos (la modelo no los ve)</p>
               <ToggleCheck etiqueta="Hemos podido acceder" check={checks[revealed.id]?.acceso} onCambio={(v) => void marcar(revealed.id, "acceso", v)} />
               <ToggleCheck etiqueta="Las credenciales son válidas" check={checks[revealed.id]?.valida} onCambio={(v) => void marcar(revealed.id, "valida", v)} />
+              <ToggleCheck
+                etiqueta="NO son válidas (avisar a la modelo)"
+                check={checks[revealed.id]?.invalida}
+                tono="rojo"
+                onCambio={(v) => {
+                  if (v && !confirm("¿Marcar estas credenciales como NO válidas? Si es un acceso de una modelo, le saldrá un aviso en su portal (y por Telegram si lo tiene) para que lo vuelva a enviar.")) return;
+                  void marcar(revealed.id, "invalida", v);
+                }}
+              />
+              {avisoCheck ? <p className="text-xs text-amber-200">{avisoCheck}</p> : null}
             </div>
             <button className="btn-secondary mt-4 flex h-10 items-center gap-2 px-4 text-sm" onClick={() => copiar("todo", revealed.value)}>
               <Copy className="h-4 w-4" /> {copiado === "todo" ? "✓ Copiado" : "Copiar todo"}
@@ -455,15 +468,21 @@ function ChipsChecks({ checks }: { checks?: ChecksEntrada }) {
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {chip(Boolean(checks?.acceso), "Acceso", checks?.acceso)}
-      {chip(Boolean(checks?.valida), "Válidas", checks?.valida)}
+      {checks?.invalida ? (
+        <span title={`No válidas: ${checks.invalida.por}, ${cuando(checks.invalida.at)}`} className="rounded-full bg-red-400/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+          ✗ No válidas
+        </span>
+      ) : (
+        chip(Boolean(checks?.valida), "Válidas", checks?.valida)
+      )}
     </div>
   );
 }
 
-function ToggleCheck({ etiqueta, check, onCambio }: { etiqueta: string; check?: { por: string; at: string }; onCambio: (v: boolean) => void }) {
+function ToggleCheck({ etiqueta, check, onCambio, tono = "verde" }: { etiqueta: string; check?: { por: string; at: string }; onCambio: (v: boolean) => void; tono?: "verde" | "rojo" }) {
   return (
     <label className="flex cursor-pointer items-center gap-3 text-sm text-white/85">
-      <input type="checkbox" checked={Boolean(check)} onChange={(e) => onCambio(e.target.checked)} className="h-5 w-5 accent-emerald-500" />
+      <input type="checkbox" checked={Boolean(check)} onChange={(e) => onCambio(e.target.checked)} className={`h-5 w-5 ${tono === "rojo" ? "accent-red-500" : "accent-emerald-500"}`} />
       <span className="flex-1">{etiqueta}</span>
       {check ? <span className="text-[11px] text-white/40">{check.por} · {cuando(check.at)}</span> : null}
     </label>

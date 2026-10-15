@@ -120,7 +120,7 @@ export function OnboardingForm({
   onCambio,
   accesos,
 }: {
-  accesos?: { modo: "of" | "completo"; dado: boolean; faltaPin?: boolean };
+  accesos?: { modo: "of" | "completo"; dado: boolean; faltaPin?: boolean; invalidos?: Array<"of" | "skrill"> };
   slug: string;
   datosIniciales: DatosOnboarding;
   estadoInicial: Estado;

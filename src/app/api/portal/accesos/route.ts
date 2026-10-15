@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
-import { accesosCompletos, anadirPinSkrill, faltaPinSkrill, guardarAccesoOF, guardarAccesosModelo, PIN_VALIDO, validarAccesos } from "@/lib/accesosModelo";
+import { accesosCompletos, accesosInvalidos, anadirPinSkrill, faltaPinSkrill, guardarAccesoOF, guardarAccesoSkrill, guardarAccesosModelo, PIN_VALIDO, validarAccesos } from "@/lib/accesosModelo";
 import { encolarTelegram } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function GET() {
   const sesion = await sesionActual();
   if (!sesion) return NextResponse.json({ error: "Sesion caducada" }, { status: 401 });
   const [completo, of] = await Promise.all([accesosCompletos(sesion.modeloId), accesosCompletos(sesion.modeloId, "of")]);
-  return NextResponse.json({ completo, of, faltaPin: await faltaPinSkrill(sesion.modeloId) });
+  return NextResponse.json({ completo, of, faltaPin: await faltaPinSkrill(sesion.modeloId), invalidos: await accesosInvalidos(sesion.modeloId) });
 }
 
 // PATCH { sk_pin }: la modelo que ya envio su Skrill sin PIN lo añade ahora
@@ -37,7 +37,8 @@ export async function PUT(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Servicio no disponible" }, { status: 503 });
 
   const raw = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const modo = raw?.modo === "of" ? "of" : "completo"; // "of": solo OnlyFans (modelos privadas, desde el formulario de su perfil)
+  // "of": solo OnlyFans (modelos privadas o cuando solo ese acceso no era valido); "sk": solo Skrill (cuando ese acceso no era valido)
+  const modo = raw?.modo === "of" ? "of" : raw?.modo === "sk" ? "sk" : "completo";
   const { datos, error } = validarAccesos(raw, modo);
   if (!datos) return NextResponse.json({ error }, { status: 400 });
 
@@ -49,10 +50,11 @@ export async function PUT(req: NextRequest) {
   const ambito = modelo.ambito === "compartido" ? "compartido" : "privado";
   try {
     if (modo === "of") await guardarAccesoOF(sesion.modeloId, String(modelo.nombre), ambito, datos);
+    else if (modo === "sk") await guardarAccesoSkrill(sesion.modeloId, String(modelo.nombre), ambito, datos);
     else await guardarAccesosModelo(sesion.modeloId, String(modelo.nombre), ambito, datos);
   } catch {
     return NextResponse.json({ error: "No se pudieron guardar tus accesos. Inténtalo de nuevo en un momento." }, { status: 500 });
   }
-  await encolarTelegram("accesos", sesion.modeloId, { actualizacion: eraCompleto, parcial: modo === "of" });
+  await encolarTelegram("accesos", sesion.modeloId, { actualizacion: eraCompleto, parcial: modo !== "completo" });
   return NextResponse.json({ ok: true });
 }

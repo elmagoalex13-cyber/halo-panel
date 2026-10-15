@@ -19,7 +19,7 @@ import { avisosActividad } from "@/lib/actividad";
 import { ahoraMadrid, estadoSemanal } from "@/lib/rondaVirales";
 import { avisosSistema, leerSistema } from "@/lib/sistema";
 import { avisosCaptacion, resumenCaptacion } from "@/lib/captacion";
-import { modelosSinAccesos, modelosSinPin } from "@/lib/accesosModelo";
+import { modelosConAccesosInvalidos, modelosSinAccesos, modelosSinPin } from "@/lib/accesosModelo";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
@@ -123,7 +123,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal, avisosContrato, sinPin] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null), avisosContratos(), modelosSinPin(await alcanceActual(grupo))]);
+  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal, avisosContrato, sinPin, accInvalidos] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null), avisosContratos(), modelosSinPin(await alcanceActual(grupo)), modelosConAccesosInvalidos(await alcanceActual(grupo))]);
   const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
@@ -229,6 +229,10 @@ export default async function DashboardPage({
     // Su Skrill ya esta pero sin el PIN (ahora se pide en el formulario; en su portal les sale un aviso)
     ...(sinPin.length
       ? [{ id: `pin|${sinPin.map((m) => m.nombre).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Falta el PIN de Skrill (en su portal ya les sale el aviso) de: ${sinPin.map((m) => m.nombre).join(", ")}`, href: "/vault" }]
+      : []),
+    // Accesos que marcamos como NO validos: la modelo ya ha recibido el aviso y esta pendiente de que los vuelva a enviar
+    ...(accInvalidos.length
+      ? [{ id: `accinv|${accInvalidos.map((m) => `${m.nombre}:${m.cuales.join("+")}`).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Accesos marcados como no válidos, pendientes de que los vuelvan a enviar: ${accInvalidos.map((m) => `${m.nombre} (${m.cuales.map((c) => (c === "of" ? "OnlyFans" : "Skrill")).join(" y ")})`).join(", ")}`, href: "/vault" }]
       : []),
     ...(contenidoBajo.length > 0
       ? [

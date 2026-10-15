@@ -4,8 +4,9 @@
 import { createAdminClient } from "@/lib/supabase/server";
 
 export type CheckVault = { por: string; at: string };
-export type ChecksEntrada = { acceso?: CheckVault; valida?: CheckVault };
-export type CampoCheck = "acceso" | "valida";
+// «valida» e «invalida» se excluyen: una credencial o es valida o no lo es (si no lo es, la modelo recibe un aviso para volver a enviarla)
+export type ChecksEntrada = { acceso?: CheckVault; valida?: CheckVault; invalida?: CheckVault };
+export type CampoCheck = "acceso" | "valida" | "invalida";
 
 export const claveChecks = (id: string) => `vault_checks:${id}`;
 

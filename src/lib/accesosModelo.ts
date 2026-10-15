@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { soloVisibles, type Alcance } from "@/lib/alcance";
 import { decryptVaultValue, encryptVaultValue } from "@/lib/vault/crypto";
+import { leerChecks } from "@/lib/vaultChecks";
 
 // ACCESOS de cada modelo (OnlyFans y Skrill): los rellena ella en su portal (obligatorio) y se guardan CIFRADOS en el Vault:
 // en el baul compartido si la modelo es compartida, y en el del dueño si es privada. No pasan por el onboarding (que guarda
@@ -24,7 +25,7 @@ const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const PIN_VALIDO = /^\d{4,8}$/;
 
 /** Valida y limpia lo que envia la modelo. `modo: "of"` = solo OnlyFans (las modelos privadas); si no, OnlyFans y Skrill (compartidas). */
-export function validarAccesos(raw: unknown, modo: "completo" | "of" = "completo"): { datos?: DatosAccesos; error?: string } {
+export function validarAccesos(raw: unknown, modo: "completo" | "of" | "sk" = "completo"): { datos?: DatosAccesos; error?: string } {
   const s = (raw ?? {}) as Record<string, unknown>;
   const d: DatosAccesos = {
     of_correo: limpiar(s.of_correo),
@@ -34,8 +35,10 @@ export function validarAccesos(raw: unknown, modo: "completo" | "of" = "completo
     sk_password: limpiar(s.sk_password),
     sk_pin: limpiar(s.sk_pin, 12).replace(/\s/g, ""),
   };
-  if (!CORREO.test(d.of_correo)) return { error: "El correo de OnlyFans no es válido" };
-  if (!d.of_password) return { error: "Falta la contraseña de OnlyFans" };
+  if (modo !== "sk") {
+    if (!CORREO.test(d.of_correo)) return { error: "El correo de OnlyFans no es válido" };
+    if (!d.of_password) return { error: "Falta la contraseña de OnlyFans" };
+  }
   if (modo === "of") return { datos: d };
   if (!CORREO.test(d.sk_correo)) return { error: "El correo de Skrill no es válido" };
   if (!d.sk_password_correo) return { error: "Falta la contraseña del correo de Skrill" };
@@ -66,6 +69,51 @@ async function guardarEntrada(modeloId: string, nombre: string, categoria: strin
 /** Guarda (o actualiza) el acceso de OnlyFans de la modelo en el Vault, cifrado. */
 export async function guardarAccesoOF(modeloId: string, nombreModelo: string, ambito: "privado" | "compartido", d: Pick<DatosAccesos, "of_correo" | "of_password">) {
   await guardarEntrada(modeloId, `${PREFIJO_OF}${nombreModelo}`, "of_credentials", "Enviado por la modelo desde su portal", ambito, `Correo: ${d.of_correo}\nContraseña: ${d.of_password}`);
+}
+
+/** Guarda (o actualiza) solo el acceso de Skrill (cuando la agencia marca el que tenia como no valido y ella lo vuelve a enviar). */
+export async function guardarAccesoSkrill(modeloId: string, nombreModelo: string, ambito: "privado" | "compartido", d: Pick<DatosAccesos, "sk_correo" | "sk_password_correo" | "sk_password" | "sk_pin">) {
+  await guardarEntrada(
+    modeloId,
+    `${PREFIJO_SKRILL}${nombreModelo}`,
+    "banco",
+    "Enviado por la modelo desde su portal",
+    ambito,
+    `Correo de Skrill: ${d.sk_correo}\nContraseña del correo: ${d.sk_password_correo}\nContraseña de Skrill: ${d.sk_password}\n${LINEA_PIN}${d.sk_pin}`,
+  );
+}
+
+/** Que accesos de esta modelo hemos marcado como NO validos (y aun no ha vuelto a enviar): "of" y/o "skrill". */
+export async function accesosInvalidos(modeloId: string): Promise<Array<"of" | "skrill">> {
+  try {
+    const { data } = await createAdminClient().from("vault_panel").select("id, nombre").eq("modelo_id", modeloId).or(`nombre.like.${PREFIJO_OF}%,nombre.like.${PREFIJO_SKRILL}%`).is("eliminada_at", null);
+    if (!data?.length) return [];
+    const checks = await leerChecks(data.map((e) => e.id as string));
+    const salida: Array<"of" | "skrill"> = [];
+    for (const e of data) if (checks[e.id as string]?.invalida) salida.push(String(e.nombre).startsWith(PREFIJO_OF) ? "of" : "skrill");
+    return salida;
+  } catch {
+    return [];
+  }
+}
+
+/** Modelos (visibles) con algun acceso marcado como no valido y pendiente de que lo vuelvan a enviar. */
+export async function modelosConAccesosInvalidos(alcance: Alcance): Promise<Array<{ id: string; nombre: string; cuales: Array<"of" | "skrill"> }>> {
+  try {
+    const db = createAdminClient();
+    const { data: modelos } = await soloVisibles(db.from("modelos").select("id, nombre").eq("activa", true), alcance, "id");
+    if (!modelos?.length) return [];
+    const { data: entradas } = await db.from("vault_panel").select("id, modelo_id, nombre").in("modelo_id", modelos.map((m) => m.id)).or(`nombre.like.${PREFIJO_OF}%,nombre.like.${PREFIJO_SKRILL}%`).is("eliminada_at", null);
+    const checks = await leerChecks((entradas ?? []).map((e) => e.id as string));
+    const porModelo = new Map<string, Array<"of" | "skrill">>();
+    for (const e of entradas ?? []) {
+      if (!checks[e.id as string]?.invalida) continue;
+      porModelo.set(e.modelo_id as string, [...(porModelo.get(e.modelo_id as string) ?? []), String(e.nombre).startsWith(PREFIJO_OF) ? "of" : "skrill"]);
+    }
+    return modelos.filter((m) => porModelo.has(m.id as string)).map((m) => ({ id: m.id as string, nombre: m.nombre as string, cuales: porModelo.get(m.id as string)! }));
+  } catch {
+    return [];
+  }
 }
 
 /** Guarda (o actualiza) los accesos de OnlyFans y Skrill (modelos compartidas). */
