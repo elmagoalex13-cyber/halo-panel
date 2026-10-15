@@ -1,7 +1,7 @@
 /**
  * «Videos de bienvenida»: la modelo nueva (al firmar el contrato el panel la apunta en panel_config.modelos_espejo con la hora a la que le toca,
  * una hora despues) recibe en su portal, UNA SOLA VEZ, los ULTIMOS 40 videos distintos que se hayan asignado a las demas modelos en ese momento.
- * Despues no se le copia nada mas. No se quita nada de lo que ya tenga y a quien ya tiene un video no se le repite.
+ * Solo cuentan videos de modelos reales (no las de prueba) y videos para asignar (no los de frases con musica que solo van al banco). Despues no se le copia nada mas. No se quita nada de lo que ya tenga y a quien ya tiene un video no se le repite.
  */
 const CLAVE = "modelos_espejo";
 const ULTIMOS = 40;
@@ -51,19 +51,57 @@ export async function cicloEspejo(sb) {
   }
 }
 
-/** Asigna a la modelo los ultimos 40 videos distintos asignados a las demas. Devuelve cuantos se le han asignado. */
+const TAGS_SOLO_BANCO = ["meta:frase_banco=1", "meta:analizar_frase=1", "meta:frase_falta=1", "meta:frase_manual=1"];
+const codigoDe = (url) => /\/reel\/([^/?#]+)/.exec(url ?? "")?.[1] ?? /([^/]+)\.mp4$/.exec(url ?? "")?.[1] ?? null;
+
+/** Codigos de los videos que solo sirven para el banco de frases (nunca se asignan a una modelo). */
+async function codigosSoloBanco(sb) {
+  const codigos = new Set();
+  for (let desde = 0; ; desde += 1000) {
+    const { data } = await sb.from("referencias_videos").select("video_url").overlaps("tags", TAGS_SOLO_BANCO).range(desde, desde + 999);
+    for (const v of data ?? []) {
+      const c = codigoDe(v.video_url);
+      if (c) codigos.add(c);
+    }
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  return codigos;
+}
+
+/**
+ * Asigna a la modelo los ultimos 40 videos distintos asignados a las demas. Devuelve cuantos se le han asignado.
+ * Solo cuentan videos de modelos REALES (las de prueba, «modelo_test», no) y videos para asignar: los de frases con musica
+ * que solo se guardan en el banco de frases no se asignan nunca.
+ */
 export async function asignarUltimos(sb, modeloId) {
   const { data: propios } = await sb.from("encargos").select("referencia_id").eq("modelo_id", modeloId).not("referencia_id", "is", null).limit(5000);
   const tiene = new Set((propios ?? []).map((e) => e.referencia_id));
 
-  // Los ultimos 40 videos distintos asignados a las demas (del mas nuevo al mas viejo)
-  const { data } = await sb.from("encargos").select("referencia_id, tipo_video, instrucciones, created_at").neq("modelo_id", modeloId).not("referencia_id", "is", null).order("created_at", { ascending: false }).limit(1500);
+  const { data: mods } = await sb.from("modelos").select("id, nombre");
+  const excluidas = new Set([modeloId, ...(mods ?? []).filter((m) => /test|prueba/i.test(m.nombre ?? "")).map((m) => m.id)]);
+  const soloBanco = await codigosSoloBanco(sb);
+
+  // Los encargos mas nuevos de modelos reales (del mas nuevo al mas viejo), un video distinto cada vez
+  const { data } = await sb.from("encargos").select("modelo_id, referencia_id, tipo_video, instrucciones, created_at").not("referencia_id", "is", null).order("created_at", { ascending: false }).limit(1500);
+  const candidatos = [];
   const vistos = new Set();
-  const nuevos = [];
   for (const e of data ?? []) {
-    if (vistos.has(e.referencia_id)) continue;
+    if (excluidas.has(e.modelo_id) || vistos.has(e.referencia_id)) continue;
     vistos.add(e.referencia_id);
-    if (vistos.size > ULTIMOS) break;
+    candidatos.push(e);
+  }
+  const urls = new Map();
+  for (let i = 0; i < candidatos.length; i += 80) {
+    const { data: refs } = await sb.from("referencias").select("id, url_original").in("id", candidatos.slice(i, i + 80).map((c) => c.referencia_id));
+    for (const r of refs ?? []) urls.set(r.id, r.url_original);
+  }
+
+  const nuevos = [];
+  let contados = 0;
+  for (const e of candidatos) {
+    const c = codigoDe(urls.get(e.referencia_id));
+    if (c && soloBanco.has(c)) continue;
+    if (++contados > ULTIMOS) break;
     if (tiene.has(e.referencia_id)) continue;
     nuevos.push({ modelo_id: modeloId, referencia_id: e.referencia_id, tipo_video: e.tipo_video, estado: "pendiente", instrucciones: e.instrucciones ?? null });
   }
