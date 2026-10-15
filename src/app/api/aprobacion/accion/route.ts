@@ -17,7 +17,7 @@ const ESTADO_MAP: Record<string, string> = {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin, velocidad } = (await req.json()) as {
+    const { id, accion, caption, correcciones, frase_quemada, recorte_inicio, recorte_fin, velocidad, recorte_cambiado } = (await req.json()) as {
       id?: string;
       accion?: string;
       caption?: string;
@@ -26,6 +26,7 @@ export async function PATCH(req: NextRequest) {
       recorte_inicio?: number | null;
       recorte_fin?: number | null;
       velocidad?: number;
+      recorte_cambiado?: boolean;
     };
 
     if (!id || !accion || !ESTADO_MAP[accion]) {
@@ -42,7 +43,7 @@ export async function PATCH(req: NextRequest) {
     const supabase = createAdminClient();
     const { data: actual, error: actualError } = await supabase
       .from("library_content")
-      .select("id, estado, recorte_inicio, recorte_fin, notas_editor")
+      .select("id, estado, recorte_inicio, recorte_fin, notas_editor, frase_quemada, tipo_video")
       .eq("id", id)
       .maybeSingle();
     if (actualError) throw actualError;
@@ -90,16 +91,30 @@ export async function PATCH(req: NextRequest) {
       // actual (el que de verdad se uso la ultima vez, automatico o manual)
       // en vez de ignorar la nota en silencio. Texto libre sin ese formato no
       // se interpreta (adivinar mal seria peor que no hacer nada).
+      // Todo lo que se haya cambiado en la ventana (velocidad, recorte, frase, notas) se aplica EN LA MISMA vez: un solo rehacer
+      let notas = actual.notas_editor as string | null;
+      let recorteBase = { inicio: actual.recorte_inicio as number | null, fin: actual.recorte_fin as number | null };
+      if (typeof velocidad === "number") {
+        if (!(OPCIONES_VELOCIDAD as readonly number[]).includes(velocidad)) return NextResponse.json({ error: "Velocidad no valida" }, { status: 400 });
+        notas = ponerAjustes(notas, { velocidad, volumen: 1 });
+        update.notas_editor = notas;
+      }
+      if (recorte_cambiado) {
+        recorteBase = { inicio: typeof recorte_inicio === "number" ? recorte_inicio : null, fin: typeof recorte_fin === "number" ? recorte_fin : null };
+        update.recorte_inicio = recorteBase.inicio;
+        update.recorte_fin = recorteBase.fin;
+        notas = conMarcaManual(notas);
+        update.notas_editor = notas;
+      }
       const ajuste = correcciones ? parseNotaRecorte(correcciones) : null;
       if (ajuste) {
-        const { inicio, fin } = aplicarAjusteRecorte(ajuste, {
-          inicio: actual.recorte_inicio,
-          fin: actual.recorte_fin,
-        });
+        const { inicio, fin } = aplicarAjusteRecorte(ajuste, recorteBase);
         update.recorte_inicio = inicio;
         update.recorte_fin = fin;
-        update.notas_editor = conMarcaManual(actual.notas_editor);
+        update.notas_editor = conMarcaManual(notas);
       }
+      // Frase con musica: si se ha cambiado el texto de la frase, la colocacion guardada (que manda sobre el texto) se descarta para que se use el nuevo
+      if (frase_quemada !== undefined && actual.tipo_video === "tipo2" && frase_quemada !== (actual.frase_quemada ?? "")) update.layout_json = null;
     }
     if (accion === "nueva_frase") {
       // Igual que rehacer, pero ademas se borra la frase/layout actuales para que el
@@ -111,6 +126,17 @@ export async function PATCH(req: NextRequest) {
       update.publicado_at = null;
       update.frase_quemada = null;
       update.layout_json = null;
+      // Tambien aplica a la vez lo demas que se haya cambiado (velocidad, recorte)
+      let notas = actual.notas_editor as string | null;
+      if (typeof velocidad === "number" && (OPCIONES_VELOCIDAD as readonly number[]).includes(velocidad)) {
+        notas = ponerAjustes(notas, { velocidad, volumen: 1 });
+        update.notas_editor = notas;
+      }
+      if (recorte_cambiado) {
+        update.recorte_inicio = typeof recorte_inicio === "number" ? recorte_inicio : null;
+        update.recorte_fin = typeof recorte_fin === "number" ? recorte_fin : null;
+        update.notas_editor = conMarcaManual(notas);
+      }
     }
     if (accion === "ajustes") {
       // Velocidad (1.1x, 1.2x...) y volumen del video hablado: se guardan en las notas y se reencola para que el editor lo rehaga con ellos

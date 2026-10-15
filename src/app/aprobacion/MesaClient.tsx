@@ -163,35 +163,9 @@ function formatearSegundos(s: number | null) {
   return `${m}:${sec.padStart(5, "0")}`;
 }
 
-/** Velocidad del video hablado (como en Edits de Instagram: 1.1x, 1.2x...). El volumen ya sale siempre al 200 %. Al aplicar, el editor rehace el video. */
-function AjustesEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => void }) {
+/** Velocidad del video hablado (como en Edits de Instagram: 1.1x, 1.2x...). Solo elige: se aplica con el boton «Rehacer con los cambios». El volumen ya sale siempre al 200 %. */
+function AjustesEditor({ row, velocidad, onCambio }: { row: VideoRow; velocidad: number; onCambio: (v: number) => void }) {
   const velActual = leerVelocidad(row.notas_editor);
-  const [velocidad, setVelocidad] = useState<number>(velActual);
-  const [guardando, setGuardando] = useState(false);
-  const [mensaje, setMensaje] = useState<string | null>(null);
-  useEffect(() => {
-    setVelocidad(leerVelocidad(row.notas_editor));
-    setMensaje(null);
-  }, [row.id, row.notas_editor]);
-
-  async function aplicar() {
-    setGuardando(true);
-    setMensaje(null);
-    try {
-      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, accion: "ajustes", velocidad }) });
-      if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-        setMensaje(payload?.error ?? "No se pudo aplicar.");
-        setGuardando(false);
-        return;
-      }
-      onGuardado();
-    } catch {
-      setMensaje("No se pudo aplicar.");
-      setGuardando(false);
-    }
-  }
-
   const boton = (activo: boolean) => `rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${activo ? "border-[#8B5CF6] bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-black/20 text-white/60 hover:text-white"}`;
 
   return (
@@ -199,40 +173,31 @@ function AjustesEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => v
       <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/40">Velocidad (voz y subtítulos van a la vez)</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {OPCIONES_VELOCIDAD.map((v) => (
-          <button key={v} type="button" onClick={() => setVelocidad(v)} className={boton(velocidad === v)}>
+          <button key={v} type="button" onClick={() => onCambio(v)} className={boton(velocidad === v)}>
             {v === 1 ? "Normal" : textoVelocidad(v)}
           </button>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => void aplicar()} disabled={guardando || velocidad === velActual} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-40" title={velocidad === velActual ? "Elige otra velocidad" : undefined}>
-          {guardando ? "Enviando…" : "Aplicar y rehacer"}
-        </button>
-        <p className="text-[11px] text-white/35">Ahora: velocidad {velActual === 1 ? "normal" : textoVelocidad(velActual)} · volumen siempre al 200 %. El editor lo rehace y vuelve a la Mesa en unos minutos.</p>
-      </div>
-      {mensaje ? <p className="mt-1 text-xs text-red-300">{mensaje}</p> : null}
+      <p className="mt-2 text-[11px] text-white/35">
+        Ahora está a {velActual === 1 ? "velocidad normal" : textoVelocidad(velActual)} · volumen siempre al 200 %.{velocidad !== velActual ? " El cambio se aplica al pulsar «Rehacer con los cambios»." : ""}
+      </p>
     </div>
   );
 }
 
-function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => void }) {
+function RecorteManualEditor({ row, inicio, fin, onCambio }: { row: VideoRow; inicio: number | null; fin: number | null; onCambio: (inicio: number | null, fin: number | null) => void }) {
+  const setInicio = (v: number | null) => onCambio(v, fin);
+  const setFin = (v: number | null) => onCambio(inicio, v);
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const [duracion, setDuracion] = useState<number | null>(null);
-  const [inicio, setInicio] = useState<number | null>(row.recorte_inicio ?? null);
-  const [fin, setFin] = useState<number | null>(row.recorte_fin ?? null);
   const [arrastrando, setArrastrando] = useState<"inicio" | "fin" | null>(null);
   const [pausadoEn, setPausadoEn] = useState<number | null>(null);
-  const [guardando, setGuardando] = useState(false);
-  const [mensaje, setMensaje] = useState<string | null>(null);
 
   useEffect(() => {
-    setInicio(row.recorte_inicio ?? null);
-    setFin(row.recorte_fin ?? null);
     setDuracion(null);
     setPausadoEn(null);
-    setMensaje(null);
-  }, [row.id, row.recorte_inicio, row.recorte_fin]);
+  }, [row.id]);
 
   function marcarInicio(tiempo?: number) {
     const t = tiempo ?? videoRef.current?.currentTime;
@@ -270,28 +235,6 @@ function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: (
         setArrastrando(null);
       },
     };
-  }
-
-  async function guardar() {
-    setGuardando(true);
-    setMensaje(null);
-    try {
-      const res = await fetch("/api/aprobacion/accion", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: row.id, accion: "recorte", recorte_inicio: inicio, recorte_fin: fin }),
-      });
-      if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-        setMensaje(payload?.error ?? "No se pudo guardar el recorte.");
-        setGuardando(false);
-        return;
-      }
-      onGuardado();
-    } catch {
-      setMensaje("No se pudo guardar el recorte.");
-      setGuardando(false);
-    }
   }
 
   const pctInicio = duracion ? ((inicio ?? 0) / duracion) * 100 : 0;
@@ -393,24 +336,13 @@ function RecorteManualEditor({ row, onGuardado }: { row: VideoRow; onGuardado: (
       <div className="mt-2 flex items-center justify-between gap-2">
         <button
           type="button"
-          onClick={() => {
-            setInicio(null);
-            setFin(null);
-          }}
+          onClick={() => onCambio(null, null)}
           className="text-[11px] text-white/40 transition hover:text-white/70"
         >
           Quitar marcas
         </button>
-        <button
-          type="button"
-          onClick={guardar}
-          disabled={guardando || (inicio === null && fin === null)}
-          className="rounded-lg bg-[#8B5CF6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#7C3AED] disabled:opacity-40"
-        >
-          {guardando ? "Guardando..." : "Guardar y reprocesar"}
-        </button>
+        <span className="text-[11px] text-white/35">Se aplica al pulsar «Rehacer con los cambios».</span>
       </div>
-      {mensaje ? <p className="mt-2 text-[11px] text-red-300">{mensaje}</p> : null}
     </div>
   );
 }
@@ -435,6 +367,9 @@ export function MesaClient({
   const [caption, setCaption] = useState("");
   const [correcciones, setCorrecciones] = useState("");
   const [frase, setFrase] = useState("");
+  // Cambios pendientes de la ventana: se aplican TODOS juntos con un solo «Rehacer con los cambios»
+  const [velocidadSel, setVelocidadSel] = useState(1);
+  const [recorteSel, setRecorteSel] = useState<{ inicio: number | null; fin: number | null }>({ inicio: null, fin: null });
   const [loading, setLoading] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const [originalOpen, setOriginalOpen] = useState(false);
@@ -505,6 +440,8 @@ export function MesaClient({
     setCaption(row.caption);
     setCorrecciones(row.correcciones);
     setFrase(row.frase_quemada);
+    setVelocidadSel(leerVelocidad(row.notas_editor));
+    setRecorteSel({ inicio: row.recorte_inicio ?? null, fin: row.recorte_fin ?? null });
     // Tipo 4: auto-expandir referencia y original para comparativa de 3 paneles
     const esTipo4 = row.tipo_video === "tipo4";
     setRefOpen(esTipo4 && Boolean(row.r2_key_referencia));
@@ -520,7 +457,21 @@ export function MesaClient({
         const res = await fetch("/api/aprobacion/accion", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: selected.id, accion, caption, correcciones, frase_quemada: frase }),
+          body: JSON.stringify({
+            id: selected.id,
+            accion,
+            caption,
+            correcciones,
+            frase_quemada: frase,
+            ...(accion === "rehacer" || accion === "nueva_frase"
+              ? {
+                  ...(velocidadSel !== leerVelocidad(selected.notas_editor) ? { velocidad: velocidadSel } : {}),
+                  ...(recorteSel.inicio !== (selected.recorte_inicio ?? null) || recorteSel.fin !== (selected.recorte_fin ?? null)
+                    ? { recorte_cambiado: true, recorte_inicio: recorteSel.inicio, recorte_fin: recorteSel.fin }
+                    : {}),
+                }
+              : {}),
+          }),
         });
 
         if (res.ok) {
@@ -552,7 +503,7 @@ export function MesaClient({
         setLoading(false);
       }
     },
-    [selected, caption, correcciones, frase, currentEstado, router, closePopup],
+    [selected, caption, correcciones, frase, velocidadSel, recorteSel, currentEstado, router, closePopup],
   );
 
   const quickAct = useCallback(
@@ -602,6 +553,15 @@ export function MesaClient({
     [currentEstado, router],
   );
 
+
+  // Que se ha cambiado en la ventana abierta (se enseña junto al boton de rehacer)
+  const cambiosPendientes: string[] = [];
+  if (selected) {
+    if (velocidadSel !== leerVelocidad(selected.notas_editor)) cambiosPendientes.push(`velocidad ${velocidadSel === 1 ? "normal" : textoVelocidad(velocidadSel)}`);
+    if (recorteSel.inicio !== (selected.recorte_inicio ?? null) || recorteSel.fin !== (selected.recorte_fin ?? null)) cambiosPendientes.push("recorte");
+    if (frase !== (selected.frase_quemada ?? "")) cambiosPendientes.push("frase");
+    if (correcciones.trim() !== (selected.correcciones ?? "").trim()) cambiosPendientes.push("nota");
+  }
 
   const puedeMarcar = currentEstado === "aprobado" || currentEstado === "publicado";
   const seleccionVisible = filteredRows.filter((row) => seleccion.has(row.id));
@@ -1183,7 +1143,7 @@ export function MesaClient({
 
               <div>
                 <label className="mb-1 block text-[9px] font-semibold uppercase tracking-widest text-white/35">
-                  Nota para Rehacer <span className="font-normal normal-case text-white/20">(obligatoria para rehacer)</span>
+                  Nota para Rehacer <span className="font-normal normal-case text-white/20">(opcional)</span>
                 </label>
                 <textarea
                   value={correcciones}
@@ -1196,8 +1156,8 @@ export function MesaClient({
                   Esta nota queda de registro, pero no hay IA que la lea. Para ajustar el recorte al rehacer, escribe
                   algo como <span className="font-mono text-white/40">inicio +1.5</span> o{" "}
                   <span className="font-mono text-white/40">fin -0.5</span> (segundos a sumar/restar al recorte
-                  actual) — para todo lo demas (frase, tamano de letra...) usa el recorte manual o &quot;Nueva
-                  frase&quot; de arriba.
+                  actual). La velocidad, el recorte manual y la frase se cambian en sus recuadros y se aplican todos
+                  juntos al pulsar «Rehacer con los cambios».
                 </p>
               </div>
 
@@ -1340,29 +1300,13 @@ export function MesaClient({
 
                 {selected.tipo_video === "tipo1" ? (
                   <div className="mt-3">
-                    <AjustesEditor
-                      row={selected}
-                      onGuardado={() => {
-                        setRows((prev) => prev.filter((row) => row.id !== selected.id));
-                        setActionMessage("Video enviado a rehacer con la velocidad y el volumen elegidos.");
-                        router.refresh();
-                        closePopup();
-                      }}
-                    />
+                    <AjustesEditor row={selected} velocidad={velocidadSel} onCambio={setVelocidadSel} />
                   </div>
                 ) : null}
 
                 {["tipo1", "tipo4"].includes(selected.tipo_video ?? "") ? (
                   <div className="mt-3">
-                    <RecorteManualEditor
-                      row={selected}
-                      onGuardado={() => {
-                        setRows((prev) => prev.filter((row) => row.id !== selected.id));
-                        setActionMessage("Video enviado a reprocesar con el recorte manual.");
-                        router.refresh();
-                        closePopup();
-                      }}
-                    />
+                    <RecorteManualEditor row={selected} inicio={recorteSel.inicio} fin={recorteSel.fin} onCambio={(i, f) => setRecorteSel({ inicio: i, fin: f })} />
                   </div>
                 ) : null}
               </div>
@@ -1387,12 +1331,13 @@ export function MesaClient({
                     </button>
                     <button
                       onClick={() => saveAndAct("rehacer")}
-                      disabled={loading || !correcciones.trim()}
-                      title={correcciones.trim() ? undefined : "Escribe una nota para rehacer"}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] py-2.5 text-sm font-semibold text-white/80 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white disabled:opacity-40"
+                      disabled={loading}
+                      title="Rehace el video UNA sola vez con todo lo que hayas cambiado (velocidad, recorte, frase, notas)"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/15 py-2.5 text-sm font-semibold text-amber-100 transition-all hover:border-amber-300/70 hover:bg-amber-400/25 disabled:opacity-40"
                     >
-                      ↺ Rehacer <kbd className="rounded bg-white/10 px-1.5 text-[9px] font-normal">R</kbd>
+                      ↺ Rehacer con los cambios{cambiosPendientes.length ? ` (${cambiosPendientes.length})` : ""} <kbd className="rounded bg-white/10 px-1.5 text-[9px] font-normal">R</kbd>
                     </button>
+                    {cambiosPendientes.length ? <p className="text-center text-[11px] text-amber-200/80">Se aplicará todo junto: {cambiosPendientes.join(" · ")}</p> : null}
                     {selected.frase_quemada ? (
                       <button
                         onClick={() => saveAndAct("nueva_frase")}
@@ -1412,16 +1357,20 @@ export function MesaClient({
                   ↓ Editar yo <span className="text-[9px] font-normal opacity-60">(descarga original)</span>
                 </a>
                 {selected.estado === "aprobado" ? (
-                  <button
-                    onClick={() => {
-                      const fila = selected;
-                      closePopup();
-                      pedirRehacer(fila);
-                    }}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/35 bg-amber-400/10 py-2.5 text-sm font-semibold text-amber-200 transition-all hover:bg-amber-400/20"
-                  >
-                    ↺ Rehacer este vídeo
-                  </button>
+                  <>
+                    <button
+                      onClick={() => {
+                        if (selected.programado_at && !confirm(`¿Rehacer «${selected.titulo ?? "este vídeo"}»?${avisoProgramados([selected])}`)) return;
+                        void saveAndAct("rehacer");
+                      }}
+                      disabled={loading}
+                      title="Rehace el video UNA sola vez con todo lo que hayas cambiado (velocidad, recorte, frase, notas)"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/15 py-2.5 text-sm font-semibold text-amber-100 transition-all hover:border-amber-300/70 hover:bg-amber-400/25 disabled:opacity-40"
+                    >
+                      ↺ Rehacer con los cambios{cambiosPendientes.length ? ` (${cambiosPendientes.length})` : ""}
+                    </button>
+                    {cambiosPendientes.length ? <p className="text-center text-[11px] text-amber-200/80">Se aplicará todo junto: {cambiosPendientes.join(" · ")}</p> : null}
+                  </>
                 ) : null}
                 {selected.estado === "en_aprobacion" ? (
                   <button
