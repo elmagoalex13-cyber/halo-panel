@@ -26,8 +26,18 @@ async function llamar(method: string, body: unknown) {
   return j;
 }
 
-export function FrasesClient({ frases: init, conMusica = [] }: { frases: Frase[]; conMusica?: string[] }) {
+type VideoMusica = { id: string; cuenta: string; thumbnail_url: string | null; frase: string | null; cancion: string | null; artista: string | null; estado: string | null; visitas: number | null };
+
+export function FrasesClient({ frases: init, conMusica: conMusicaInicial = [] }: { frases: Frase[]; conMusica?: string[] }) {
   const [frases, setFrases] = useState(init);
+  // Musica de las frases: todas deben tenerla. Las que no, se completan desde la pagina (de un video guardado o subiendo un audio)
+  const [conMusica, setConMusica] = useState<string[]>(conMusicaInicial);
+  const [pidiendo, setPidiendo] = useState<string[]>([]); // frases a las que se les esta sacando la musica de un video
+  const [musicaDe, setMusicaDe] = useState<Frase | null>(null);
+  const [videosMusica, setVideosMusica] = useState<VideoMusica[] | null>(null);
+  const [musicaMsg, setMusicaMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [musicaCargando, setMusicaCargando] = useState(false);
+  const sinMusica = frases.filter((f) => f.activa && !conMusica.includes(f.id));
   const [filter, setFilter] = useState<"all" | "activa" | "inactiva">("all");
   const [busqueda, setBusqueda] = useState("");
   const [form, setForm] = useState<Formulario | null>(null);
@@ -40,6 +50,52 @@ export function FrasesClient({ frases: init, conMusica = [] }: { frases: Frase[]
       .filter((f) => (filter === "activa" ? f.activa : filter === "inactiva" ? !f.activa : true))
       .filter((f) => !q || `${f.frase} ${f.cancion_nombre} ${f.cancion_artista ?? ""}`.toLowerCase().includes(q));
   }, [frases, filter, busqueda]);
+
+  async function abrirMusica(f: Frase) {
+    setMusicaDe(f);
+    setMusicaMsg(null);
+    setVideosMusica(null);
+    const res = await fetch("/api/frases/musica", { cache: "no-store" });
+    const j = (await res.json().catch(() => ({}))) as { videos?: VideoMusica[] };
+    setVideosMusica(j.videos ?? []);
+  }
+
+  async function musicaDesdeVideo(f: Frase, v: VideoMusica) {
+    setMusicaCargando(true);
+    setMusicaMsg(null);
+    try {
+      const res = await fetch("/api/frases/musica", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "desde_video", frase_id: f.id, video_id: v.id }) });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(j.error ?? "No se pudo pedir");
+      setPidiendo((p) => [...p, f.id]);
+      setMusicaDe(null);
+    } catch (e) {
+      setMusicaMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
+    } finally {
+      setMusicaCargando(false);
+    }
+  }
+
+  async function subirMusica(f: Frase, archivo: File) {
+    setMusicaCargando(true);
+    setMusicaMsg(null);
+    try {
+      const pedir = await fetch("/api/frases/musica", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "subida", frase_id: f.id, contentType: archivo.type || "audio/mpeg" }) });
+      const j = (await pedir.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!pedir.ok || !j.url) throw new Error(j.error ?? "No se pudo preparar la subida");
+      const put = await fetch(j.url, { method: "PUT", headers: { "Content-Type": archivo.type || "audio/mpeg" }, body: archivo });
+      if (!put.ok) throw new Error("No se pudo subir el archivo");
+      const fin = await fetch("/api/frases/musica", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "subida_hecha", frase_id: f.id }) });
+      const k = (await fin.json().catch(() => ({}))) as { error?: string };
+      if (!fin.ok) throw new Error(k.error ?? "No se pudo confirmar la subida");
+      setConMusica((p) => [...p, f.id]);
+      setMusicaDe(null);
+    } catch (e) {
+      setMusicaMsg({ ok: false, texto: e instanceof Error ? e.message : "Error" });
+    } finally {
+      setMusicaCargando(false);
+    }
+  }
 
   async function accion(clave: string, fn: () => Promise<void>) {
     setLoading(clave);
@@ -108,6 +164,11 @@ export function FrasesClient({ frases: init, conMusica = [] }: { frases: Frase[]
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-halo-text">Banco de Frases</h1>
+          {sinMusica.length ? (
+            <p className="mt-2 max-w-2xl rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+              {sinMusica.length} {sinMusica.length === 1 ? "frase activa no tiene" : "frases activas no tienen"} música y no se {sinMusica.length === 1 ? "usa" : "usan"} en los vídeos mientras haya otras con música. Pulsa «🎵 Poner música» en cada una (de un vídeo guardado o subiendo un audio).
+            </p>
+          ) : null}
           <p className="mt-1 text-sm text-halo-subtle">
             {frases.filter((f) => f.activa).length} activas · {frases.length} total · el runner y la confirmación de reparto usan la activa menos usada en los vídeos tipo 2
           </p>
@@ -202,8 +263,12 @@ export function FrasesClient({ frases: init, conMusica = [] }: { frases: Frase[]
                   <p className="line-clamp-2 text-sm text-halo-text">{f.frase}</p>
                   {conMusica.includes(f.id) ? (
                     <span className="mt-1 inline-block rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300" title="El video sale con la cancion del video scrapeado de donde salio esta frase">🎵 con música</span>
+                  ) : pidiendo.includes(f.id) ? (
+                    <span className="mt-1 inline-block rounded-full bg-sky-400/15 px-2 py-0.5 text-[10px] font-semibold text-sky-300">⏳ sacando la música… (1 minuto, recarga después)</span>
                   ) : (
-                    <span className="mt-1 inline-block rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40" title="Sin musica: el video sale con su propio audio">sin música</span>
+                    <button type="button" onClick={() => void abrirMusica(f)} className="mt-1 inline-block rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-semibold text-amber-200 hover:bg-amber-400/20" title="Esta frase no tiene música y no se usa en los vídeos">
+                      🎵 Poner música
+                    </button>
                   )}
                 </td>
                 <td className="px-4 py-3">
@@ -246,6 +311,60 @@ export function FrasesClient({ frases: init, conMusica = [] }: { frases: Frase[]
           </tbody>
         </table>
       </div>
+
+      {musicaDe ? (
+        <div className="sin-blur fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" role="dialog" aria-modal="true">
+          <div className="glass-card flex max-h-[88dvh] w-full max-w-2xl flex-col gap-4 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-display text-lg font-semibold text-white">🎵 Poner música a la frase</p>
+                <p className="mt-0.5 line-clamp-2 text-sm text-white/55">«{musicaDe.frase}»</p>
+              </div>
+              <button type="button" onClick={() => setMusicaDe(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 text-white/50 hover:text-white" aria-label="Cerrar">
+                x
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-sm font-semibold text-white">Subir un audio</p>
+              <p className="text-xs text-white/45">Un mp3, m4a o un video: se usa su sonido (los primeros 20 segundos).</p>
+              <input
+                type="file"
+                accept="audio/*,video/*"
+                disabled={musicaCargando}
+                onChange={(e) => e.target.files?.[0] && void subirMusica(musicaDe, e.target.files[0])}
+                className="mt-2 block w-full text-xs text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-[#8B5CF6]/30 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+              />
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <p className="mb-2 text-sm font-semibold text-white">…o usar la música de un vídeo guardado</p>
+              {videosMusica === null ? <p className="text-sm text-white/40">Cargando vídeos…</p> : null}
+              {videosMusica && !videosMusica.length ? <p className="text-sm text-white/40">No hay vídeos guardados de cuentas de frases.</p> : null}
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {(videosMusica ?? []).map((v) => (
+                  <li key={v.id} className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-2">
+                    {v.thumbnail_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={v.thumbnail_url} alt="" className="h-20 w-14 shrink-0 rounded-lg object-cover" />
+                    ) : (
+                      <div className="h-20 w-14 shrink-0 rounded-lg bg-black/40" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-white/80">@{v.cuenta}</p>
+                      <p className="truncate text-[11px] text-white/45">{v.cancion ? `${v.cancion}${v.artista ? ` · ${v.artista}` : ""}` : "Canción sin nombre"}</p>
+                      <button type="button" disabled={musicaCargando} onClick={() => void musicaDesdeVideo(musicaDe, v)} className="mt-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+                        Usar su música
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {musicaMsg ? <p className={`text-sm ${musicaMsg.ok ? "text-emerald-300" : "text-red-300"}`}>{musicaMsg.texto}</p> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

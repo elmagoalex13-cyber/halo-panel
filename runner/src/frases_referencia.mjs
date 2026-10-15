@@ -191,6 +191,58 @@ export async function cicloFrasesReferencia(supabase) {
   }
 }
 
+let ocupadoPedidos = false;
+
+/**
+ * Pedidos desde la pagina Frases: «pon a esta frase la musica de este video guardado». Se saca el audio del video y se sube como musica de la frase.
+ * (La cola vive en panel_config.frases_audio_pedidos; el panel anade pedidos y aqui se quitan al hacerlos.)
+ */
+export async function cicloPedidosMusica(supabase) {
+  if (ocupadoPedidos) return;
+  ocupadoPedidos = true;
+  try {
+    const { data: fila } = await supabase.from("panel_config").select("value").eq("key", "frases_audio_pedidos").maybeSingle();
+    const items = fila?.value?.items ?? [];
+    if (!items.length) return;
+    const hechos = [];
+    for (const it of items.slice(0, 3)) {
+      const dir = path.join(config.tmpDir, "frases-musica", randomUUID());
+      try {
+        const { data: v } = await supabase.from("referencias_videos").select("video_url, tags").eq("id", it.video_id).maybeSingle();
+        const key = keyDesdeUrl(v?.video_url);
+        if (!key) throw new Error("el video ya no existe");
+        await mkdir(dir, { recursive: true });
+        const mp4 = path.join(dir, "ref.mp4");
+        await downloadFromR2(key, mp4);
+        if (!(await subirAudioDeVideo(mp4, dir, claveAudioFrase(it.frase_id)))) throw new Error("el video no tiene audio");
+        // De paso, la cancion de ese video queda apuntada en la frase si la frase no tenia ninguna
+        const cancion = tagValor(v.tags, "meta:cancion");
+        if (cancion) {
+          const { data: f } = await supabase.from("banco_frases_canciones").select("cancion_nombre").eq("id", it.frase_id).maybeSingle();
+          if (!f?.cancion_nombre || f.cancion_nombre === SIN_CANCION || f.cancion_nombre === "varios") {
+            await supabase.from("banco_frases_canciones").update({ cancion_nombre: cancion, cancion_artista: tagValor(v.tags, "meta:artista"), audio_id_ig: tagValor(v.tags, "meta:audio_id") }).eq("id", it.frase_id);
+          }
+        }
+        console.log(`[frases-musica] frase ${it.frase_id}: musica puesta desde el video ${it.video_id}`);
+      } catch (e) {
+        console.error(`[frases-musica] frase ${it.frase_id}:`, e.message);
+      } finally {
+        hechos.push(it);
+        await rm(dir, { recursive: true, force: true });
+      }
+    }
+    // Se quitan solo los hechos (el panel puede haber anadido otros mientras tanto)
+    const { data: ultimo } = await supabase.from("panel_config").select("value").eq("key", "frases_audio_pedidos").maybeSingle();
+    const quedan = (ultimo?.value?.items ?? []).filter((x) => !hechos.some((h) => h.frase_id === x.frase_id && h.video_id === x.video_id));
+    await supabase.from("panel_config").upsert({ key: "frases_audio_pedidos", value: { items: quedan }, updated_at: new Date().toISOString() });
+    await publicarListaConAudio(supabase);
+  } catch (e) {
+    console.error("[frases-musica] error inesperado:", e.message);
+  } finally {
+    ocupadoPedidos = false;
+  }
+}
+
 /** Musica de la frase de esta pieza (la que se le asigno del banco), si esa frase tiene. Devuelve la clave en R2 o null. */
 export async function audioDeFraseDePieza(supabase, pieza) {
   let { data, error } = await supabase.from("banco_frases_usos").select("frase_id").eq("pieza_id", pieza.id).order("created_at", { ascending: false }).limit(1);

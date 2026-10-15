@@ -22,8 +22,10 @@ export async function asignarFrase(supabase, pieza) {
   if (error || !todas?.length) return null;
   const orden = (a, b) => Number(conMusica.has(b.id)) - Number(conMusica.has(a.id)) || (a.veces_usada ?? 0) - (b.veces_usada ?? 0) || (b.puntuacion ?? 0) - (a.puntuacion ?? 0);
   // Si ya se han usado todas las frases activas en esta pieza (banco pequeno), no hay otra opcion que repetir
-  const candidatas = todas.filter((f) => !excluidas.includes(f.id));
-  const elegida = [...(candidatas.length ? candidatas : todas)].sort(orden).slice(0, 1);
+  // Todo video sale con musica: solo se usan las frases que la tienen (si por lo que sea no hubiera ninguna, se usan todas para no dejar de editar)
+  const usables = todas.some((f) => conMusica.has(f.id)) ? todas.filter((f) => conMusica.has(f.id)) : todas;
+  const candidatas = usables.filter((f) => !excluidas.includes(f.id));
+  const elegida = [...(candidatas.length ? candidatas : usables)].sort(orden).slice(0, 1);
   if (!elegida.length) return null;
 
   const f = elegida[0];
