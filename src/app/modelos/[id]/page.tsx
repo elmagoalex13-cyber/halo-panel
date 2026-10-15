@@ -20,6 +20,8 @@ import { piezasEnEspera } from "@/lib/captacionPiezas";
 import { progresoCaptacion } from "@/lib/captacion";
 import { ligarContratosAutomatico } from "@/lib/contratos";
 import { ContratoModelo, type ContratoFicha } from "./ContratoModelo";
+import { NotasModelo } from "./NotasModelo";
+import { leerNotas, ordenarNotas } from "@/lib/notasModelo";
 
 export const revalidate = 0;
 
@@ -347,7 +349,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
   let contratosFicha: { propios: ContratoFicha[]; disponibles: ContratoFicha[] } | null = null;
   if ((await alcanceActual()).dueno) {
     await ligarContratosAutomatico();
-    const campos = "id, nombre, estado, fecha_inicio, firmado_at, created_at";
+    const campos = "id, nombre, estado, fecha_inicio, firmado_at, created_at, nombre_firmante";
     const dbc = createAdminClient();
     const [{ data: propios, error: e1 }, { data: libres }] = await Promise.all([
       dbc.from("contratos_modelos").select(campos).eq("modelo_id", modelo.id).neq("estado", "cancelado").order("created_at", { ascending: false }),
@@ -355,6 +357,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
     ]);
     if (!e1) contratosFicha = { propios: (propios ?? []) as ContratoFicha[], disponibles: (libres ?? []) as ContratoFicha[] };
   }
+  const notasModelo = ordenarNotas((await leerNotas(modelo.id).catch(() => ({ notas: [] }))).notas);
   const of = await cargarResumenOF(modelo.id);
   const ofNuevos = of.resumen.filter((c) => c.nuevo).length;
 
@@ -398,6 +401,13 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
       aviso: ofNuevos ? `${ofNuevos} nuevo${ofNuevos === 1 ? "" : "s"}` : null,
       contenido: <ContenidoModelo modelo={{ id: modelo.id, nombre: modelo.nombre, foto: of.modelos[0]?.foto ?? null }} instagram={instagram} onlyfans={of.resumen} />,
     },
+    {
+      id: "notas",
+      label: "Notas",
+      icono: "📝",
+      aviso: notasModelo.length ? String(notasModelo.length) : null,
+      contenido: <NotasModelo modeloId={modelo.id} nombre={modelo.nombre} iniciales={notasModelo} />,
+    },
     ...(contratosFicha
       ? [
           {
@@ -437,6 +447,20 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
             </div>
           ))}
         </div>
+
+        {notasModelo.some((n) => n.fijada) ? (
+          <div className="rounded-2xl border border-amber-300/30 bg-amber-300/[0.07] p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-amber-200">📌 Ojo con {modelo.nombre}</p>
+            <ul className="mt-1.5 space-y-1">
+              {notasModelo.filter((n) => n.fijada).map((n) => (
+                <li key={n.id} className="whitespace-pre-line text-sm text-halo-text">
+                  {n.texto} <span className="text-xs text-halo-subtle">— {n.autor}</span>
+                </li>
+              ))}
+            </ul>
+            <a href="#notas" className="mt-1.5 inline-block text-xs font-semibold text-amber-200 hover:underline">Ver todas las notas</a>
+          </div>
+        ) : null}
 
         <FichaTabs pestanas={pestanas} inicial="resumen" />
       </div>
