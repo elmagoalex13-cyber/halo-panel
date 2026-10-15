@@ -170,13 +170,23 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
     }
   }
 
+  // Videos de «frases con musica»: aprobarlos NO es asignarlos a una modelo, es guardar su frase (con su colocacion) y su musica en el banco de frases.
+  // El editor lo hace en un minuto; el panel lo enseña en la tarjeta. Lo puede hacer cualquiera de los dos (el banco es de todos).
+  async function guardarEnBanco(v: ReferenciaVideo) {
+    const tags = (v.tags ?? []).filter((t) => !["meta:frase_falta=1", "meta:frase_manual=1", "meta:analizar_frase=1", "label:frase_musica_no"].includes(t));
+    if (!tags.includes("label:frase_musica_si")) tags.push("label:frase_musica_si");
+    if (!tags.includes("meta:frase_banco=1")) tags.push("meta:analizar_frase=1");
+    await guardar(v, { estado_triaje: "confirmado", formato_confirmado: "tipo2", formato_propuesto: "tipo2", tags });
+    setMsg({ ok: true, texto: "Guardando la frase y la música en el banco de frases (tarda un minuto). La verás en «Frases» con su 🎵." });
+  }
+
   // «Guardar frase»: se escribe la frase del video y el editor la guarda en el banco con su colocacion y la MUSICA del video (en un minuto)
   async function guardarFrase(v: ReferenciaVideo) {
     const frase = window.prompt("Frase que aparece en el video", v.frase_detectada ?? "");
     if (!frase?.trim()) return;
     const tags = (v.tags ?? []).filter((t) => !["meta:frase_falta=1", "meta:frase_banco=1", "meta:frase_manual=1", "meta:analizar_frase=1"].includes(t));
     tags.push("meta:frase_manual=1", "meta:analizar_frase=1");
-    await guardar(v, { frase_detectada: frase.trim(), formato_confirmado: "tipo2", formato_propuesto: "tipo2", tags });
+    await guardar(v, { frase_detectada: frase.trim(), estado_triaje: "confirmado", formato_confirmado: "tipo2", formato_propuesto: "tipo2", tags });
     setMsg({ ok: true, texto: "Frase enviada: en un minuto estará en el banco de frases con su colocación y la música de este vídeo." });
   }
 
@@ -254,7 +264,7 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
             const tipo = tipoDe(v);
             return (
               <article key={v.id} className={`relative flex flex-col gap-3 rounded-2xl border p-3 ${seleccion.includes(v.id) ? "border-emerald-500/50 bg-emerald-500/[0.06]" : "border-white/[0.08] bg-white/[0.03]"}`}>
-                {vista !== "descartado" && tipo ? (
+                {vista !== "descartado" && tipo && m.categoria !== "frases" ? (
                   <button
                     type="button"
                     onClick={() => alternarSeleccion(v.id)}
@@ -298,7 +308,22 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                 {(v.tags ?? []).includes("meta:frase_falta=1") ? <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-200">No se ha podido leer la frase de este vídeo: pulsa «Guardar frase» y escríbela (se guarda con su música).</p> : null}
                 {(v.tags ?? []).includes("meta:frase_banco=1") ? <p className="text-[11px] text-emerald-300/80">🎵 Frase y música guardadas en el banco de frases</p> : null}
 
-                {vista === "pendiente" ? (
+                {vista === "pendiente" && m.categoria === "frases" ? (
+                  <div className="mt-auto space-y-2">
+                    <p className="text-[11px] leading-relaxed text-white/40">Si te gusta, guarda su frase y su música en el banco: así se pondrán a los vídeos de gestos de las modelos.</p>
+                    <button onClick={() => void guardarEnBanco(v)} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                      🎵 Guardar frase y música
+                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => void guardarFrase(v)} className="flex-1 rounded-lg border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-3 py-2 text-xs font-semibold text-[#c4b5fd] transition hover:bg-[#8B5CF6]/20">
+                        Escribir la frase yo
+                      </button>
+                      <button onClick={() => marcarEstilo(v, false)} className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-950/50">
+                        Descartar
+                      </button>
+                    </div>
+                  </div>
+                ) : vista === "pendiente" ? (
                   <>
                     <div>
                       <p className="mb-1 text-[10px] uppercase tracking-wider text-white/30">Tipo de edición</p>
@@ -358,7 +383,22 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                         {vista === "aprobado" ? "Devolver a revisar" : "Recuperar"}
                       </button>
                     </div>
-                    {vista === "aprobado" ? (
+                    {vista === "aprobado" && m.categoria === "frases" ? (
+                      <div className="space-y-2">
+                        {(v.tags ?? []).includes("meta:frase_banco=1") ? (
+                          <p className="text-[11px] text-emerald-300/90">🎵 Frase y música guardadas en el banco de frases</p>
+                        ) : (v.tags ?? []).includes("meta:frase_falta=1") ? (
+                          <>
+                            <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-200">No se ha podido leer la frase: escríbela y se guarda con su música.</p>
+                            <button onClick={() => void guardarFrase(v)} className="w-full rounded-lg border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-3 py-2 text-sm font-semibold text-[#c4b5fd] transition hover:bg-[#8B5CF6]/20">
+                              Escribir la frase
+                            </button>
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-white/45">⏳ Guardando la frase y la música en el banco…</p>
+                        )}
+                      </div>
+                    ) : vista === "aprobado" ? (
                       <>
                         <p className="text-[11px] leading-relaxed text-white/45">
                           {asignados[v.id]?.length
