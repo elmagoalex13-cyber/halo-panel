@@ -21,6 +21,8 @@ import { progresoCaptacion } from "@/lib/captacion";
 import { ligarContratosAutomatico } from "@/lib/contratos";
 import { ContratoModelo, type ContratoFicha } from "./ContratoModelo";
 import { NotasModelo } from "./NotasModelo";
+import { EspejoVideos } from "./EspejoVideos";
+import { enEspejo } from "@/lib/espejoVideos";
 import { leerNotas, ordenarNotas } from "@/lib/notasModelo";
 
 export const revalidate = 0;
@@ -174,6 +176,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
 
   const { modelo, cuentas, pipeline, ultimasPublicaciones, facturacion, encargos, porEstado, totalVideos, onboarding, onboardingHistorial, fotoVersion } = data;
   const onboardingDatos = sanearDatos(onboarding?.datos ?? {});
+  const videosAlDia = await enEspejo(modelo.id);
   const notasModelo = ordenarNotas((await leerNotas(modelo.id).catch(() => ({ notas: [] }))).notas);
   const pendientes = encargos.filter((e) => e.estado !== "entregado");
   const facturacionMes = facturacion[0];
@@ -215,6 +218,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
 
       <div className="space-y-4">
         <NotasModelo modeloId={modelo.id} nombre={modelo.nombre} iniciales={notasModelo} />
+        <EspejoVideos modeloId={modelo.id} activo={videosAlDia} />
         <a href="#onboarding" className="card block !p-4 transition hover:border-[#8B5CF6]/40">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-halo-subtle">Onboarding</h2>

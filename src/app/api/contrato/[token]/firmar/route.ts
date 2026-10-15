@@ -5,6 +5,7 @@ import { generarPdfContrato } from "@/lib/contratoPdf";
 import { enviarCopiaFirmada } from "@/lib/contratos";
 import { encolarTelegram } from "@/lib/telegramCola";
 import { crearPortalTrasFirma } from "@/lib/contratoPortal";
+import { registrarEspejo } from "@/lib/espejoVideos";
 
 export const dynamic = "force-dynamic";
 
@@ -54,12 +55,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // Ficha + portal de la modelo, al momento: usuario y contraseña se le enseñan en la pantalla de «contrato firmado»
   const portal = await crearPortalTrasFirma({ id: c.id as string, nombre: c.nombre as string }, nombreFirmante);
   const creado = portal && "slug" in portal ? portal : null;
+  // Modelo nueva con portal: recibira los ultimos 40 videos asignados a las demas y los que se asignen a partir de ahora (lo hace el editor en un minuto)
+  const espejo = creado ? await registrarEspejo(creado.modelo_id).catch(() => false) : false;
   await encolarTelegram("contrato_firmado", null, {
     nombre: c.nombre,
     enviado_por: c.enviado_por ?? null,
     ...(portal ? { modelo_id: portal.modelo_id } : {}),
     ...(portal && "yaTenia" in portal ? { portal_existente: true, modelo_nombre: portal.modelo_nombre } : {}),
-    ...(creado ? { portal_slug: creado.slug, portal_usuario: creado.usuario, modelo_nueva: creado.modeloNueva } : {}),
+    ...(creado ? { portal_slug: creado.slug, portal_usuario: creado.usuario, modelo_nueva: creado.modeloNueva, videos_al_dia: espejo } : {}),
   });
 
   return NextResponse.json({
