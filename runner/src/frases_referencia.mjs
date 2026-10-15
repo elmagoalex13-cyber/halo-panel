@@ -1,28 +1,58 @@
 /**
- * Videos de «frase con musica» que se asignan a una modelo: el editor saca del video de referencia la frase y como esta colocada (OCR, igual
- * que hace el scraper), las guarda en el BANCO DE FRASES (con la cancion si se sabe) y las deja en el propio video de referencia. Despues, cuando
- * la modelo sube su video para ese encargo, sale con esa frase y con la cancion del video de referencia (ver portal/subir y queue.mjs).
+ * Banco de frases CON MUSICA. Cada video de «frase con musica» que se aprueba/asigna (el panel lo marca con la etiqueta «meta:analizar_frase=1»)
+ * se procesa aqui: el editor lee la frase y como esta colocada (OCR, igual que el scraper), saca el AUDIO del video (la cancion) y guarda las
+ * dos cosas en el banco de frases (la musica en R2: frases-audio/<id_frase>.m4a). Despues, cuando se edita un video de gesto de una modelo, se le
+ * pone una frase del banco —preferentemente una que tenga musica— y su cancion ya mezclada (ver queue.mjs y frases.mjs).
  *
- * El panel marca el video con la etiqueta «meta:analizar_frase=1» al asignarlo; aqui se cambia por «meta:frase_banco=1» al terminar.
+ * Al terminar la etiqueta pasa a «meta:frase_banco=1». La lista de frases que ya tienen musica se guarda en panel_config (frases_con_audio)
+ * para que el panel tambien las prefiera al asignar frase cuando la modelo sube su video.
  */
 import path from "path";
 import { mkdir, rm } from "fs/promises";
 import { randomUUID } from "crypto";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { config } from "./config.mjs";
-import { downloadFromR2, keyDesdeUrl } from "./r2.mjs";
-import { analizarLayoutTexto } from "./vision.mjs";
+import { downloadFromR2, uploadToR2, keyDesdeUrl, existeEnR2, listarClaves } from "./r2.mjs";
+import { analizarLayoutTexto, puntuarTexto } from "./vision.mjs";
 
+const execFileAsync = promisify(execFile);
 const ETIQUETA_PENDIENTE = "meta:analizar_frase=1";
 const ETIQUETA_HECHO = "meta:frase_banco=1";
+const ETIQUETA_FALTA = "meta:frase_falta=1"; // el OCR no ha leido bien la frase: hay que escribirla a mano
+const ETIQUETA_MANUAL = "meta:frase_manual=1"; // la frase la ha escrito una persona (frase_detectada): se usa tal cual
+const CALIDAD_MINIMA = 85;
 const SIN_CANCION = "Sin cancion";
+const PREFIJO_AUDIO = "frases-audio/";
+
+export const claveAudioFrase = (fraseId) => `${PREFIJO_AUDIO}${fraseId}.m4a`;
 
 const norm = (t) => String(t ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 const tagValor = (tags, clave) => (tags ?? []).find((t) => t.startsWith(`${clave}=`))?.slice(clave.length + 1) ?? null;
 
+const palabraLimpia = (w) => /^[\p{L}¿¡"“”'’(][\p{L}\p{M}.,:;!?¡¿"“”'’()…-]*$/u.test(w) || /^\d[\d.,:%-]*$/.test(w);
+
+/** Layout con el texto de cada bloque sin los simbolos y restos que mete el OCR (asi lo que se quema en el video es lo mismo que la frase). */
+export function limpiarLayout(layout) {
+  if (!Array.isArray(layout?.bloques)) return layout;
+  const bloques = layout.bloques
+    .map((b) => ({ ...b, texto: String(b.texto ?? "").split(/\s+/).filter((w) => w && palabraLimpia(w)).join(" ") }))
+    .filter((b) => b.texto.length >= 3);
+  return { ...layout, bloques };
+}
+
 /** Frase de los bloques de texto que se leen en pantalla (los bloques cercanos ya vienen unidos por el OCR). */
 export function fraseDeLayout(layout) {
   const bloques = Array.isArray(layout?.bloques) ? layout.bloques : [];
-  const texto = bloques.map((b) => String(b.texto ?? "")).join(" ").replace(/\s+/g, " ").trim();
+  // Fuera lo que el OCR mete de mas: simbolos sueltos (/ | \) y 1-2 letras sueltas tras el punto final de la frase
+  const palabras = bloques.flatMap((b) => String(b.texto ?? "").split(/\s+/)).filter((w) => w && palabraLimpia(w));
+  for (let cambio = true; cambio && palabras.length > 3; ) {
+    const ultima = palabras.at(-1);
+    const previa = palabras.at(-2);
+    cambio = ultima.length <= 2 && (/[.?!]$/.test(previa) || previa.length <= 2) && !/[.?!]$/.test(ultima);
+    if (cambio) palabras.pop();
+  }
+  const texto = palabras.join(" ").replace(/\s+/g, " ").trim();
   return texto.length >= 6 ? texto.slice(0, 300) : null;
 }
 
@@ -48,6 +78,29 @@ async function frasesDelBanco(supabase) {
   return filas;
 }
 
+/** Ids de las frases que ya tienen su musica en R2. */
+export async function frasesConAudio() {
+  const claves = await listarClaves(PREFIJO_AUDIO).catch(() => []);
+  return claves.map((k) => k.slice(PREFIJO_AUDIO.length).replace(/\.m4a$/, "")).filter(Boolean);
+}
+
+async function publicarListaConAudio(supabase) {
+  const ids = await frasesConAudio();
+  await supabase.from("panel_config").upsert({ key: "frases_con_audio", value: { ids }, updated_at: new Date().toISOString() });
+}
+
+/** Saca la musica del video de referencia (hasta 20 s desde el principio) y la sube a R2. Devuelve true si habia audio. */
+async function subirAudioDeVideo(mp4, destino, key) {
+  const m4a = path.join(destino, "musica.m4a");
+  try {
+    await execFileAsync(config.ffmpeg, ["-y", "-i", mp4, "-vn", "-t", "20", "-c:a", "aac", "-b:a", "160k", m4a], { maxBuffer: 1024 * 1024 * 8 });
+    await uploadToR2(m4a, key, "audio/mp4");
+    return true;
+  } catch {
+    return false; // el video no tiene audio (o no se pudo leer): la frase se guarda sin musica
+  }
+}
+
 let ocupado = false;
 
 export async function cicloFrasesReferencia(supabase) {
@@ -67,43 +120,65 @@ export async function cicloFrasesReferencia(supabase) {
       try {
         const key = keyDesdeUrl(v.video_url);
         let layout = v.layout_json && Array.isArray(v.layout_json.bloques) && v.layout_json.bloques.length ? v.layout_json : null;
-        if (!layout && key) {
-          await mkdir(dir, { recursive: true });
-          const mp4 = path.join(dir, "ref.mp4");
-          await downloadFromR2(key, mp4);
-          layout = await analizarLayoutTexto(mp4);
-        }
-        const frase = fraseDeLayout(layout) ?? limpiarFrase(v.frase_detectada);
+        await mkdir(dir, { recursive: true });
+        const mp4 = path.join(dir, "ref.mp4");
+        if (key) await downloadFromR2(key, mp4);
+        if (!layout && key) layout = await analizarLayoutTexto(mp4);
+        if (layout?.origen === "tesseract") layout = limpiarLayout(layout);
+        // Frase: la que escribio una persona; si no, la que lee el OCR SOLO si se lee bien (si no, mejor pedirla a mano que quemar basura en un video)
+        const manual = (v.tags ?? []).includes(ETIQUETA_MANUAL) ? v.frase_detectada?.trim() || null : null;
+        const calidad = Array.isArray(layout?.bloques) ? puntuarTexto(layout.bloques) : -1;
+        const delOcr = calidad >= CALIDAD_MINIMA ? fraseDeLayout(layout) : null;
+        const frase = manual ?? delOcr;
+        // La colocacion sale del OCR (posiciones); con frase escrita a mano, su texto sustituye al leido
+        if (manual && layout?.bloques?.length) layout = { ...layout, bloques: [{ ...layout.bloques[0], texto: manual }] };
+        else if (manual) layout = { version: 1, origen: "manual", bloques: [{ texto: manual, posicion: "center", color: "#FFFFFF", negrita: true, fontsize: 72 }] };
 
-        // 1) La frase al banco (si no estaba ya), con la cancion del video
-        let enBanco = null;
+        let mensaje = "frase no legible (OCR con calidad baja): hay que escribirla a mano";
         if (frase) {
+          // 1) La frase al banco (si no estaba ya), con su colocacion y la cancion
           const banco = await frasesDelBanco(supabase);
-          enBanco = banco.find((f) => norm(f.frase) === norm(frase)) ?? null;
-          if (!enBanco) {
-            const cancion = tagValor(v.tags, "meta:cancion");
-            const { error: eIns } = await supabase.from("banco_frases_canciones").insert({
-              frase,
-              cancion_nombre: cancion || SIN_CANCION,
-              cancion_artista: tagValor(v.tags, "meta:artista"),
-              audio_id_ig: tagValor(v.tags, "meta:audio_id"),
-              puntuacion: 7,
-              layout_json: layout,
-              origen: "bot",
-              veces_usada: 0,
-              activa: true,
-            });
-            if (eIns) throw new Error(`no se pudo guardar la frase en el banco: ${eIns.message}`);
+          let fraseId = banco.find((f) => norm(f.frase) === norm(frase))?.id ?? null;
+          if (!fraseId) {
+            const { data: nueva, error: eIns } = await supabase
+              .from("banco_frases_canciones")
+              .insert({
+                frase,
+                cancion_nombre: tagValor(v.tags, "meta:cancion") || SIN_CANCION,
+                cancion_artista: tagValor(v.tags, "meta:artista"),
+                audio_id_ig: tagValor(v.tags, "meta:audio_id"),
+                puntuacion: 7,
+                layout_json: layout,
+                origen: "analizador", // la tabla solo admite los origenes que ya usa (manual / analizador)
+                veces_usada: 0,
+                activa: true,
+              })
+              .select("id")
+              .single();
+            if (eIns || !nueva) throw new Error(`no se pudo guardar la frase en el banco: ${eIns?.message ?? "sin respuesta"}`);
+            fraseId = nueva.id;
+            mensaje = "guardada en el banco";
+          } else {
+            mensaje = "ya estaba en el banco";
+          }
+          // 2) La musica del video, para esa frase (si aun no la tiene)
+          const claveAudio = claveAudioFrase(fraseId);
+          if (key && !(await existeEnR2(claveAudio))) {
+            mensaje += (await subirAudioDeVideo(mp4, dir, claveAudio)) ? " + musica" : " (el video no tiene audio)";
+          } else if (key) {
+            mensaje += " (ya tenia musica)";
           }
         }
 
-        // 2) Frase y colocacion en el propio video de referencia (asi la modelo recibe exactamente esa) y se quita la marca de pendiente
-        const tags = [...(v.tags ?? []).filter((t) => t !== ETIQUETA_PENDIENTE), ETIQUETA_HECHO];
-        await supabase.from("referencias_videos").update({ frase_detectada: frase ?? v.frase_detectada, layout_json: layout, tags }).eq("id", v.id);
-        console.log(`[frases-ref] ${v.id}: ${frase ? `«${frase.slice(0, 60)}»${enBanco ? " (ya estaba en el banco)" : " guardada en el banco"}` : "sin frase legible (se usara una del banco)"}`);
+        // 3) Frase y colocacion tambien en el propio video de referencia, y se quita la marca de pendiente
+        const base = (v.tags ?? []).filter((t) => t !== ETIQUETA_PENDIENTE && t !== ETIQUETA_FALTA && t !== ETIQUETA_MANUAL);
+        const tags = [...base, frase ? ETIQUETA_HECHO : ETIQUETA_FALTA];
+        await supabase.from("referencias_videos").update({ frase_detectada: frase ?? v.frase_detectada, layout_json: frase ? layout : v.layout_json, tags }).eq("id", v.id);
+        await publicarListaConAudio(supabase);
+        console.log(`[frases-ref] ${v.id}: ${frase ? `«${frase.slice(0, 60)}» ` : ""}${mensaje}`);
       } catch (e) {
         console.error(`[frases-ref] ${v.id}:`, e.message);
-        // Si falla, se quita la marca para no reintentar para siempre; la modelo recibira una frase del banco
+        // Si falla, se quita la marca para no reintentar para siempre
         await supabase.from("referencias_videos").update({ tags: (v.tags ?? []).filter((t) => t !== ETIQUETA_PENDIENTE) }).eq("id", v.id);
       } finally {
         await rm(dir, { recursive: true, force: true });
@@ -116,13 +191,12 @@ export async function cicloFrasesReferencia(supabase) {
   }
 }
 
-/** Frase y colocacion que el video de referencia (el de la cancion) ya tiene guardadas; null si aun no se han sacado. */
-export async function fraseDeReferencia(supabase, pieza) {
-  const key = keyDesdeUrl(pieza.audio_referencia_url);
-  if (!key) return null;
-  const { data } = await supabase.from("referencias_videos").select("frase_detectada, layout_json, tags").eq("video_url", key).limit(1).maybeSingle();
-  if ((data?.tags ?? []).includes(ETIQUETA_PENDIENTE)) return null; // aun se esta leyendo la frase del video: por ahora una del banco
-  const frase = data?.frase_detectada?.trim();
-  if (!frase) return null;
-  return { frase, layout_json: data?.layout_json ?? null };
+/** Musica de la frase de esta pieza (la que se le asigno del banco), si esa frase tiene. Devuelve la clave en R2 o null. */
+export async function audioDeFraseDePieza(supabase, pieza) {
+  let { data, error } = await supabase.from("banco_frases_usos").select("frase_id").eq("pieza_id", pieza.id).order("created_at", { ascending: false }).limit(1);
+  if (error) ({ data } = await supabase.from("banco_frases_usos").select("frase_id").eq("pieza_id", pieza.id).limit(1));
+  const fraseId = data?.[0]?.frase_id;
+  if (!fraseId) return null;
+  const key = claveAudioFrase(fraseId);
+  return (await existeEnR2(key)) ? key : null;
 }

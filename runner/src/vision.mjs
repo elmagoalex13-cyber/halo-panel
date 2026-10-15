@@ -17,11 +17,26 @@ export async function analizarLayoutTexto(videoPath) {
 
   try {
     const frames = await extraerFramesLayout(videoPath, framesDir);
+    // El texto de estos reels es blanco: dejandolo en negro sobre fondo blanco (y quitando la cara y el fondo) el OCR acierta casi siempre;
+    // con la imagen tal cual lee basura. Se prueban las dos versiones de cada fotograma y se queda la que mejor se lee.
+    let mejor = null;
     for (const frame of frames) {
-      const bloques = await leerBloquesConTesseract(frame);
-      if (bloques.length) return { version: 1, origen: "tesseract", bloques };
+      const blanco = frame.replace(/\.png$/, "-texto.png");
+      const imagenes = [frame];
+      try {
+        await execFileAsync(config.ffmpeg, ["-y", "-i", frame, "-vf", "format=gray,lutyuv=y='if(gt(val,215),0,255)'", blanco], { maxBuffer: 1024 * 1024 * 8 });
+        imagenes.unshift(blanco);
+      } catch {
+        /* sin version en blanco y negro: se usa solo el fotograma */
+      }
+      for (const img of imagenes) {
+        const bloques = await leerBloquesConTesseract(img);
+        if (!bloques.length) continue;
+        const score = puntuarTexto(bloques);
+        if (!mejor || score > mejor.score) mejor = { bloques, score };
+      }
     }
-    return null;
+    return mejor ? { version: 1, origen: "tesseract", calidad: Math.round(mejor.score), bloques: mejor.bloques } : null;
   } catch (err) {
     console.warn(`[vision] no se pudo extraer layout OCR de ${path.basename(videoPath)}: ${err.message}`);
     return null;
@@ -49,6 +64,15 @@ export async function analizarFraseMusicaVisual(videoPath, contexto = {}) {
   } finally {
     await rm(framesDir, { recursive: true, force: true });
   }
+}
+
+/** Cuanto se lee de bien un texto (0-120): palabras bien formadas (letras y puntuacion normal) y algo de longitud; la basura del OCR puntua bajo. */
+export function puntuarTexto(bloques) {
+  const palabras = bloques.flatMap((b) => String(b.texto ?? "").split(/\s+/)).filter(Boolean);
+  if (palabras.length < 3) return -1;
+  const limpia = (w) => /^[\p{L}¿¡"“”'’(][\p{L}\p{M}.,:;!?¡¿"“”'’()…-]*$/u.test(w) && (w.length >= 2 || /^[ayoeuAYOEU]$/.test(w));
+  const ratio = palabras.filter(limpia).length / palabras.length;
+  return ratio * 100 + Math.min(palabras.join(" ").length, 120) / 6;
 }
 
 async function extraerFramesLayout(videoPath, outputDir) {

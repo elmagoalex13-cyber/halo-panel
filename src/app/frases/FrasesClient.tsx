@@ -26,7 +26,7 @@ async function llamar(method: string, body: unknown) {
   return j;
 }
 
-export function FrasesClient({ frases: init }: { frases: Frase[] }) {
+export function FrasesClient({ frases: init, conMusica = [] }: { frases: Frase[]; conMusica?: string[] }) {
   const [frases, setFrases] = useState(init);
   const [filter, setFilter] = useState<"all" | "activa" | "inactiva">("all");
   const [busqueda, setBusqueda] = useState("");
@@ -200,6 +200,11 @@ export function FrasesClient({ frases: init }: { frases: Frase[] }) {
               <tr key={f.id} className={`border-b border-halo-border/50 hover:bg-white/[0.02] ${!f.activa ? "opacity-50" : ""}`}>
                 <td className="max-w-xs px-4 py-3">
                   <p className="line-clamp-2 text-sm text-halo-text">{f.frase}</p>
+                  {conMusica.includes(f.id) ? (
+                    <span className="mt-1 inline-block rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300" title="El video sale con la cancion del video scrapeado de donde salio esta frase">🎵 con música</span>
+                  ) : (
+                    <span className="mt-1 inline-block rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40" title="Sin musica: el video sale con su propio audio">sin música</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="text-sm text-halo-text">{f.cancion_nombre === SIN_CANCION ? "—" : f.cancion_nombre}</div>

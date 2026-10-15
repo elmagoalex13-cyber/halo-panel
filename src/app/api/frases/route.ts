@@ -57,6 +57,15 @@ export async function PATCH(req: NextRequest) {
     const fila = limpiar(body);
     if (fila.frase === "") return error("La frase no puede estar vacia", 400);
     if (Object.keys(fila).length === 0) return error("Nada que actualizar", 400);
+    // Si se cambia el texto de una frase que ya tiene colocacion guardada, la colocacion manda sobre el texto al editar el video:
+    // se actualiza el texto de la colocacion (en un solo bloque, en la posicion del primero) para que el cambio se vea de verdad.
+    if (typeof fila.frase === "string" && fila.layout_json === undefined) {
+      const { data: actual } = await createAdminClient().from("banco_frases_canciones").select("frase, layout_json").eq("id", body.id).maybeSingle();
+      const layout = actual?.layout_json as { bloques?: Array<Record<string, unknown>> } | null;
+      if (actual && actual.frase !== fila.frase && Array.isArray(layout?.bloques) && layout.bloques.length) {
+        fila.layout_json = { ...layout, bloques: [{ ...layout.bloques[0], texto: fila.frase }] };
+      }
+    }
     const { data, error: err } = await createAdminClient()
       .from("banco_frases_canciones")
       .update({ ...fila, updated_at: new Date().toISOString() })

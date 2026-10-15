@@ -7,15 +7,16 @@ export type FraseElegida = { id: string; frase: string; nota: string | null; lay
 
 /** Frase activa menos usada del banco (a igualdad, la de mayor puntuacion). */
 export async function elegirFrase(supabase: SupabaseClient): Promise<FraseElegida | null> {
-  const { data, error } = await supabase
-    .from("banco_frases_canciones")
-    .select("id, frase, cancion_nombre, cancion_artista, layout_json")
-    .eq("activa", true)
-    .order("veces_usada", { ascending: true })
-    .order("puntuacion", { ascending: false })
-    .limit(1);
+  // Se prefieren las frases que tienen MUSICA (el editor mantiene la lista en panel_config.frases_con_audio): el video sale con la cancion
+  const [{ data, error }, { data: lista }] = await Promise.all([
+    supabase.from("banco_frases_canciones").select("id, frase, cancion_nombre, cancion_artista, layout_json, veces_usada, puntuacion").eq("activa", true),
+    supabase.from("panel_config").select("value").eq("key", "frases_con_audio").maybeSingle(),
+  ]);
   if (error || !data?.length) return null;
-  const f = data[0] as { id: string; frase: string; cancion_nombre: string | null; cancion_artista: string | null; layout_json: unknown | null };
+  const conMusica = new Set(((lista?.value as { ids?: string[] } | null)?.ids ?? []) as string[]);
+  const filas = data as Array<{ id: string; frase: string; cancion_nombre: string | null; cancion_artista: string | null; layout_json: unknown | null; veces_usada: number | null; puntuacion: number | null }>;
+  filas.sort((x, y) => Number(conMusica.has(y.id)) - Number(conMusica.has(x.id)) || (x.veces_usada ?? 0) - (y.veces_usada ?? 0) || (y.puntuacion ?? 0) - (x.puntuacion ?? 0));
+  const f = filas[0];
   const nota = f.cancion_nombre && f.cancion_nombre !== SIN_CANCION ? `Audio sugerido: ${f.cancion_nombre}${f.cancion_artista ? " - " + f.cancion_artista : ""}` : null;
   return { id: f.id, frase: f.frase, nota, layout_json: f.layout_json ?? null };
 }

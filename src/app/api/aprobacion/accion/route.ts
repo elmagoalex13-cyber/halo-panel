@@ -126,6 +126,7 @@ export async function PATCH(req: NextRequest) {
       update.publicado_at = null;
       update.frase_quemada = null;
       update.layout_json = null;
+      update.audio_referencia_url = null; // la musica era la de la frase anterior: la nueva trae la suya
       // Tambien aplica a la vez lo demas que se haya cambiado (velocidad, recorte)
       let notas = actual.notas_editor as string | null;
       if (typeof velocidad === "number" && (OPCIONES_VELOCIDAD as readonly number[]).includes(velocidad)) {

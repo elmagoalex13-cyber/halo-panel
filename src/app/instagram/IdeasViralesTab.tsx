@@ -110,6 +110,8 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
   async function marcarEstilo(v: ReferenciaVideo, esFraseMusica: boolean) {
     const tags = (v.tags ?? []).filter((tag) => !tag.startsWith("label:frase_musica_"));
     tags.push(esFraseMusica ? "label:frase_musica_si" : "label:frase_musica_no");
+    // Un video que es del estilo alimenta el banco de frases: el editor saca su frase, su colocacion y su musica
+    if (esFraseMusica && !tags.includes("meta:frase_banco=1") && !tags.includes("meta:analizar_frase=1")) tags.push("meta:analizar_frase=1");
     await guardar(v, {
       tags,
       formato_confirmado: esFraseMusica ? "tipo2" : v.formato_confirmado,
@@ -168,29 +170,14 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
     }
   }
 
+  // «Guardar frase»: se escribe la frase del video y el editor la guarda en el banco con su colocacion y la MUSICA del video (en un minuto)
   async function guardarFrase(v: ReferenciaVideo) {
-    const m = metricasDe(v);
     const frase = window.prompt("Frase que aparece en el video", v.frase_detectada ?? "");
     if (!frase?.trim()) return;
-    const res = await fetch("/api/frases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        frase,
-        cancion_nombre: m.cancion ?? "",
-        cancion_artista: m.artista ?? "",
-        audio_id_ig: m.audioId ?? "",
-        puntuacion: 7,
-        layout_json: v.layout_json ?? null,
-      }),
-    });
-    if (res.ok) {
-      await guardar(v, { frase_detectada: frase, formato_confirmado: "tipo2", formato_propuesto: "tipo2" });
-      setMsg({ ok: true, texto: "Frase guardada en el banco." });
-    } else {
-      const j = (await res.json().catch(() => null)) as { error?: string } | null;
-      setMsg({ ok: false, texto: j?.error ?? "No se pudo guardar la frase" });
-    }
+    const tags = (v.tags ?? []).filter((t) => !["meta:frase_falta=1", "meta:frase_banco=1", "meta:frase_manual=1", "meta:analizar_frase=1"].includes(t));
+    tags.push("meta:frase_manual=1", "meta:analizar_frase=1");
+    await guardar(v, { frase_detectada: frase.trim(), formato_confirmado: "tipo2", formato_propuesto: "tipo2", tags });
+    setMsg({ ok: true, texto: "Frase enviada: en un minuto estará en el banco de frases con su colocación y la música de este vídeo." });
   }
 
   return (
@@ -308,6 +295,8 @@ export function IdeasViralesTab({ videos: iniciales, modelos }: { videos: Refere
                 {v.descripcion ? <p className="line-clamp-2 text-xs text-white/45">{v.descripcion}</p> : null}
                 {m.visionMotivo ? <p className="line-clamp-2 text-[11px] text-white/35">{m.visionMotivo}</p> : null}
                 {v.frase_detectada ? <p className="rounded-lg border border-[#8B5CF6]/20 bg-[#8B5CF6]/10 px-2 py-1.5 text-xs text-[#ddd6fe]">&quot;{v.frase_detectada}&quot;</p> : null}
+                {(v.tags ?? []).includes("meta:frase_falta=1") ? <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-200">No se ha podido leer la frase de este vídeo: pulsa «Guardar frase» y escríbela (se guarda con su música).</p> : null}
+                {(v.tags ?? []).includes("meta:frase_banco=1") ? <p className="text-[11px] text-emerald-300/80">🎵 Frase y música guardadas en el banco de frases</p> : null}
 
                 {vista === "pendiente" ? (
                   <>
