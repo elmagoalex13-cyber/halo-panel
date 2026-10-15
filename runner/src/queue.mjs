@@ -3,6 +3,7 @@ import { config } from "./config.mjs";
 import { publicUrl } from "./r2.mjs";
 import { procesarTipo } from "./tipos.mjs";
 import { asignarFrase } from "./frases.mjs";
+import { fraseDeReferencia } from "./frases_referencia.mjs";
 
 export const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
 
@@ -70,7 +71,10 @@ export async function procesarPieza(pieza) {
   console.log(`[runner] pieza ${pieza.id} tipo ${tipo}`);
   try {
     if (tipo === 2 && !pieza.frase_quemada) {
-      const asignado = await asignarFrase(supabase, pieza);
+      // Si el video se asigno desde un video de referencia (frase con musica), sale con SU frase y su colocacion; si no, una del banco
+      const deReferencia = await fraseDeReferencia(supabase, pieza).catch(() => null);
+      if (deReferencia) await supabase.from("library_content").update({ frase_quemada: deReferencia.frase, layout_json: deReferencia.layout_json }).eq("id", pieza.id);
+      const asignado = deReferencia ?? (await asignarFrase(supabase, pieza));
       pieza.frase_quemada = asignado?.frase ?? "";
       pieza.layout_json = asignado?.layout_json ?? null;
     }

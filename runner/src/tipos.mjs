@@ -140,8 +140,7 @@ export async function procesarTipo(tipo, pieza) {
       // Velocidad elegida en la Mesa para este video hablado ([velocidad=1.2] en notas_editor); sin marca = normal
       const v = Number(/\[velocidad=([0-9.]+)\]/.exec(pieza.notas_editor ?? "")?.[1]);
       const velocidad = Number.isFinite(v) && v >= 1 && v <= 1.5 ? v : 1;
-      const vol = Number(/\[volumen=([0-9.]+)\]/.exec(pieza.notas_editor ?? "")?.[1]);
-      const volumen = Number.isFinite(vol) && vol >= 1 && vol <= 3 ? vol : 1;
+      const volumen = 2; // todos los videos hablados salen con el volumen al 200 % (ya no se ajusta a mano)
       await renderTipo1(rawPath, subs?.assPath, outPath, { trim: subs?.trim, velocidad, volumen });
       fraseQuemada = subs?.texto ?? pieza.frase_quemada ?? "";
       trimUsado = subs?.trim ?? null;

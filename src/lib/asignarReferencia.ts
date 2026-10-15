@@ -23,7 +23,7 @@ export async function asignarVideoAModelos(
 ): Promise<ResultadoAsignacion> {
   const { data: video, error: vErr } = await supabase
     .from("referencias_videos")
-    .select("id, cuenta_id, video_url, thumbnail_url, descripcion, formato_confirmado, referencias_cuentas:cuenta_id(username)")
+    .select("id, cuenta_id, video_url, thumbnail_url, descripcion, formato_confirmado, tags, referencias_cuentas:cuenta_id(username)")
     .eq("id", videoId)
     .single();
   if (vErr || !video) return { ok: false, status: 404, error: "Video no encontrado" };
@@ -95,7 +95,11 @@ export async function asignarVideoAModelos(
   }
 
   const ahora = new Date().toISOString();
-  const upd = { estado_triaje: "confirmado", formato_confirmado: tipoVideo, confirmado_at: ahora };
+  // Frase con musica: el editor saca del video la frase y su colocacion, las guarda en el banco de frases y la modelo recibe esa misma frase
+  // con la cancion del video (etiqueta que lee el runner; se cambia por meta:frase_banco=1 al terminar)
+  const tags = (video.tags as string[] | null) ?? [];
+  const marcarFrase = tipo === 2 && !tags.includes("meta:frase_banco=1") && !tags.includes("meta:analizar_frase=1");
+  const upd = { estado_triaje: "confirmado", formato_confirmado: tipoVideo, confirmado_at: ahora, ...(marcarFrase ? { tags: [...tags, "meta:analizar_frase=1"] } : {}) };
   let { error } = await supabase.from("referencias_videos").update(upd).eq("id", videoId);
   if (error && /confirmado_at/.test(error.message)) ({ error } = await supabase.from("referencias_videos").update({ estado_triaje: "confirmado", formato_confirmado: tipoVideo }).eq("id", videoId));
   if (error) throw error;

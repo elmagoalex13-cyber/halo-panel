@@ -7,7 +7,7 @@ import { urlR2, videoBrutoAlternativas, videoEditado } from "@/lib/media";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
-import { OPCIONES_VELOCIDAD, OPCIONES_VOLUMEN, leerVelocidad, leerVolumen, textoVelocidad, textoVolumen } from "@/lib/velocidadHablados";
+import { OPCIONES_VELOCIDAD, leerVelocidad, textoVelocidad } from "@/lib/velocidadHablados";
 
 export interface VideoRow {
   id: string;
@@ -163,17 +163,14 @@ function formatearSegundos(s: number | null) {
   return `${m}:${sec.padStart(5, "0")}`;
 }
 
-/** Velocidad (como en Edits de Instagram: 1.1x, 1.2x...) y volumen del video hablado. Al aplicarlos, el editor rehace el video. */
+/** Velocidad del video hablado (como en Edits de Instagram: 1.1x, 1.2x...). El volumen ya sale siempre al 200 %. Al aplicar, el editor rehace el video. */
 function AjustesEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => void }) {
   const velActual = leerVelocidad(row.notas_editor);
-  const volActual = leerVolumen(row.notas_editor);
   const [velocidad, setVelocidad] = useState<number>(velActual);
-  const [volumen, setVolumen] = useState<number>(volActual);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   useEffect(() => {
     setVelocidad(leerVelocidad(row.notas_editor));
-    setVolumen(leerVolumen(row.notas_editor));
     setMensaje(null);
   }, [row.id, row.notas_editor]);
 
@@ -181,7 +178,7 @@ function AjustesEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => v
     setGuardando(true);
     setMensaje(null);
     try {
-      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, accion: "ajustes", velocidad, volumen }) });
+      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, accion: "ajustes", velocidad }) });
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
         setMensaje(payload?.error ?? "No se pudo aplicar.");
@@ -196,7 +193,6 @@ function AjustesEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => v
   }
 
   const boton = (activo: boolean) => `rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${activo ? "border-[#8B5CF6] bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-black/20 text-white/60 hover:text-white"}`;
-  const sinCambios = velocidad === velActual && volumen === volActual;
 
   return (
     <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
@@ -208,21 +204,11 @@ function AjustesEditor({ row, onGuardado }: { row: VideoRow; onGuardado: () => v
           </button>
         ))}
       </div>
-      <p className="mb-2 mt-3 text-[10px] uppercase tracking-[0.14em] text-white/40">Volumen (sube la voz sin que se sature)</p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {OPCIONES_VOLUMEN.map((v) => (
-          <button key={v} type="button" onClick={() => setVolumen(v)} className={boton(volumen === v)}>
-            {textoVolumen(v)}
-          </button>
-        ))}
-      </div>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => void aplicar()} disabled={guardando || sinCambios} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-40" title={sinCambios ? "Elige otra velocidad o volumen" : undefined}>
+        <button type="button" onClick={() => void aplicar()} disabled={guardando || velocidad === velActual} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-40" title={velocidad === velActual ? "Elige otra velocidad" : undefined}>
           {guardando ? "Enviando…" : "Aplicar y rehacer"}
         </button>
-        <p className="text-[11px] text-white/35">
-          Ahora: velocidad {velActual === 1 ? "normal" : textoVelocidad(velActual)} · volumen {volActual === 1 ? "normal" : textoVolumen(volActual)}. El editor lo rehace y vuelve a la Mesa en unos minutos.
-        </p>
+        <p className="text-[11px] text-white/35">Ahora: velocidad {velActual === 1 ? "normal" : textoVelocidad(velActual)} · volumen siempre al 200 %. El editor lo rehace y vuelve a la Mesa en unos minutos.</p>
       </div>
       {mensaje ? <p className="mt-1 text-xs text-red-300">{mensaje}</p> : null}
     </div>

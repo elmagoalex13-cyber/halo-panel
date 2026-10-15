@@ -49,7 +49,6 @@ export async function POST(req: NextRequest) {
   }
   if (![1, 2, 3].includes(tipo)) return NextResponse.json({ error: "Tipo de video no valido" }, { status: 400 });
   const refKey: string | null = null; // ya no hay tipo con edicion "igual que la referencia"
-  void referenciaId;
 
   const { data: cuentas } = await supabase
     .from("cuentas_instagram")
@@ -63,7 +62,20 @@ export async function POST(req: NextRequest) {
   // Los TikTok no son reels de Instagram: no se retienen ni cuentan para la captacion
   const enCaptacion = Boolean(modeloCap?.objetivo_videos) && !modeloCap?.captacion_aprobada_at && tipo !== 3;
 
-  const frase = tipo === 2 && !enCaptacion ? await elegirFrase(supabase) : null; // en espera no se gasta ninguna frase (se asigna al editarlo)
+  // Video de «frase con musica» asignado desde un video de referencia: sale con SU frase (y su colocacion) y con la cancion de ese video.
+  // Si aun no se ha leido la frase del video de referencia, el editor la coge de ahi al editarlo; si no hay referencia, una del banco.
+  let audioRef: string | null = null;
+  let fraseRef: { frase: string; layout_json: unknown | null } | null = null;
+  if (tipo === 2 && referenciaId) {
+    const { data: ref } = await supabase.from("referencias").select("url_r2").eq("id", referenciaId).maybeSingle();
+    if (ref?.url_r2) {
+      audioRef = ref.url_r2 as string;
+      const { data: vr } = await supabase.from("referencias_videos").select("frase_detectada, layout_json, tags").eq("video_url", ref.url_r2 as string).limit(1).maybeSingle();
+      const pendiente = ((vr?.tags as string[] | null) ?? []).includes("meta:analizar_frase=1");
+      if (vr?.frase_detectada?.trim() && !pendiente) fraseRef = { frase: vr.frase_detectada.trim(), layout_json: vr.layout_json ?? null };
+    }
+  }
+  const frase = tipo === 2 && !enCaptacion && !fraseRef ? await elegirFrase(supabase) : null; // en espera no se gasta ninguna frase (se asigna al editarlo)
   const ahora = new Date().toISOString();
   const { data: pieza, error } = await supabase
     .from("library_content")
@@ -83,8 +95,9 @@ export async function POST(req: NextRequest) {
       estado_procesamiento: enCaptacion ? null : "pendiente",
       recibido_at: ahora,
       reparto_at: ahora,
-      frase_quemada: frase?.frase ?? "",
-      layout_json: frase?.layout_json ?? null,
+      frase_quemada: fraseRef?.frase ?? frase?.frase ?? "",
+      layout_json: fraseRef?.layout_json ?? frase?.layout_json ?? null,
+      ...(audioRef ? { audio_referencia_url: audioRef } : {}),
       notas_editor: [instrucciones, frase?.nota].filter(Boolean).join(" | ") || null,
       caption: "",
       correcciones: "",
