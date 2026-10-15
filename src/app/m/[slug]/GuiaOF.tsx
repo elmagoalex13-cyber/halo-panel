@@ -118,7 +118,7 @@ export function GuiaOF({ packs, posts, referencias }: { packs: string; posts: st
                 puntos={[
                   "Vertical, tipo selfie, con tu cara grande y bien centrada.",
                   "Se tiene que ver muy bien la cara: de frente, mirando a la cámara.",
-                  "Con buena luz, mejor luz natural de frente (junto a una ventana).",
+                  "Hecha con el aro de luz, de frente, para que se te vea la cara muy bien iluminada.",
                 ]}
               />
             </div>
@@ -134,7 +134,7 @@ export function GuiaOF({ packs, posts, referencias }: { packs: string; posts: st
                 puntos={[
                   "Horizontal (con el móvil tumbado).",
                   "Tu cara bien visible y mirando a la cámara, sin que se corte por los bordes.",
-                  "Con buena luz y el fondo ordenado.",
+                  "Hecha también con el aro de luz y con el fondo ordenado.",
                 ]}
               />
             </div>
