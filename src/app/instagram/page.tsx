@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SubPaginas, subInstagram } from "@/components/SubPaginas";
 import { PanelLayout } from "@/components/PanelLayout";
 import { CuentasTab } from "./CuentasTab";
 import { ReferenciasTab } from "./ReferenciasTab";
@@ -142,49 +142,7 @@ export default async function InstagramPage({
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Instagram</h1>
       </div>
 
-      <div className="mb-6 flex gap-2 border-b border-white/[0.08]">
-        <Link
-          href="/instagram?tab=cuentas"
-          className={`px-4 py-2.5 text-sm font-semibold transition ${
-            activeTab === "cuentas" ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"
-          }`}
-        >
-          Cuentas
-        </Link>
-        <Link
-          href="/instagram?tab=referencias"
-          className={`px-4 py-2.5 text-sm font-semibold transition ${
-            activeTab === "referencias" ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"
-          }`}
-        >
-          Cuentas de referencia
-        </Link>
-        <Link
-          href="/instagram?tab=ideas"
-          className={`px-4 py-2.5 text-sm font-semibold transition ${
-            activeTab === "ideas" ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"
-          }`}
-        >
-          Ideas virales
-        </Link>
-        <Link
-          href="/instagram?tab=propios"
-          className={`px-4 py-2.5 text-sm font-semibold transition ${
-            activeTab === "propios" ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"
-          }`}
-        >
-          Virales propios
-        </Link>
-        <Link
-          href="/instagram?tab=historias"
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition ${
-            activeTab === "historias" ? "border-b-2 border-[#8B5CF6] text-white" : "text-[color:var(--text-secondary)] hover:text-white"
-          }`}
-        >
-          Historias
-          {historiasNuevas ? <span className="rounded-full bg-pink-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{historiasNuevas}</span> : null}
-        </Link>
-      </div>
+      <SubPaginas items={subInstagram(activeTab, historiasNuevas)} />
 
       {activeTab === "cuentas" ? (
         <CuentasTab cuentas={cuentas} esDueno={esDueno} ambitos={porModelo} />

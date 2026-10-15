@@ -11,11 +11,8 @@ const NAV = [
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
   { href: "/originales", label: "Originales", icon: "▤" },
   { href: "/onlyfans", label: "OnlyFans", icon: "♡", ofBadge: true },
-  { href: "/posts-of", label: "Posts por programar", icon: "🗓" },
-  { href: "/captions", label: "Captions", icon: "❝" },
   { href: "/leads", label: "Leads", icon: "◇", leadsBadge: true },
   { href: "/contratos", label: "Contratos", icon: "✎" },
-  { href: "/asignar", label: "Asignar vídeos", icon: "⇪" },
   { href: "/instagram", label: "Instagram", icon: "◎", histBadge: true },
   { href: "/landings", label: "Landings", icon: "◇" },
   { href: "/modelos", label: "Modelos", icon: "◉" },
@@ -170,7 +167,11 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
     router.refresh();
   }
 
+  // Subpaginas que cuelgan de una seccion del menu (OnlyFans: por programar y captions; Instagram: asignar videos)
+  const SUBPAGINAS: Record<string, string[]> = { "/onlyfans": ["/posts-of", "/captions"], "/instagram": ["/asignar"] };
+
   function activeFor(href: string) {
+    if (SUBPAGINAS[href]?.some((sub) => pathname === sub || pathname.startsWith(`${sub}/`))) return true;
     return pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
   }
 
