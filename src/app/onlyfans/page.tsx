@@ -1,4 +1,3 @@
-import { SubPaginas, subOnlyFans } from "@/components/SubPaginas";
 import { PanelLayout } from "@/components/PanelLayout";
 import { cargarResumenOF } from "@/lib/ofResumen";
 import { ambitosModelos } from "@/lib/alcance";
@@ -19,7 +18,6 @@ export default async function OnlyFansPage({ searchParams }: { searchParams: Pro
           Las modelos lo suben desde su portal (pestaña «Contenido OnlyFans») por fases, y aquí lo tienes listo para ver y descargar tal cual lo grabaron, sin perder calidad.
         </p>
       </div>
-      <SubPaginas items={subOnlyFans("contenido")} />
       {listo ? (
         <OnlyFansClient modelos={modelos} colecciones={resumen} modeloInicial={modelo} esDueno={esDueno} ambitos={porModelo} />
       ) : (

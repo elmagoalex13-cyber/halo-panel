@@ -1,4 +1,3 @@
-import { SubPaginas, subInstagram } from "@/components/SubPaginas";
 import { PanelLayout } from "@/components/PanelLayout";
 import { CuentasTab } from "./CuentasTab";
 import { ReferenciasTab } from "./ReferenciasTab";
@@ -131,18 +130,15 @@ export default async function InstagramPage({
     loadViralesPropios(),
     loadHistorias(),
   ]);
-  const historiasNuevas = historias.reduce((n, h) => n + h.nuevas, 0);
   const cuentas = loadCuentasIG(cuentasReales);
   const { esDueno, porModelo } = await ambitosModelos();
 
   return (
     <PanelLayout>
       <div className="mb-6">
-        <p className="text-sm text-[color:var(--text-secondary)]">Cuentas de la agencia y competencia</p>
-        <h1 className="mt-2 font-display text-4xl font-semibold text-white">Instagram</h1>
+        <p className="text-sm text-[color:var(--text-secondary)]">Instagram · cuentas de la agencia y competencia</p>
+        <h1 className="mt-2 font-display text-4xl font-semibold text-white">{{ cuentas: "Cuentas", referencias: "Cuentas de referencia", ideas: "Ideas virales", propios: "Virales propios", historias: "Historias" }[activeTab]}</h1>
       </div>
-
-      <SubPaginas items={subInstagram(activeTab, historiasNuevas)} />
 
       {activeTab === "cuentas" ? (
         <CuentasTab cuentas={cuentas} esDueno={esDueno} ambitos={porModelo} />

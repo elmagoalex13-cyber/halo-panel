@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+
 import { areaDePath, type AreaId } from "@/lib/areas";
 
 const NAV = [
@@ -10,10 +11,33 @@ const NAV = [
   { href: "/facturacion", label: "Facturación", icon: "$" },
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
   { href: "/originales", label: "Originales", icon: "▤" },
-  { href: "/onlyfans", label: "OnlyFans", icon: "♡", ofBadge: true },
+  {
+    href: "/onlyfans",
+    label: "OnlyFans",
+    icon: "♡",
+    ofBadge: true,
+    sub: [
+      { href: "/onlyfans", label: "Contenido" },
+      { href: "/posts-of", label: "Por programar" },
+      { href: "/captions", label: "Captions" },
+    ],
+  },
   { href: "/leads", label: "Leads", icon: "◇", leadsBadge: true },
   { href: "/contratos", label: "Contratos", icon: "✎" },
-  { href: "/instagram", label: "Instagram", icon: "◎", histBadge: true },
+  {
+    href: "/instagram",
+    label: "Instagram",
+    icon: "◎",
+    histBadge: true,
+    sub: [
+      { href: "/instagram?tab=cuentas", label: "Cuentas" },
+      { href: "/instagram?tab=referencias", label: "Cuentas de referencia" },
+      { href: "/instagram?tab=ideas", label: "Ideas virales" },
+      { href: "/instagram?tab=propios", label: "Virales propios" },
+      { href: "/instagram?tab=historias", label: "Historias", histBadge: true },
+      { href: "/asignar", label: "Asignar vídeos" },
+    ],
+  },
   { href: "/landings", label: "Landings", icon: "◇" },
   { href: "/modelos", label: "Modelos", icon: "◉" },
   { href: "/frases", label: "Frases", icon: "✦" },
@@ -21,6 +45,41 @@ const NAV = [
   { href: "/vault", label: "Vault", icon: "◆" },
   { href: "/ajustes", label: "Ajustes", icon: "⚙" },
 ];
+
+type SubItem = { href: string; label: string; histBadge?: boolean };
+
+/** ¿Es esta subpagina la que esta abierta? (las de Instagram se distinguen por ?tab=). */
+function subActiva(sub: SubItem, pathname: string, tab: string | null) {
+  const [ruta, query] = sub.href.split("?");
+  if (pathname !== ruta && !(ruta !== "/instagram" && pathname.startsWith(`${ruta}/`))) return false;
+  if (!query) return true;
+  const quiere = new URLSearchParams(query).get("tab");
+  return (tab ?? "cuentas") === quiere;
+}
+
+function SubMenu({ subs, historias, onNavegar }: { subs: SubItem[]; historias: number; onNavegar?: () => void }) {
+  const pathname = usePathname();
+  const tab = useSearchParams().get("tab");
+  return (
+    <ul className="mt-1 ml-5 flex flex-col gap-0.5 border-l border-white/[0.08] pl-2">
+      {subs.map((it) => {
+        const activo = subActiva(it, pathname, tab);
+        return (
+          <li key={it.href}>
+            <Link
+              href={it.href}
+              onClick={onNavegar}
+              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] transition ${activo ? "bg-[#8B5CF6]/[0.16] text-white" : "text-white/55 hover:bg-white/[0.05] hover:text-white/90"}`}
+            >
+              <span className="flex-1 truncate">{it.label}</span>
+              {it.histBadge && historias > 0 ? <span className="rounded-full bg-pink-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{historias > 99 ? "99+" : historias}</span> : null}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export const EVENTO_MODELOS = "halo:modelos-actualizados";
 
@@ -83,6 +142,8 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   });
   const [modelos, setModelos] = useState<ModeloMenu[]>(cache.modelos);
   const [modelosAbierto, setModelosAbierto] = useState(cache.modelosAbierto ?? true);
+  // Desplegables de OnlyFans e Instagram: se abren solos al entrar en una de sus paginas; ademas se pueden abrir y cerrar con la flecha
+  const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (cache.modelosAbierto !== null) return;
@@ -215,10 +276,10 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
               const badgeText = badgeFor(item);
               const esModelos = href === "/modelos";
               return (
-                <div key={href} className={esModelos ? "relative" : undefined}>
+                <div key={href} className={esModelos || "sub" in item ? "relative" : undefined}>
                 <Link
                   href={href}
-                  className={`group relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-150 ${esModelos ? "pr-10 " : ""}${
+                  className={`group relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all duration-150 ${esModelos || "sub" in item ? "pr-10 " : ""}${
                     active
                       ? "border-[#A78BFA]/30 bg-[#8B5CF6]/[0.16] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-8px_rgba(139,92,246,0.6)]"
                       : "border-transparent text-white/50 hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white/85"
@@ -236,6 +297,24 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                     </span>
                   ) : null}
                 </Link>
+                {"sub" in item ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setAbiertos((p) => ({ ...p, [href]: !(p[href] ?? active) }))}
+                      aria-expanded={abiertos[href] ?? active}
+                      aria-label={(abiertos[href] ?? active) ? `Cerrar ${label}` : `Abrir ${label}`}
+                      className="absolute right-2 top-[11px] grid h-6 w-6 place-items-center rounded-lg text-xs text-white/45 transition hover:bg-white/[0.08] hover:text-white"
+                    >
+                      <span className={`inline-block transition-transform ${(abiertos[href] ?? active) ? "rotate-180" : ""}`}>▾</span>
+                    </button>
+                    {(abiertos[href] ?? active) ? (
+                      <Suspense fallback={null}>
+                        <SubMenu subs={item.sub as SubItem[]} historias={counts.historias} />
+                      </Suspense>
+                    ) : null}
+                  </>
+                ) : null}
                 {esModelos ? (
                   <>
                     <button
@@ -371,10 +450,10 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
               </div>
             ) : null}
             <div className="grid grid-cols-2 gap-2">
-              {moreItems.map((item) => {
+              {moreItems.flatMap((item) => {
                 const active = activeFor(item.href);
                 const badgeText = badgeFor(item);
-                return (
+                const principal = (
                   <Link
                     key={item.href}
                     href={item.href}
@@ -390,6 +469,19 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                     {badgeText ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] text-white ${colorBadge(item)}`}>{badgeText}</span> : null}
                   </Link>
                 );
+                if (!("sub" in item)) return [principal];
+                // OnlyFans / Instagram: sus apartados tambien salen aqui, debajo (el primero es la propia pagina principal)
+                const hijos = (item.sub as SubItem[]).filter((it) => it.href !== item.href).map((it) => (
+                  <Link
+                    key={it.href}
+                    href={it.href}
+                    onClick={() => setMoreOpen(false)}
+                    className="flex min-h-12 items-center rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 text-[13px] font-semibold text-white/60"
+                  >
+                    ↳ {it.label}
+                  </Link>
+                ));
+                return [principal, ...hijos];
               })}
             </div>
             <button type="button" onClick={logout} className="btn-secondary mt-3 flex min-h-12 w-full items-center justify-center text-sm">

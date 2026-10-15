@@ -1,7 +1,6 @@
 import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { AsignarClient, type EncargoRow } from "./AsignarClient";
-import { SubPaginas, subInstagram } from "@/components/SubPaginas";
 import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
@@ -53,10 +52,9 @@ export default async function AsignarPage() {
   return (
     <PanelLayout>
       <div className="mb-6">
-        <p className="text-sm text-[color:var(--text-secondary)]">Asignar vídeos: lo que asignas aparece en el portal privado de cada modelo</p>
-        <h1 className="mt-2 font-display text-4xl font-semibold text-white">Instagram</h1>
+        <p className="text-sm text-[color:var(--text-secondary)]">Instagram · lo que asignas aparece en el portal privado de cada modelo</p>
+        <h1 className="mt-2 font-display text-4xl font-semibold text-white">Asignar vídeos</h1>
       </div>
-      <SubPaginas items={subInstagram("asignar")} />
       <AsignarClient modelos={modelos} encargos={encargos} esDueno={esDueno} ambitos={porModelo} />
     </PanelLayout>
   );
