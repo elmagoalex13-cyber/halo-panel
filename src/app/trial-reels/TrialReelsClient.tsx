@@ -155,13 +155,25 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
             return (
               <article key={v.id} className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
                 <div className="flex flex-wrap items-center gap-3">
+                  {src ? (
+                    <button type="button" onClick={() => setOriginal(src)} title="Ver el reel original" className="group relative h-24 w-[3.4rem] shrink-0 overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
+                      <video src={`${src}#t=0.5`} poster={v.thumbnail_url ?? undefined} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
+                      <span className="absolute inset-0 grid place-items-center bg-black/25 text-lg text-white opacity-80 transition group-hover:opacity-100">▶</span>
+                    </button>
+                  ) : null}
                   <AvatarModelo id={v.modelo_id ?? v.id} nombre={v.modelo_nombre || v.username} foto={v.foto} className="h-8 w-8 text-xs" />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-48">
                     <p className="truncate font-semibold text-white">@{v.username} <span className="font-normal text-white/40">· {v.modelo_nombre}</span></p>
                     <p className="text-xs text-white/40">
                       {compacto(v.vistas)} visitas · {compacto(v.likes)} likes · {ETIQUETA_ESTADO[v.estado]}
                       {v.fecha_publicacion ? ` · ${new Date(v.fecha_publicacion).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}` : ""}
                     </p>
+                    {v.descripcion ? <p className="mt-0.5 line-clamp-2 text-xs text-white/55">{v.descripcion}</p> : null}
+                    {v.codigo ? (
+                      <a href={`https://www.instagram.com/reel/${v.codigo}/`} target="_blank" rel="noreferrer" className="mt-0.5 inline-block text-[11px] font-semibold text-[#A78BFA] hover:underline">
+                        Abrir en Instagram ↗
+                      </a>
+                    ) : null}
                   </div>
                   {src ? (
                     <button onClick={() => setOriginal(src)} className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/60 transition hover:text-white">
