@@ -9,6 +9,16 @@ import type { FotosPerfilVistas } from "@/lib/fotosPerfil";
 import { FotosPerfilModelo } from "@/components/FotosPerfilPanel";
 import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
+const CLAVE_VISTA = "of_vista"; // la vista que tenias (modelo, pestaña, filtros)
+const CLAVE_VOLVER = "of_volver"; // 1 = acabas de abrir un script/pack/post: al volver se recupera la vista
+const alAbrir = () => {
+  try {
+    sessionStorage.setItem(CLAVE_VOLVER, "1");
+  } catch {
+    /* sin almacenamiento */
+  }
+};
+
 export function OnlyFansClient({
   modelos: modelosTodas,
   colecciones: coleccionesTodas,
@@ -49,6 +59,28 @@ export function OnlyFansClient({
     estadoInicial === "entregado" || estadoInicial === "en_curso" || estadoInicial === "por_subir" ? estadoInicial : "todos",
   );
 
+  // Al volver de abrir un script, pack o post (con «← OnlyFans» o con el «atrás» del navegador) la pagina puede llegar tal como estaba al entrar,
+  // sin la modelo ni la pestaña que habias elegido: se recuperan de lo guardado (solo si se vuelve de abrir uno y la direccion no trae su propia vista)
+  useEffect(() => {
+    if (sinFiltroModelo) return;
+    try {
+      if (sessionStorage.getItem(CLAVE_VOLVER) !== "1") return;
+      sessionStorage.removeItem(CLAVE_VOLVER);
+      if (modeloInicial || tipoInicial || estadoInicial || ambitoInicial) return;
+      const v = JSON.parse(sessionStorage.getItem(CLAVE_VISTA) ?? "null") as { modelo?: string; tipo?: string; verPerfil?: boolean; estado?: string; ambito?: string } | null;
+      if (!v) return;
+      if (v.modelo && v.modelo !== "todas" && modelosTodas.some((m) => m.id === v.modelo)) setModelo(v.modelo);
+      if (v.verPerfil && fotosPerfilInicial) setVerPerfil(true);
+      else if (v.tipo === "pack" || v.tipo === "post" || v.tipo === "script") setTipo(v.tipo);
+      if (v.estado === "entregado" || v.estado === "en_curso" || v.estado === "por_subir") setEstado(v.estado);
+      if (v.ambito === "mias" || v.ambito === "compartidas") setFiltroAmbito(v.ambito);
+    } catch {
+      /* sin almacenamiento: se queda la vista por defecto */
+    }
+    // solo al entrar
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Lo que estas viendo (modelo, pestaña, estado, grupo) queda en la direccion: al abrir un script y volver, o al recargar, sigues donde estabas
   useEffect(() => {
     if (sinFiltroModelo) return;
@@ -60,6 +92,11 @@ export function OnlyFansClient({
     if (filtroAmbito !== "todas") q.set("ambito", filtroAmbito);
     const url = `${window.location.pathname}${q.toString() ? `?${q}` : ""}`;
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, "", url);
+    try {
+      sessionStorage.setItem(CLAVE_VISTA, JSON.stringify({ modelo, tipo, verPerfil, estado, ambito: filtroAmbito }));
+    } catch {
+      /* sin almacenamiento */
+    }
   }, [modelo, tipo, verPerfil, estado, filtroAmbito, sinFiltroModelo]);
 
   async function llamar(c: ResumenColeccion, url: string, init: RequestInit, alOk: (j: Record<string, unknown>) => void, fallo: string) {
@@ -213,7 +250,7 @@ export function OnlyFansClient({
                     <button type="button" onClick={() => setPanel(null)} className="rounded-lg border border-white/15 px-2.5 py-1 text-xs text-white/60 hover:text-white">Cancelar</button>
                   </form>
                 ) : (
-                  <Link href={`/onlyfans/${c.id}`} className="flex items-center gap-2">
+                  <Link href={`/onlyfans/${c.id}`} onClick={alAbrir} className="flex items-center gap-2">
                     <AvatarModelo id={c.modelo_id} nombre={c.modelo_nombre} foto={modelos.find((m) => m.id === c.modelo_id)?.foto ?? null} className="h-7 w-7 text-[11px]" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-white">{c.nombre}</p>
@@ -225,7 +262,7 @@ export function OnlyFansClient({
                     </span>
                   </Link>
                 )}
-                <Link href={`/onlyfans/${c.id}`} className="space-y-2.5">
+                <Link href={`/onlyfans/${c.id}`} onClick={alAbrir} className="space-y-2.5">
                   <p className="text-xs text-white/50">
                     {c.fasesCompletas !== null ? `${c.fasesCompletas}/8 fases completas · ` : ""}
                     {c.videos} vídeo{c.videos === 1 ? "" : "s"} · {c.fotos} foto{c.fotos === 1 ? "" : "s"} · {formatoTamano(c.bytes) || "0 MB"}
