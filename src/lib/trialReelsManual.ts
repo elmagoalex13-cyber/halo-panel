@@ -12,6 +12,7 @@ export type PedidoTrial = {
   id: string;
   viral_id: string;
   modelo_id: string | null;
+  cantidad?: number; // cuantas versiones se piden (1 a 3; si falta, 3)
   estado: "pendiente" | "procesando" | "listo" | "error";
   at: string;
   por: string;
@@ -50,7 +51,8 @@ async function cambiar(fn: (p: PedidoTrial[]) => PedidoTrial[] | null): Promise<
 }
 
 /** Pide 3 versiones de cada viral. A los que ya tienen un pedido en marcha no se les repite. Devuelve cuantos pedidos nuevos hay. */
-export async function crearPedidos(virales: Array<{ viral_id: string; modelo_id: string | null }>, por: string): Promise<{ ok: boolean; nuevos: number }> {
+export async function crearPedidos(virales: Array<{ viral_id: string; modelo_id: string | null }>, por: string, cantidad = VARIANTES): Promise<{ ok: boolean; nuevos: number }> {
+  const n = Math.min(VARIANTES, Math.max(1, Math.round(cantidad) || VARIANTES));
   let nuevos = 0;
   const ok = await cambiar((lista) => {
     const activos = new Set(lista.filter((p) => p.estado === "pendiente" || p.estado === "procesando").map((p) => p.viral_id));
@@ -60,7 +62,7 @@ export async function crearPedidos(virales: Array<{ viral_id: string; modelo_id:
     const ahora = Date.now();
     return [
       ...lista,
-      ...crear.map((v, i): PedidoTrial => ({ id: crypto.randomUUID(), viral_id: v.viral_id, modelo_id: v.modelo_id, estado: "pendiente", at: new Date(ahora + i).toISOString(), por, variantes: [] })),
+      ...crear.map((v, i): PedidoTrial => ({ id: crypto.randomUUID(), viral_id: v.viral_id, modelo_id: v.modelo_id, cantidad: n, estado: "pendiente", at: new Date(ahora + i).toISOString(), por, variantes: [] })),
     ];
   });
   return { ok, nuevos };

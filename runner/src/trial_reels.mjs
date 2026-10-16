@@ -71,10 +71,14 @@ async function procesar(sb, pedido) {
     const usuario = String(cuenta?.username ?? "cuenta").replace(/^@/, "").replace(/[^a-z0-9._-]/gi, "_");
     await downloadFromR2(viral.video_key, fuente);
 
-    for (let n = 1; n <= VARIANTES_TRIAL; n++) {
+    // Cuantas versiones se piden (1 a 3). Si son menos de 3, los lados de zoom/filtros se eligen al azar para que no salga siempre el mismo
+    const cantidad = Math.min(VARIANTES_TRIAL, Math.max(1, Number(pedido.cantidad) || VARIANTES_TRIAL));
+    const estilos = [1, 2, 3].sort(() => Math.random() - 0.5).slice(0, cantidad);
+    if (cantidad === VARIANTES_TRIAL) estilos.sort();
+    for (let n = 1; n <= cantidad; n++) {
       const salida = path.join(dir, `${pedido.id}-v${n}.mp4`);
       locales.push(salida);
-      const params = paramsTrial(n);
+      const params = paramsTrial(estilos[n - 1]);
       const info = await spoofearTrial(fuente, salida, params);
       const key = `trial-reels/${usuario}/${viral.codigo}-${String(pedido.id).slice(0, 8)}-v${n}.mp4`;
       await uploadToR2(salida, key, "video/mp4");
@@ -82,7 +86,7 @@ async function procesar(sb, pedido) {
         ...x,
         variantes: [...(x.variantes ?? []).filter((v) => v.n !== n), { n, key, resumen: resumenTrial(params), duracion: info.duracion }],
       }));
-      console.log(`[trial-reels] ${usuario}/${viral.codigo}: versión ${n}/${VARIANTES_TRIAL} lista`);
+      console.log(`[trial-reels] ${usuario}/${viral.codigo}: versión ${n}/${cantidad} lista`);
     }
     await cambiar(sb, pedido.id, (x) => ({ ...x, estado: "listo", terminado_at: new Date().toISOString() }));
   } catch (e) {

@@ -27,14 +27,14 @@ export async function GET() {
   return NextResponse.json({ pedidos: await pedidosVisibles() });
 }
 
-// POST { accion: "generar", viral_ids: [...] }  -> pide 3 versiones de cada uno
+// POST { accion: "generar", viral_ids: [...], cantidad?: 1|2|3 }  -> pide esas versiones (3 por defecto) de cada uno
 // POST { accion: "programado", pedido_id, n, valor } -> marca una version como programada (o no)
 export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const sesion = await sesionPanelActual();
   if (!sesion) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const quien = sesion.nombre || sesion.usuario;
-  const b = (await req.json().catch(() => null)) as { accion?: unknown; viral_ids?: unknown; pedido_id?: unknown; n?: unknown; valor?: unknown } | null;
+  const b = (await req.json().catch(() => null)) as { accion?: unknown; viral_ids?: unknown; cantidad?: unknown; pedido_id?: unknown; n?: unknown; valor?: unknown } | null;
 
   if (b?.accion === "generar") {
     const ids = Array.isArray(b.viral_ids) ? [...new Set((b.viral_ids as unknown[]).filter((x): x is string => typeof x === "string" && UUID.test(x)))].slice(0, 100) : [];
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       .map((v) => ({ viral_id: v.id as string, modelo_id: ((v.modelo_id as string | null) ?? modeloDeCuenta.get(v.cuenta_id as string) ?? null) as string | null }))
       .filter((v) => veModelo(alcance, v.modelo_id));
     if (!validos.length) return NextResponse.json({ error: "Esos vídeos no están disponibles" }, { status: 404 });
-    const r = await crearPedidos(validos, quien);
+    const r = await crearPedidos(validos, quien, Number(b.cantidad) || 3);
     if (!r.ok) return NextResponse.json({ error: "No se pudo guardar, inténtalo otra vez" }, { status: 500 });
     return NextResponse.json({ ok: true, nuevos: r.nuevos, pedidos: await pedidosVisibles() });
   }

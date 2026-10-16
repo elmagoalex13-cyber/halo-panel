@@ -24,6 +24,8 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
   const [mostrar, setMostrar] = useState<Mostrar>("todos");
   const [conDescartados, setConDescartados] = useState(true); // los que descartaste en «Virales propios» tambien valen para trials
   const [orden, setOrden] = useState<"vistas" | "reciente">("vistas");
+  const [cantidad, setCantidad] = useState(3); // versiones que se piden por cada vídeo (1 a 3)
+  const [seleccion, setSeleccion] = useState<string[]>([]);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
   const [original, setOriginal] = useState<string | null>(null);
@@ -94,12 +96,18 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
   }
 
   async function generar(ids: string[]) {
-    const j = await llamar(ids.length === 1 ? ids[0] : "lote", { method: "POST", body: JSON.stringify({ accion: "generar", viral_ids: ids }) });
-    if (j) setAviso({ ok: true, texto: `${j.nuevos ?? ids.length} ${j.nuevos === 1 ? "vídeo en cola" : "vídeos en cola"}: en unos minutos tendrás sus 3 versiones aquí.` });
+    const j = await llamar(ids.length === 1 ? ids[0] : "lote", { method: "POST", body: JSON.stringify({ accion: "generar", viral_ids: ids, cantidad }) });
+    if (j) {
+      setSeleccion([]);
+      setAviso({ ok: true, texto: `${j.nuevos ?? ids.length} ${j.nuevos === 1 ? "vídeo en cola" : "vídeos en cola"}: en unos minutos tendrás ${cantidad === 1 ? "su versión" : `sus ${cantidad} versiones`} aquí.` });
+    }
   }
+  const alternar = (id: string) => setSeleccion((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const marcar = (ids: string[]) => setSeleccion(ids);
+  const textoVersiones = (n: number) => (n === 1 ? "1 reel" : `${n} reels`);
   const programado = (p: PedidoVista, n: number, valor: boolean) => void llamar(`${p.id}-${n}`, { method: "POST", body: JSON.stringify({ accion: "programado", pedido_id: p.id, n, valor }) });
   function borrar(p: PedidoVista) {
-    if (!window.confirm("¿Borrar estas 3 versiones? Se borran los archivos para siempre.")) return;
+    if (!window.confirm(`¿Borrar ${p.variantes.length === 1 ? "esta versión" : `estas ${p.variantes.length || ""} versiones`}? Se borran los archivos para siempre.`)) return;
     void llamar(p.id, { method: "DELETE" }, `/api/trial-reels/manual?id=${p.id}`);
   }
 
@@ -134,6 +142,27 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs">
+        <span className="font-semibold text-white/70">Versiones por vídeo</span>
+        {[1, 2, 3].map((n) => (
+          <button key={n} onClick={() => setCantidad(n)} className={`h-7 w-7 rounded-lg text-xs font-bold transition ${cantidad === n ? "bg-[#8B5CF6] text-white" : "bg-white/[0.06] text-white/50 hover:text-white"}`}>
+            {n}
+          </button>
+        ))}
+        <span className="mx-2 hidden h-4 w-px bg-white/10 sm:block" />
+        <span className="font-semibold text-white/70">Selección rápida</span>
+        {([["Los 5 más vistos", () => marcar(visibles.slice(0, 5).map((v) => v.id))], ["Los 10 más vistos", () => marcar(visibles.slice(0, 10).map((v) => v.id))], ["Todos los visibles", () => marcar(visibles.map((v) => v.id))], ["Solo sin generar", () => marcar(sinGenerar.map((v) => v.id))]] as Array<[string, () => void]>).map(([texto, accion]) => (
+          <button key={texto} onClick={accion} className="rounded-full bg-white/[0.06] px-2.5 py-1 font-semibold text-white/60 transition hover:text-white">
+            {texto}
+          </button>
+        ))}
+        {seleccion.length ? (
+          <button onClick={() => setSeleccion([])} className="rounded-full px-2.5 py-1 font-semibold text-white/40 transition hover:text-white">
+            Quitar ({seleccion.length})
+          </button>
+        ) : null}
+      </div>
+
       {sinGenerar.length ? (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.05] px-3 py-2 text-xs">
           <button
@@ -141,9 +170,9 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
             onClick={() => void generar(sinGenerar.map((v) => v.id).slice(0, 100))}
             className="rounded-lg bg-emerald-500/20 px-3 py-1.5 font-semibold text-emerald-200 transition hover:bg-emerald-500/30 disabled:opacity-40"
           >
-            ⚡ Generar 3 reels para los {Math.min(sinGenerar.length, 100)} vídeos sin generar
+            ⚡ Generar {textoVersiones(cantidad)} de cada uno de los {Math.min(sinGenerar.length, 100)} vídeos sin generar
           </button>
-          <span className="text-white/35">Se hacen de uno en uno (cada vídeo tarda un par de minutos).</span>
+          <span className="text-white/35">Se hacen de uno en uno (cada versión tarda unos 30 segundos).</span>
         </div>
       ) : null}
       {aviso ? <p className={`rounded-xl border px-3 py-2 text-xs ${aviso.ok ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-red-500/25 bg-red-500/10 text-red-300"}`}>{aviso.texto}</p> : null}
@@ -158,8 +187,16 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
             const lista = porViral.get(v.id) ?? [];
             const src = urlVideo(v.video_key);
             return (
-              <article key={v.id} className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+              <article key={v.id} className={`rounded-2xl border p-4 ${seleccion.includes(v.id) ? "border-emerald-500/50 bg-emerald-500/[0.05]" : "border-white/[0.08] bg-white/[0.03]"}`}>
                 <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => alternar(v.id)}
+                    aria-label={seleccion.includes(v.id) ? "Quitar de la selección" : "Seleccionar"}
+                    className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-sm font-bold transition ${seleccion.includes(v.id) ? "border-emerald-400 bg-emerald-500 text-white" : "border-white/25 bg-black/30 text-transparent hover:text-white/50"}`}
+                  >
+                    ✓
+                  </button>
                   {src ? (
                     <button type="button" onClick={() => setOriginal(src)} title="Ver el reel original" className="group relative h-24 w-[3.4rem] shrink-0 overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
                       <video src={`${src}#t=0.5`} poster={v.thumbnail_url ?? undefined} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
@@ -190,7 +227,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
                     onClick={() => void generar([v.id])}
                     className="rounded-lg bg-[#8B5CF6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#7C3AED] disabled:opacity-40"
                   >
-                    {enMarcha(v.id) ? "Generando…" : lista.some((p) => p.estado === "listo") ? "Generar otras 3" : "Generar 3 reels"}
+                    {enMarcha(v.id) ? "Generando…" : lista.some((p) => p.estado === "listo") ? `Generar otros ${textoVersiones(cantidad)}` : `Generar ${textoVersiones(cantidad)}`}
                   </button>
                 </div>
 
@@ -199,7 +236,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="text-white/45">Pedido el {fecha(p.at)}{p.por ? ` · ${p.por}` : ""}</span>
                       {p.estado === "pendiente" ? <span className="rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white/60">En cola</span> : null}
-                      {p.estado === "procesando" ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-300">Generando… {p.variantes.length}/3</span> : null}
+                      {p.estado === "procesando" ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-300">Generando… {p.variantes.length}/{p.cantidad ?? 3}</span> : null}
                       {p.estado === "error" ? <span className="rounded-full bg-red-500/15 px-2 py-0.5 font-semibold text-red-300">Error</span> : null}
                       <button disabled={ocupado !== null || p.estado === "procesando"} onClick={() => borrar(p)} className="ml-auto text-white/35 transition hover:text-red-300 disabled:opacity-30">
                         Borrar tanda
@@ -207,7 +244,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
                     </div>
                     {p.estado === "error" ? <p className="text-xs text-red-300">{p.error ?? "No se pudo generar."} Pulsa «Borrar tanda» y vuelve a generar.</p> : null}
                     {p.variantes.length ? (
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className={`grid gap-3 ${p.variantes.length === 1 ? "max-w-[10rem] grid-cols-1" : p.variantes.length === 2 ? "max-w-[20rem] grid-cols-2" : "grid-cols-3"}`}>
                         {p.variantes.map((x) => (
                           <div key={x.n} className="space-y-1.5">
                             <div className="aspect-[9/16] overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
@@ -237,6 +274,22 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
           })}
         </div>
       )}
+
+      {seleccion.length ? (
+        <div className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-[min(92vw,36rem)] items-center justify-between gap-3 rounded-2xl border border-emerald-500/40 bg-[#14101f]/95 px-4 py-3 shadow-2xl backdrop-blur">
+          <p className="text-sm font-semibold text-white">
+            {seleccion.length} {seleccion.length === 1 ? "vídeo seleccionado" : "vídeos seleccionados"}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setSeleccion([])} className="btn-secondary px-3 py-2 text-sm">
+              Quitar
+            </button>
+            <button disabled={ocupado !== null} onClick={() => void generar(seleccion.slice(0, 100))} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">
+              Generar {textoVersiones(cantidad)} de cada uno
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {original ? <VisorVideo src={original} onCerrar={() => setOriginal(null)} /> : null}
     </div>
