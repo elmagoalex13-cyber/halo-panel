@@ -22,7 +22,8 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
   const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
   const [modelo, setModelo] = useState("todas");
   const [mostrar, setMostrar] = useState<Mostrar>("todos");
-  const [conDescartados, setConDescartados] = useState(false);
+  const [conDescartados, setConDescartados] = useState(true); // los que descartaste en «Virales propios» tambien valen para trials
+  const [orden, setOrden] = useState<"vistas" | "reciente">("vistas");
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
   const [original, setOriginal] = useState<string | null>(null);
@@ -54,8 +55,8 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
           if (mostrar === "listos") return tieneListos(v.id);
           return true;
         })
-        .sort((a, b) => new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime()),
-    [virales, conDescartados, modelo, mostrar, porViral, enMarcha, tieneListos],
+        .sort((a, b) => (orden === "vistas" ? b.vistas - a.vistas : new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime())),
+    [virales, conDescartados, modelo, mostrar, orden, porViral, enMarcha, tieneListos],
   );
   const sinGenerar = visibles.filter((v) => !(porViral.get(v.id) ?? []).length);
   const hayEnMarcha = pedidos.some((p) => p.estado === "pendiente" || p.estado === "procesando");
@@ -118,6 +119,10 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
           <label className="flex items-center gap-1.5 text-xs text-white/50">
             <input type="checkbox" checked={conDescartados} onChange={(e) => setConDescartados(e.target.checked)} className="accent-[#8B5CF6]" /> Incluir descartados
           </label>
+          <select value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} className="input-base py-1.5 text-xs">
+            <option value="vistas">Más visitas</option>
+            <option value="reciente">Más recientes</option>
+          </select>
           <select value={modelo} onChange={(e) => setModelo(e.target.value)} className="input-base py-1.5 text-xs">
             <option value="todas">Todas las modelos</option>
             {modelos.map(([id, nombre]) => (
