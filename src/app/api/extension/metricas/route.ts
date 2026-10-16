@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
   }
 
   if (modo === "propias") {
-    const { data, error } = await soloVisibles(supabase.from("virales_propios").select("id, codigo").eq("compartidos", 0).limit(400), await alcanceActual());
+    // TODOS los virales guardados (antes solo los que tenian 0 compartidos, y los demas se quedaban con las visitas del dia que se guardaron)
+    const { data, error } = await soloVisibles(supabase.from("virales_propios").select("id, codigo").order("fecha_publicacion", { ascending: false }).limit(400), await alcanceActual());
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ videos: data ?? [] });
   }

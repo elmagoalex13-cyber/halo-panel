@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
-import { ajustesDe, analizarCuenta, sanearReels } from "@/lib/viralesExtension";
+import { ajustesDe, analizarCuenta, mediana, sanearReels } from "@/lib/viralesExtension";
 import { exigirFila } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +40,19 @@ export async function POST(req: NextRequest) {
   // asi que aqui solo se aplica el umbral de vistas; fecha y estilo se aplican en la pasada definitiva.
   const candidatos = body.fase === "candidatos";
   const ajustes = ajustesDe(body);
+  // Virales propios: cada busqueda trae las cifras de HOY de todos los reels de la cuenta, asi que se aprovechan para poner al dia los que ya estaban
+  // guardados (si no, se quedaban con las visitas del dia que se guardaron aunque el reel siguiera creciendo).
+  if (body.modo === "propias" && candidatos) {
+    const frescos = reels.filter((r) => conocidos.has(r.codigo) && r.vistas > 0);
+    const med = mediana(reels.filter((r) => r.esVideo && r.vistas > 0).map((r) => r.vistas));
+    for (let i = 0; i < frescos.length; i += 10) {
+      await Promise.all(
+        frescos.slice(i, i + 10).map((r) =>
+          supabase.from("virales_propios").update({ vistas: r.vistas, likes: r.likes, comentarios: r.comentarios, compartidos: r.compartidos, mediana_cuenta: med }).eq("cuenta_id", body.cuenta_id as string).eq("codigo", r.codigo),
+        ),
+      );
+    }
+  }
   // Busqueda manual: se garantizan al menos 5 videos por cuenta (los que superan el umbral y, si faltan, los mas vistos del periodo elegido).
   // La ronda automatica del lunes no lo hace: ahi solo entran los que de verdad destacan.
   const ranking = body.origen === "lunes" ? 0 : 5;
