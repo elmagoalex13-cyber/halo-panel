@@ -15,6 +15,7 @@ import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
 import { cicloTrials } from "./trials.mjs";
 import { cicloTrialReels } from "./trial_reels.mjs";
+import { cicloCopias } from "./copias.mjs";
 import { backupOnboarding } from "./backup_onboarding.mjs";
 import { cicloVenuz } from "./venuz.mjs";
 import { cicloPostsVenuz } from "./venuz_posts.mjs";
@@ -73,6 +74,9 @@ setInterval(() => cicloTrials(supabase), 5 * 60000);
 // Seccion «Trial reels» del panel: 3 versiones spoofeadas de cada video viral que se pida (se descargan y se programan a mano)
 setTimeout(() => cicloTrialReels(supabase), 25000);
 setInterval(() => cicloTrialReels(supabase), 15000);
+// Reconoce solo cuales de los reels guardados son copias nuestras (trials ya publicados): compara huellas visuales, sin pegar enlaces
+setTimeout(() => cicloCopias(supabase), 40000);
+setInterval(() => cicloCopias(supabase), 60000);
 
 // Pide al panel que programe en Publer lo pendiente (trial reels nuevos, aprobados sin fecha...)
 async function avisarPanel() {

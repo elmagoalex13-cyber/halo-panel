@@ -117,11 +117,6 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
   const alternar = (id: string) => setSeleccion((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const marcar = (ids: string[]) => setSeleccion(ids);
   const textoVersiones = (n: number) => (n === 1 ? "1 reel" : `${n} reels`);
-  function enlacePublicado(p: PedidoVista, n: number, actual: string | null) {
-    const url = window.prompt("Pega el enlace del reel que has publicado en Instagram (déjalo vacío para quitarlo).\nAsí sabremos que ese reel es una copia nuestra (no se usará como original) y veremos sus visitas.", actual ?? "");
-    if (url === null) return;
-    void llamar(`${p.id}-${n}`, { method: "POST", body: JSON.stringify({ accion: "publicado", pedido_id: p.id, n, url }) });
-  }
   const programado = (p: PedidoVista, n: number, valor: boolean) => void llamar(`${p.id}-${n}`, { method: "POST", body: JSON.stringify({ accion: "programado", pedido_id: p.id, n, valor }) });
   function borrar(p: PedidoVista) {
     if (!window.confirm(`¿Borrar ${p.variantes.length === 1 ? "esta versión" : `estas ${p.variantes.length || ""} versiones`}? Se borran los archivos para siempre.`)) return;
@@ -284,17 +279,10 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
                               >
                                 {x.programado_at ? "✓ Programado" : "Marcar programado"}
                               </button>
-                              <button
-                                disabled={ocupado !== null}
-                                onClick={() => enlacePublicado(p, x.n, x.ig_url)}
-                                className={`rounded-lg border px-2 py-1 transition disabled:opacity-40 ${x.ig_url ? "border-sky-500/40 bg-sky-500/10 text-sky-300" : "border-white/15 bg-white/[0.04] text-white/55 hover:text-white"}`}
-                              >
-                                {x.ig_url ? "🔗 Enlace" : "＋ Enlace"}
-                              </button>
                             </div>
                             {x.ig_url ? (
                               <p className="text-[10px] text-white/45">
-                                <a href={x.ig_url} target="_blank" rel="noreferrer" className="text-sky-300 hover:underline">Ver publicado ↗</a>
+                                Detectado en Instagram: <a href={x.ig_url} target="_blank" rel="noreferrer" className="text-sky-300 hover:underline">ver ↗</a>
                                 {x.ig_vistas != null ? ` · ${compacto(x.ig_vistas)} visitas${x.ig_likes != null ? ` · ${compacto(x.ig_likes)} likes` : ""}` : " · aún sin cifras (se leen al buscar virales)"}
                               </p>
                             ) : null}

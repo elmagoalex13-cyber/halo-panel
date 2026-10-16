@@ -9,6 +9,7 @@ import path from "path";
 import { config } from "./config.mjs";
 import { downloadFromR2, existeEnR2, uploadToR2 } from "./r2.mjs";
 import { VARIANTES_TRIAL, paramsTrial, resumenTrial, spoofearTrial } from "./spoofer.mjs";
+import { huellaVideo } from "./huella.mjs";
 
 const CLAVE = "trial_reels_pedidos";
 const ATASCADO_MS = 25 * 60 * 1000; // un pedido «procesando» desde hace mas de esto se reintenta (se cayo el runner)
@@ -80,11 +81,13 @@ async function procesar(sb, pedido) {
       locales.push(salida);
       const params = paramsTrial(estilos[n - 1]);
       const info = await spoofearTrial(fuente, salida, params);
+      // Huella visual de esta version: asi, cuando aparezca publicada en la cuenta, se reconoce sola (copias.mjs)
+      const hash = await huellaVideo(salida).catch(() => null);
       const key = `trial-reels/${usuario}/${viral.codigo}-${String(pedido.id).slice(0, 8)}-v${n}.mp4`;
       await uploadToR2(salida, key, "video/mp4");
       await cambiar(sb, pedido.id, (x) => ({
         ...x,
-        variantes: [...(x.variantes ?? []).filter((v) => v.n !== n), { n, key, resumen: resumenTrial(params), duracion: info.duracion }],
+        variantes: [...(x.variantes ?? []).filter((v) => v.n !== n), { n, key, resumen: resumenTrial(params), duracion: info.duracion, ...(hash ? { hash } : {}) }],
       }));
       console.log(`[trial-reels] ${usuario}/${viral.codigo}: versión ${n}/${cantidad} lista`);
     }

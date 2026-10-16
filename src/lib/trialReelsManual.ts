@@ -20,6 +20,7 @@ export type VarianteTrial = {
   ig_vistas?: number;
   ig_likes?: number;
   ig_at?: string;
+  hash?: string[]; // huella visual de esta version (la usa el editor para reconocerla cuando se publica)
 };
 export type PedidoTrial = {
   id: string;
@@ -177,6 +178,10 @@ export async function marcarPublicado(id: string, n: number, url: string, por: s
 export async function codigosDeCopias(): Promise<Set<string>> {
   const s = new Set<string>();
   for (const p of await leerPedidos()) for (const v of p.variantes) if (v.ig_codigo) s.add(v.ig_codigo);
+  // Las que reconoce solo el editor comparando la imagen con la de nuestras versiones y la de los originales anteriores (runner/src/copias.mjs)
+  const { data } = await createAdminClient().from("panel_config").select("value").eq("key", "virales_copias").maybeSingle();
+  const copias = (data?.value as { copias?: Record<string, unknown> } | null)?.copias;
+  if (copias && typeof copias === "object") for (const c of Object.keys(copias)) s.add(c);
   return s;
 }
 
