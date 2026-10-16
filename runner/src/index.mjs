@@ -14,6 +14,7 @@ import { cicloTelegram } from "./telegram.mjs";
 import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
 import { cicloTrials } from "./trials.mjs";
+import { cicloTrialReels } from "./trial_reels.mjs";
 import { backupOnboarding } from "./backup_onboarding.mjs";
 import { cicloVenuz } from "./venuz.mjs";
 import { cicloPostsVenuz } from "./venuz_posts.mjs";
@@ -68,6 +69,10 @@ setInterval(() => cicloScraper(supabase), 60000);
 // Trial reels: repone la cola de cada cuenta (3 al dia) con virales propios pasados por el spoofer
 setTimeout(() => cicloTrials(supabase), 20000);
 setInterval(() => cicloTrials(supabase), 5 * 60000);
+
+// Seccion «Trial reels» del panel: 3 versiones spoofeadas de cada video viral que se pida (se descargan y se programan a mano)
+setTimeout(() => cicloTrialReels(supabase), 25000);
+setInterval(() => cicloTrialReels(supabase), 15000);
 
 // Pide al panel que programe en Publer lo pendiente (trial reels nuevos, aprobados sin fecha...)
 async function avisarPanel() {

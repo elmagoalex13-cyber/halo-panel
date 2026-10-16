@@ -34,6 +34,7 @@ const NAV = [
       { href: "/instagram?tab=referencias", label: "Cuentas de referencia" },
       { href: "/instagram?tab=ideas", label: "Ideas virales" },
       { href: "/instagram?tab=propios", label: "Virales propios" },
+      { href: "/trial-reels", label: "Trial reels" },
       { href: "/instagram?tab=historias", label: "Historias", histBadge: true },
       { href: "/asignar", label: "Asignar vídeos" },
     ],
@@ -228,8 +229,8 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
     router.refresh();
   }
 
-  // Subpaginas que cuelgan de una seccion del menu (OnlyFans: por programar y captions; Instagram: asignar videos)
-  const SUBPAGINAS: Record<string, string[]> = { "/onlyfans": ["/posts-of", "/captions"], "/instagram": ["/asignar"] };
+  // Subpaginas que cuelgan de una seccion del menu (OnlyFans: por programar y captions; Instagram: asignar videos y trial reels)
+  const SUBPAGINAS: Record<string, string[]> = { "/onlyfans": ["/posts-of", "/captions"], "/instagram": ["/asignar", "/trial-reels"] };
 
   function activeFor(href: string) {
     if (SUBPAGINAS[href]?.some((sub) => pathname === sub || pathname.startsWith(`${sub}/`))) return true;
