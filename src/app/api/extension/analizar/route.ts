@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { ajustesDe, analizarCuenta, mediana, sanearReels } from "@/lib/viralesExtension";
 import { exigirFila } from "@/lib/alcance";
+import { actualizarMetricasCopias, codigosDeCopias } from "@/lib/trialReelsManual";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,15 @@ export async function POST(req: NextRequest) {
   // asi que aqui solo se aplica el umbral de vistas; fecha y estilo se aplican en la pasada definitiva.
   const candidatos = body.fase === "candidatos";
   const ajustes = ajustesDe(body);
+  // Los reels que son copias nuestras (trial reels que ya se publicaron) NO son originales: no se guardan como virales ni se usan como fuente.
+  // De paso se anotan sus visitas de hoy para ver cuales funcionan.
+  let copias = new Set<string>();
+  if (body.modo === "propias") {
+    copias = await codigosDeCopias().catch(() => new Set<string>());
+    if (candidatos && copias.size) {
+      await actualizarMetricasCopias(new Map(reels.filter((r) => copias.has(r.codigo)).map((r) => [r.codigo, { vistas: r.vistas, likes: r.likes }]))).catch(() => undefined);
+    }
+  }
   // Virales propios: cada busqueda trae las cifras de HOY de todos los reels de la cuenta, asi que se aprovechan para poner al dia los que ya estaban
   // guardados (si no, se quedaban con las visitas del dia que se guardaron aunque el reel siguiera creciendo).
   if (body.modo === "propias" && candidatos) {
@@ -61,7 +71,7 @@ export async function POST(req: NextRequest) {
     ranking,
     max: candidatos ? Math.max(ajustes.max, 20) : ajustes.max,
     categoria: candidatos ? null : categoria,
-    conocidos,
+    conocidos: new Set([...conocidos, ...copias]),
   });
   return NextResponse.json({
     analizados: r.analizados,

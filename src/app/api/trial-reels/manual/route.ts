@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, soloVisibles, veModelo } from "@/lib/alcance";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
-import { borrarPedido, crearPedidos, leerPedidos, marcarProgramado, pedidosConVistas } from "@/lib/trialReelsManual";
+import { borrarPedido, codigosDeCopias, crearPedidos, leerPedidos, marcarProgramado, marcarPublicado, pedidosConVistas } from "@/lib/trialReelsManual";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +29,13 @@ export async function GET() {
 
 // POST { accion: "generar", viral_ids: [...], cantidad?: 1|2|3 }  -> pide esas versiones (3 por defecto) de cada uno
 // POST { accion: "programado", pedido_id, n, valor } -> marca una version como programada (o no)
+// POST { accion: "publicado", pedido_id, n, url } -> apunta el enlace del reel publicado (url vacia = quitarlo)
 export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const sesion = await sesionPanelActual();
   if (!sesion) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const quien = sesion.nombre || sesion.usuario;
-  const b = (await req.json().catch(() => null)) as { accion?: unknown; viral_ids?: unknown; cantidad?: unknown; pedido_id?: unknown; n?: unknown; valor?: unknown } | null;
+  const b = (await req.json().catch(() => null)) as { accion?: unknown; viral_ids?: unknown; cantidad?: unknown; pedido_id?: unknown; n?: unknown; valor?: unknown; url?: unknown } | null;
 
   if (b?.accion === "generar") {
     const ids = Array.isArray(b.viral_ids) ? [...new Set((b.viral_ids as unknown[]).filter((x): x is string => typeof x === "string" && UUID.test(x)))].slice(0, 100) : [];
@@ -42,18 +43,31 @@ export async function POST(req: NextRequest) {
     const db = createAdminClient();
     const alcance = await alcanceActual();
     const [virales, cuentas] = await Promise.all([
-      soloVisibles(db.from("virales_propios").select("id, cuenta_id, modelo_id, video_key").in("id", ids), alcance),
+      soloVisibles(db.from("virales_propios").select("id, codigo, cuenta_id, modelo_id, video_key").in("id", ids), alcance),
       soloVisibles(db.from("cuentas_instagram").select("id, modelo_id"), alcance),
     ]);
     const modeloDeCuenta = new Map((cuentas.data ?? []).map((c) => [c.id as string, (c.modelo_id as string | null) ?? null]));
+    // Las copias nuestras ya publicadas no son originales: los trials salen siempre del vídeo original
+    const copias = await codigosDeCopias();
     const validos = (virales.data ?? [])
-      .filter((v) => v.video_key)
+      .filter((v) => v.video_key && !copias.has(v.codigo as string))
       .map((v) => ({ viral_id: v.id as string, modelo_id: ((v.modelo_id as string | null) ?? modeloDeCuenta.get(v.cuenta_id as string) ?? null) as string | null }))
       .filter((v) => veModelo(alcance, v.modelo_id));
     if (!validos.length) return NextResponse.json({ error: "Esos vídeos no están disponibles" }, { status: 404 });
     const r = await crearPedidos(validos, quien, Number(b.cantidad) || 3);
     if (!r.ok) return NextResponse.json({ error: "No se pudo guardar, inténtalo otra vez" }, { status: 500 });
     return NextResponse.json({ ok: true, nuevos: r.nuevos, pedidos: await pedidosVisibles() });
+  }
+
+  if (b?.accion === "publicado") {
+    const id = typeof b.pedido_id === "string" ? b.pedido_id : "";
+    const n = Number(b.n);
+    if (!id || !Number.isInteger(n) || typeof b.url !== "string") return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
+    const alcance = await alcanceActual();
+    if (!(await leerPedidos()).some((p) => p.id === id && veModelo(alcance, p.modelo_id))) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    const r = await marcarPublicado(id, n, b.url, quien);
+    if (!r.ok) return NextResponse.json({ error: r.error ?? "No se pudo guardar" }, { status: 400 });
+    return NextResponse.json({ ok: true, pedidos: await pedidosVisibles() });
   }
 
   if (b?.accion === "programado") {

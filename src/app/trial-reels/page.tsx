@@ -2,7 +2,7 @@ import { PanelLayout } from "@/components/PanelLayout";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, ambitosModelos, soloVisibles, veModelo } from "@/lib/alcance";
 import { versionesFotos } from "@/lib/fotosModelos";
-import { leerPedidos, pedidosConVistas } from "@/lib/trialReelsManual";
+import { codigosDeCopias, leerPedidos, pedidosConVistas } from "@/lib/trialReelsManual";
 import type { ViralPropio } from "@/app/instagram/ViralesPropiosTab";
 import { TrialReelsClient } from "./TrialReelsClient";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Trial reels" };
 
 async function cargar() {
-  if (!canUseSupabase()) return { virales: [] as ViralPropio[], pedidos: [] };
+  if (!canUseSupabase()) return { virales: [] as ViralPropio[], pedidos: [], copias: [] as string[] };
   const db = createAdminClient();
   const alcance = await alcanceActual();
   const [virales, cuentas, modelos, fotos] = await Promise.all([
@@ -45,21 +45,21 @@ async function cargar() {
     (await leerPedidos()).filter((p) => veModelo(alcance, p.modelo_id)),
     (p, n) => `trial_${info.get(p.viral_id) ?? p.viral_id}_v${n}.mp4`,
   );
-  return { virales: lista, pedidos };
+  return { virales: lista, pedidos, copias: [...(await codigosDeCopias().catch(() => new Set<string>()))] };
 }
 
 export default async function TrialReelsPage() {
-  const [{ virales, pedidos }, { esDueno, porModelo }] = await Promise.all([cargar(), ambitosModelos()]);
+  const [{ virales, pedidos, copias }, { esDueno, porModelo }] = await Promise.all([cargar(), ambitosModelos()]);
   return (
     <PanelLayout>
       <div className="mb-6">
         <p className="text-sm text-[color:var(--text-secondary)]">Instagram</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Trial reels</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/45">
-          De cada vídeo viral de tus modelos sacamos 3 versiones con pequeños retoques (un poco de zoom por la izquierda, la derecha o el centro, brillo, saturación, tono, un filtro suave y sin metadatos) para que no sean exactamente el mismo vídeo. Las descargas y las programas tú.
+          De cada vídeo viral de tus modelos sacamos 3 versiones con pequeños retoques (un poco de zoom por la izquierda, la derecha o el centro, brillo, saturación, tono, un filtro suave y sin metadatos) para que no sean exactamente el mismo vídeo. Las descargas y las programas tú. Siempre se generan a partir del vídeo original que guardó el buscador, nunca de una copia.
         </p>
       </div>
-      <TrialReelsClient virales={virales} pedidos={pedidos} esDueno={esDueno} ambitos={porModelo} />
+      <TrialReelsClient virales={virales} pedidos={pedidos} copias={copias} esDueno={esDueno} ambitos={porModelo} />
     </PanelLayout>
   );
 }

@@ -17,7 +17,7 @@ function urlVideo(key: string | null) {
 }
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
 
-export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, ambitos }: { virales: ViralPropio[]; pedidos: PedidoVista[]; esDueno: boolean; ambitos: Record<string, string> }) {
+export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, esDueno, ambitos }: { virales: ViralPropio[]; pedidos: PedidoVista[]; copias: string[]; esDueno: boolean; ambitos: Record<string, string> }) {
   const [pedidos, setPedidos] = useState(iniciales);
   const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
   const [modelo, setModelo] = useState("todas");
@@ -26,11 +26,23 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
   const [orden, setOrden] = useState<"vistas" | "reciente">("vistas");
   const [cantidad, setCantidad] = useState(3); // versiones que se piden por cada vídeo (1 a 3)
   const [seleccion, setSeleccion] = useState<string[]>([]);
+  const [verCopias, setVerCopias] = useState(false);
+  const esCopia = useMemo(() => new Set(copias), [copias]);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
   const [original, setOriginal] = useState<string | null>(null);
 
-  const virales = useMemo(() => todos.filter((v) => ambitoCoincide(filtroAmbito, v.modelo_id ? ambitos[v.modelo_id] : null)), [todos, filtroAmbito, ambitos]);
+  const virales = useMemo(
+    () => todos.filter((v) => ambitoCoincide(filtroAmbito, v.modelo_id ? ambitos[v.modelo_id] : null)).filter((v) => verCopias || !esCopia.has(v.codigo)),
+    [todos, filtroAmbito, ambitos, verCopias, esCopia],
+  );
+  const nCopias = useMemo(() => todos.filter((v) => esCopia.has(v.codigo)).length, [todos, esCopia]);
+  // Originales guardados por modelo (los que eligio el buscador; las copias nuestras no cuentan)
+  const originalesPorModelo = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const v of todos) if (v.modelo_id && !esCopia.has(v.codigo)) m.set(v.modelo_id, (m.get(v.modelo_id) ?? 0) + 1);
+    return m;
+  }, [todos, esCopia]);
   const modelos = useMemo(() => {
     const m = new Map<string, string>();
     for (const v of virales) if (v.modelo_id && v.modelo_nombre) m.set(v.modelo_id, v.modelo_nombre);
@@ -105,6 +117,11 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
   const alternar = (id: string) => setSeleccion((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const marcar = (ids: string[]) => setSeleccion(ids);
   const textoVersiones = (n: number) => (n === 1 ? "1 reel" : `${n} reels`);
+  function enlacePublicado(p: PedidoVista, n: number, actual: string | null) {
+    const url = window.prompt("Pega el enlace del reel que has publicado en Instagram (déjalo vacío para quitarlo).\nAsí sabremos que ese reel es una copia nuestra (no se usará como original) y veremos sus visitas.", actual ?? "");
+    if (url === null) return;
+    void llamar(`${p.id}-${n}`, { method: "POST", body: JSON.stringify({ accion: "publicado", pedido_id: p.id, n, url }) });
+  }
   const programado = (p: PedidoVista, n: number, valor: boolean) => void llamar(`${p.id}-${n}`, { method: "POST", body: JSON.stringify({ accion: "programado", pedido_id: p.id, n, valor }) });
   function borrar(p: PedidoVista) {
     if (!window.confirm(`¿Borrar ${p.variantes.length === 1 ? "esta versión" : `estas ${p.variantes.length || ""} versiones`}? Se borran los archivos para siempre.`)) return;
@@ -124,6 +141,11 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
           </button>
         ))}
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {nCopias ? (
+            <label className="flex items-center gap-1.5 text-xs text-white/50">
+              <input type="checkbox" checked={verCopias} onChange={(e) => setVerCopias(e.target.checked)} className="accent-[#8B5CF6]" /> Ver copias nuestras ({nCopias})
+            </label>
+          ) : null}
           <label className="flex items-center gap-1.5 text-xs text-white/50">
             <input type="checkbox" checked={conDescartados} onChange={(e) => setConDescartados(e.target.checked)} className="accent-[#8B5CF6]" /> Incluir descartados
           </label>
@@ -135,7 +157,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
             <option value="todas">Todas las modelos</option>
             {modelos.map(([id, nombre]) => (
               <option key={id} value={id}>
-                {nombre}
+                {nombre} ({originalesPorModelo.get(id) ?? 0})
               </option>
             ))}
           </select>
@@ -262,7 +284,20 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, esDueno, 
                               >
                                 {x.programado_at ? "✓ Programado" : "Marcar programado"}
                               </button>
+                              <button
+                                disabled={ocupado !== null}
+                                onClick={() => enlacePublicado(p, x.n, x.ig_url)}
+                                className={`rounded-lg border px-2 py-1 transition disabled:opacity-40 ${x.ig_url ? "border-sky-500/40 bg-sky-500/10 text-sky-300" : "border-white/15 bg-white/[0.04] text-white/55 hover:text-white"}`}
+                              >
+                                {x.ig_url ? "🔗 Enlace" : "＋ Enlace"}
+                              </button>
                             </div>
+                            {x.ig_url ? (
+                              <p className="text-[10px] text-white/45">
+                                <a href={x.ig_url} target="_blank" rel="noreferrer" className="text-sky-300 hover:underline">Ver publicado ↗</a>
+                                {x.ig_vistas != null ? ` · ${compacto(x.ig_vistas)} visitas${x.ig_likes != null ? ` · ${compacto(x.ig_likes)} likes` : ""}` : " · aún sin cifras (se leen al buscar virales)"}
+                              </p>
+                            ) : null}
                           </div>
                         ))}
                       </div>
