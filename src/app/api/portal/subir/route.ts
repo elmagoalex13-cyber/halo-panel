@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
 
   // Captacion: si la modelo tiene objetivo de videos y la agencia aun no ha aprobado el lote, el video se guarda EN ESPERA (sin editar)
   const { data: modeloCap } = await supabase.from("modelos").select("nombre, objetivo_videos, captacion_aprobada_at, umbral_avisado_at").eq("id", sesion.modeloId).maybeSingle();
-  // Los TikTok no son reels de Instagram: no se retienen ni cuentan para la captacion
-  const enCaptacion = Boolean(modeloCap?.objetivo_videos) && !modeloCap?.captacion_aprobada_at && tipo !== 3;
+  // Los TikTok tambien se quedan en espera (se van acumulando, sin editar), pero NO cuentan como reels: ver progresoCaptacion
+  const enCaptacion = Boolean(modeloCap?.objetivo_videos) && !modeloCap?.captacion_aprobada_at;
 
   // Video de gesto (tipo 2): la frase la pone el editor, del banco (con su musica). En espera no se gasta ninguna frase (se asigna al editarlo)
   const frase = tipo === 2 && !enCaptacion ? await elegirFrase(supabase) : null;

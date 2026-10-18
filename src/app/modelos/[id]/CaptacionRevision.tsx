@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { PiezaEnEspera } from "@/lib/captacionPiezas";
 import type { ProgresoCaptacion } from "@/lib/captacion";
 
-const NOMBRE_TIPO: Record<number, string> = { 1: "Hablado", 2: "Frases + música", 3: "Parar imagen", 4: "Con referencia" };
+const NOMBRE_TIPO: Record<number, string> = { 1: "Hablado", 2: "Frases + música", 3: "TikTok (no cuenta como reel)", 4: "Con referencia" };
 const mb = (b: number | null) => (b ? `${Math.round(b / 1e6)} MB` : "");
 
 function Tarjeta({
@@ -211,7 +211,7 @@ export function CaptacionRevision({
             {nombre} · {subidos}/{objetivo} reels subidos
           </span>
           <span className="text-white/50">
-            {piezas.length} en espera de revisión · {enEdicion} ya enviados a edición{terminada ? " · captación terminada" : ""}
+            {piezas.filter((p) => p.tipo !== 3).length} reels en espera de revisión{piezas.some((p) => p.tipo === 3) ? ` + ${piezas.filter((p) => p.tipo === 3).length} TikTok guardados` : ""} · {enEdicion} ya enviados a edición{terminada ? " · captación terminada" : ""}
           </span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">

@@ -45,7 +45,7 @@ export async function progresoCaptacion(modeloId: string): Promise<ProgresoCapta
 
     const entregadas = (tipo: string) => db.from("of_colecciones").select("id", { count: "exact", head: true }).eq("modelo_id", modeloId).eq("tipo", tipo).eq("estado", "entregado");
     const [reels, scriptsEnt, packs, posts] = await Promise.all([
-      db.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", modeloId).eq("origen", "upload_manual").or("tipo.is.null,tipo.not.in.(3,5)"), // los TikTok no son reels
+      db.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", modeloId).eq("origen", "upload_manual").or("tipo.is.null,tipo.not.in.(3,5)"), // los TikTok no son reels: se acumulan en espera pero no cuentan para el objetivo
       entregadas("script"),
       entregadas("pack"),
       contarPosts(db, modeloId),
@@ -106,7 +106,7 @@ export async function resumenCaptacion(alcance: Alcance): Promise<ResumenCaptaci
     const filas = await Promise.all(
       modelos.map(async (m) => {
         const [espera, cuentas, progreso] = await Promise.all([
-          db.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("estado", "recibido"),
+          db.from("library_content").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("estado", "recibido").or("tipo.is.null,tipo.neq.3"), // reels en espera (los TikTok se guardan aparte)
           db.from("cuentas_instagram").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("activa", true),
           progresoCaptacion(m.id as string),
         ]);
