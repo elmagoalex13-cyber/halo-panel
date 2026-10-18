@@ -559,7 +559,6 @@ export function PortalClient({
                   <span className="ml-auto shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-black">{conteos[t.tipo]} pedidos</span>
                 ) : null}
               </div>
-              {t.tipo === 3 && captacion ? <p className="text-xs leading-relaxed text-white/45">Se guardan, pero <span className="font-semibold text-white/70">no cuentan</span> como reels de los que tienes que subir.</p> : null}
               <SubirBoton tipo={t.tipo} etiqueta={t.etiquetaSubida} />
             </article>
           ))}
