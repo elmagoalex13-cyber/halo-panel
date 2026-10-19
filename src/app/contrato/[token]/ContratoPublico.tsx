@@ -3,12 +3,12 @@
 import { useRef, useState } from "react";
 import { FirmaPad } from "@/components/FirmaPad";
 import { CONTRATO_AGENCIA } from "@/lib/contratoTexto";
-import { PREGUNTAS_FRECUENTES, RESUMEN_ESENCIAL } from "@/lib/contratoExplicacion";
+import type { GrupoPreguntas } from "@/lib/contratoExplicacion";
 import { primerNombre } from "@/lib/leadsMensajes";
 
 const fechaLarga = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Madrid" });
 
-export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firmado: yaFirmado, firmadoAt }: { token: string; nombre: string; fechaInicio: string; firmaAgencia: string | null; firmado: boolean; firmadoAt: string | null }) {
+export function ContratoPublico({ token, nombre, fechaInicio, firmaAgencia, firmado: yaFirmado, firmadoAt, resumen: RESUMEN_ESENCIAL, preguntas: PREGUNTAS_FRECUENTES }: { token: string; nombre: string; fechaInicio: string; firmaAgencia: string | null; firmado: boolean; firmadoAt: string | null; resumen: Array<{ icono: string; titulo: string; texto: string }>; preguntas: GrupoPreguntas[] }) {
   const [firmado, setFirmado] = useState(yaFirmado);
   const [portal, setPortal] = useState<{ url: string; usuario: string; password: string } | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);

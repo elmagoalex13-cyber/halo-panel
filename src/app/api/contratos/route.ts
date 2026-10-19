@@ -4,6 +4,8 @@ import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { emailConfigurado } from "@/lib/resend";
 import { CAMPOS_LISTA, emailValido, enlaceContrato, enviarEmailContrato, ligarContratosAutomatico, nuevoToken, type ContratoFila } from "@/lib/contratos";
 import { CLAVE_FIRMA_AGENCIA } from "@/lib/contratoFirma";
+import { esVarianteContrato } from "@/lib/contratoVariantes";
+import { guardarVariante, variantesDe } from "@/lib/contratoVariantesDb";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +29,11 @@ export async function GET(req: NextRequest) {
   }
   const { data: modelos } = await db.from("modelos").select("id, nombre").is("eliminada_at", null).order("nombre");
   const origen = req.nextUrl.origin;
+  const variantes = await variantesDe(((data ?? []) as unknown as ContratoFila[]).map((c) => c.token));
   return NextResponse.json({
     resend: emailConfigurado(),
     modelos: modelos ?? [],
-    contratos: ((data ?? []) as unknown as ContratoFila[]).map((c) => ({ ...c, enlace: enlaceContrato(origen, c.token) })),
+    contratos: ((data ?? []) as unknown as ContratoFila[]).map((c) => ({ ...c, enlace: enlaceContrato(origen, c.token), variante: variantes[c.token] ?? "70-30" })),
   });
 }
 
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const sesion = await sesionPanelActual();
   if (!sesion) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  const body = (await req.json().catch(() => ({}))) as { nombre?: unknown; email?: unknown; fecha_inicio?: unknown; firma_agencia?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { nombre?: unknown; email?: unknown; fecha_inicio?: unknown; firma_agencia?: unknown; variante?: unknown };
   const nombre = typeof body.nombre === "string" ? body.nombre.trim().replace(/\s+/g, " ").slice(0, 120) : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase().slice(0, 200) : "";
   const fecha = typeof body.fecha_inicio === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha_inicio) ? body.fecha_inicio : "";
@@ -66,10 +69,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: falta ? SIN_TABLA : (error?.message ?? "No se pudo crear el contrato") }, { status: falta ? 409 : 500 });
   }
 
+  // Reparto de ESTE contrato (60-40 o el de siempre): lo leen el email, la pagina de firma y el PDF
+  const variante = esVarianteContrato(body.variante) ? body.variante : "70-30";
+  if (variante !== "70-30") await guardarVariante(token, variante);
+
   const enlace = enlaceContrato(req.nextUrl.origin, token);
   // Con email y el envio configurado, sale por email; si no, queda el enlace para mandarlo por WhatsApp
   if (!email) return NextResponse.json({ ok: true, enlace, email: { enviado: false, omitido: true } });
-  const envio = await enviarEmailContrato({ nombre, email, fecha_inicio: fecha }, enlace);
+  const envio = await enviarEmailContrato({ nombre, email, fecha_inicio: fecha }, enlace, variante);
   const ahora = new Date().toISOString();
   await db.from("contratos_modelos").update(envio.ok ? { enviado_at: ahora, email_error: null } : { email_error: envio.error.slice(0, 300) }).eq("id", creado.id);
 

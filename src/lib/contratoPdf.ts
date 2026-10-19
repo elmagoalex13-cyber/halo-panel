@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { CONTRATO_AGENCIA, CONTRATO_CLAUSULAS, CONTRATO_TITULO } from "@/lib/contratoTexto";
+import { CONTRATO_AGENCIA, CONTRATO_TITULO } from "@/lib/contratoTexto";
+import { clausulasDe, type VarianteContrato } from "@/lib/contratoVariantes";
 
 // PDF del contrato: el texto tal cual, con el nombre de la modelo y la fecha rellenados, la firma de la agencia y, si ya firmo, la suya.
 
@@ -12,6 +13,7 @@ export type DatosPdfContrato = {
   dni?: string | null;
   firmadoAt?: string | null; // ISO
   firmanteIp?: string | null;
+  variante?: VarianteContrato; // reparto del contrato (por defecto 70-30)
 };
 
 const MARGEN = 56;
@@ -109,7 +111,7 @@ export async function generarPdfContrato(d: DatosPdfContrato): Promise<Uint8Arra
   linea(`Fecha de firma: ${fechaLarga(d.fechaInicio)}`, { espacio: 10 });
 
   // Clausulas (texto tal cual)
-  for (const c of CONTRATO_CLAUSULAS) {
+  for (const c of clausulasDe(d.variante ?? "70-30")) {
     asegurar(40);
     y -= 4;
     linea(`${c.n}. ${c.titulo}`, { fuente: negrita, tam: 11, espacio: 3 });

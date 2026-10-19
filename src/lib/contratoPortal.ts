@@ -7,7 +7,7 @@ import { mismoNombre } from "@/lib/contratos";
 
 export type PortalCreado = { modelo_id: string; slug: string; usuario: string; password: string; modeloNueva: boolean };
 
-export async function crearPortalTrasFirma(contrato: { id: string; nombre: string }, nombreFirmante: string): Promise<PortalCreado | { modelo_id: string; yaTenia: true; modelo_nombre: string } | null> {
+export async function crearPortalTrasFirma(contrato: { id: string; nombre: string; porcentajeAgencia?: number }, nombreFirmante: string): Promise<PortalCreado | { modelo_id: string; yaTenia: true; modelo_nombre: string } | null> {
   try {
     const db = createAdminClient();
     const { data: modelos, error: eMod } = await db.from("modelos").select("id, nombre, portal_token").is("eliminada_at", null);
@@ -20,6 +20,8 @@ export async function crearPortalTrasFirma(contrato: { id: string; nombre: strin
     let slug: string | null = null;
     if (candidatas.length === 1) {
       modeloId = candidatas[0].id as string;
+      // Si el contrato lleva un reparto distinto del de siempre (60-40), la ficha de la modelo (y con ella la facturacion) pasa a llevarlo tambien
+      if (contrato.porcentajeAgencia && contrato.porcentajeAgencia !== 70) await db.from("modelos").update({ porcentaje_comision: contrato.porcentajeAgencia }).eq("id", modeloId);
       slug = (candidatas[0].portal_token as string | null) ?? null;
       if (slug && (await leerCredencial(modeloId))) {
         await db.from("contratos_modelos").update({ modelo_id: modeloId }).eq("id", contrato.id);
@@ -30,7 +32,7 @@ export async function crearPortalTrasFirma(contrato: { id: string; nombre: strin
       const base = {
         nombre: contrato.nombre.trim(),
         nombre_real: nombreFirmante || null,
-        porcentaje_comision: 70,
+        porcentaje_comision: contrato.porcentajeAgencia ?? 70,
         activa: true,
         fecha_alta: new Date().toISOString().split("T")[0],
         ambito: "compartido",
@@ -38,7 +40,7 @@ export async function crearPortalTrasFirma(contrato: { id: string; nombre: strin
       const objetivos = { objetivo_videos: 30, objetivo_scripts: 4, objetivo_packs: 5, objetivo_posts: 30 };
       let r = await db.from("modelos").insert({ ...base, ...objetivos }).select("id").single();
       if (r.error) r = await db.from("modelos").insert(base).select("id").single(); // faltan columnas de objetivos o de ambito
-      if (r.error) r = await db.from("modelos").insert({ nombre: base.nombre, nombre_real: base.nombre_real, porcentaje_comision: 70, activa: true }).select("id").single();
+      if (r.error) r = await db.from("modelos").insert({ nombre: base.nombre, nombre_real: base.nombre_real, porcentaje_comision: contrato.porcentajeAgencia ?? 70, activa: true }).select("id").single();
       if (r.error || !r.data) return null;
       modeloId = r.data.id as string;
       modeloNueva = true;

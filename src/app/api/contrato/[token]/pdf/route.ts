@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { getR2Object } from "@/lib/r2";
 import { generarPdfContrato } from "@/lib/contratoPdf";
+import { varianteDe } from "@/lib/contratoVariantesDb";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       dni: c.dni,
       firmadoAt: c.firmado_at,
       firmanteIp: c.firmante_ip,
+      variante: await varianteDe(token),
     });
   }
   // ?ver=1 -> se abre en el navegador (leer). ?descargar=1 -> se descarga SIEMPRE (octet-stream: ni el visor del navegador ni el de WhatsApp lo abren).

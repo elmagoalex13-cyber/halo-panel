@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { enviarEmail, type EmailAdjunto } from "@/lib/resend";
-import { RESUMEN_ESENCIAL } from "@/lib/contratoExplicacion";
+import { resumenEsencialDe } from "@/lib/contratoExplicacion";
+import type { VarianteContrato } from "@/lib/contratoVariantes";
 import { primerNombre } from "@/lib/leadsMensajes";
 import { fechaLarga } from "@/lib/contratoPdf";
 
@@ -32,7 +33,8 @@ export const emailValido = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** Email con el enlace al contrato y lo esencial explicado en dos minutos de lectura. */
-export async function enviarEmailContrato(c: { nombre: string; email: string; fecha_inicio: string }, enlace: string) {
+export async function enviarEmailContrato(c: { nombre: string; email: string; fecha_inicio: string }, enlace: string, variante: VarianteContrato = "70-30") {
+  const RESUMEN_ESENCIAL = resumenEsencialDe(variante); // el resumen lleva el MISMO reparto que el contrato que va a firmar
   const nombre = primerNombre(c.nombre) || "";
   const logo = (() => {
     try {

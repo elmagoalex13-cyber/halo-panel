@@ -1,3 +1,4 @@
+import type { VarianteContrato } from "@/lib/contratoVariantes";
 // Resumen corto del contrato en lenguaje llano y preguntas frecuentes, para que la modelo lo entienda todo antes de firmar
 // (email y pagina de firma). Dice lo mismo que el contrato, clausula por clausula; el PDF con el texto completo esta siempre al lado.
 
@@ -105,3 +106,34 @@ export const PREGUNTAS_FRECUENTES: GrupoPreguntas[] = [
     ],
   },
 ];
+
+/* ---- Variante 60-40 (60 % agencia / 40 % creadora desde el primer dia): mismo texto, con el reparto cambiado ---- */
+const REPARTO_6040 = "60 % para la agencia y 40 % para ti, desde el primer día y durante todo el contrato.";
+
+export function resumenEsencialDe(v: VarianteContrato) {
+  if (v !== "60-40") return RESUMEN_ESENCIAL;
+  return RESUMEN_ESENCIAL.map((r) =>
+    r.titulo === "Cómo se reparte lo que se gana"
+      ? { ...r, texto: `${REPARTO_6040} Sobre lo que se cobra de verdad (tras las comisiones de la plataforma y los gastos que apruebes). Te pagamos los días 1 y 15, con un resumen de ingresos.` }
+      : r,
+  );
+}
+
+export function preguntasFrecuentesDe(v: VarianteContrato): GrupoPreguntas[] {
+  if (v !== "60-40") return PREGUNTAS_FRECUENTES;
+  return PREGUNTAS_FRECUENTES.map((g) => ({
+    ...g,
+    preguntas: g.preguntas.map((q) => {
+      if (q.p.startsWith("¿Cómo se reparte")) {
+        return { ...q, r: `El reparto se hace sobre los ingresos que realmente se cobran, una vez descontadas las comisiones propias de la plataforma y los gastos operativos que se hayan acordado contigo antes. Es ${REPARTO_6040}` };
+      }
+      if (q.p.startsWith("¿El 70-30 es negociable")) {
+        return { p: "¿El 60-40 es negociable? ¿Se mantiene siempre así?", r: "Es 60-40 (60 % agencia, 40 % para ti) desde el primer día y se mantiene durante todo el contrato. Si quieres hablar de otro reparto, se puede hablar caso a caso; cualquier cambio sobre lo que firmas se acuerda por escrito y firmado por las dos partes." };
+      }
+      if (q.p.startsWith("¿Cuándo empieza a contar")) {
+        return { ...q, r: q.r.replace(/\s*Los 6 meses del 70-30 se cuentan desde ahí\./, "") };
+      }
+      return q;
+    }),
+  }));
+}

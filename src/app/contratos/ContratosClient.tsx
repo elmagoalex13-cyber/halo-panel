@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FirmaPad } from "@/components/FirmaPad";
+import { VARIANTES_CONTRATO, type VarianteContrato } from "@/lib/contratoVariantes";
 
 type Contrato = {
   id: string;
@@ -18,6 +19,7 @@ type Contrato = {
   enlace: string;
   modelo_id?: string | null;
   nota_interna?: string | null;
+  variante?: VarianteContrato;
 };
 
 type ModeloOpcion = { id: string; nombre: string };
@@ -53,6 +55,7 @@ export function ContratosClient() {
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [fecha, setFecha] = useState(hoy());
+  const [variante, setVariante] = useState<VarianteContrato>("70-30");
   const [enviando, setEnviando] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string; enlace?: string; nombre?: string; telefono?: string } | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
@@ -83,7 +86,7 @@ export function ContratosClient() {
     setEnviando(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/contratos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre, email, fecha_inicio: fecha, firma_agencia: firmaNueva ?? undefined }) });
+      const res = await fetch("/api/contratos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre, email, fecha_inicio: fecha, firma_agencia: firmaNueva ?? undefined, variante }) });
       const j = (await res.json().catch(() => ({}))) as { error?: string; enlace?: string; email?: { enviado: boolean; error?: string; sinConfigurar?: boolean; omitido?: boolean } };
       if (!res.ok) throw new Error(j.error ?? "No se pudo crear el contrato");
       if (firmaNueva) {
@@ -174,6 +177,27 @@ export function ContratosClient() {
             </label>
           </div>
 
+          <div className="space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-white/40">Reparto del contrato</span>
+            <div className="flex flex-wrap gap-2">
+              {VARIANTES_CONTRATO.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setVariante(v.id)}
+                  className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${variante === v.id ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/20 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"}`}
+                >
+                  {v.etiqueta}
+                </button>
+              ))}
+            </div>
+            <span className="block text-[11px] text-white/30">
+              {variante === "60-40"
+                ? "60 % agencia / 40 % creadora desde el primer día. El email, la página de firma y el PDF lo dicen así, y su ficha queda con el 60 % de la agencia."
+                : "El de siempre: 70 % agencia / 30 % creadora los primeros 6 meses y 60 / 40 desde el mes 7."}
+            </span>
+          </div>
+
           <label className="block max-w-xs space-y-1.5">
             <span className="text-xs font-semibold uppercase tracking-wider text-white/40">WhatsApp de la modelo (opcional)</span>
             <input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="34600123456 (con prefijo)" className="input-base w-full" />
@@ -243,6 +267,7 @@ export function ContratosClient() {
                 {pendientes.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-sm">
                     <span className="font-semibold text-white">{c.nombre}</span>
+                    {c.variante === "60-40" ? <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-[11px] font-bold text-amber-200" title="Reparto 60 % agencia / 40 % creadora desde el primer día">60/40</span> : null}
                     <span className="text-xs text-white/40">{c.email || "sin email (por enlace)"}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${ESTADO[c.estado].clase}`}>{ESTADO[c.estado].texto}</span>
                     <span className="text-xs text-white/35">
@@ -287,6 +312,7 @@ export function ContratosClient() {
                 {firmados.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] px-3 py-2.5 text-sm">
                     <span className="font-semibold text-white">{c.nombre}</span>
+                    {c.variante === "60-40" ? <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-[11px] font-bold text-amber-200" title="Reparto 60 % agencia / 40 % creadora desde el primer día">60/40</span> : null}
                     <span className="text-xs text-white/40">firmado {cuando(c.firmado_at)}</span>
                     <label className="flex items-center gap-1.5 text-xs text-white/45">
                       Ficha:

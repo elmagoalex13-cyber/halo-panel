@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { uploadToR2 } from "@/lib/r2";
 import { generarPdfContrato } from "@/lib/contratoPdf";
+import { varianteDe } from "@/lib/contratoVariantesDb";
+import { porcentajeAgenciaDe } from "@/lib/contratoVariantes";
 import { enviarCopiaFirmada } from "@/lib/contratos";
 import { encolarTelegram } from "@/lib/telegramCola";
 import { crearPortalTrasFirma } from "@/lib/contratoPortal";
@@ -41,10 +43,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!marcado?.length) return NextResponse.json({ error: "Este contrato ya está firmado." }, { status: 409 });
 
+  const variante = await varianteDe(token); // el reparto que lleva ESTE contrato (el mismo que vio al firmar)
   // PDF firmado: se guarda en R2 y se manda copia por email; si algo de esto falla, la firma ya esta registrada y se puede regenerar
   let pdf: Uint8Array | null = null;
   try {
-    pdf = await generarPdfContrato({ nombre: c.nombre, fechaInicio: c.fecha_inicio, firmaAgencia: c.firma_agencia, firmaCreadora: firma, nombreFirmante, dni, firmadoAt: ahora, firmanteIp: ip });
+    pdf = await generarPdfContrato({ nombre: c.nombre, fechaInicio: c.fecha_inicio, firmaAgencia: c.firma_agencia, firmaCreadora: firma, nombreFirmante, dni, firmadoAt: ahora, firmanteIp: ip, variante });
     const key = `contratos/${token}.pdf`;
     await uploadToR2(key, pdf, "application/pdf");
     await db.from("contratos_modelos").update({ pdf_key: key }).eq("id", c.id);
@@ -53,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
   if (pdf) await enviarCopiaFirmada({ nombre: c.nombre, email: c.email }, pdf).catch(() => undefined);
   // Ficha + portal de la modelo, al momento: usuario y contraseña se le enseñan en la pantalla de «contrato firmado»
-  const portal = await crearPortalTrasFirma({ id: c.id as string, nombre: c.nombre as string }, nombreFirmante);
+  const portal = await crearPortalTrasFirma({ id: c.id as string, nombre: c.nombre as string, porcentajeAgencia: porcentajeAgenciaDe(variante) }, nombreFirmante);
   const creado = portal && "slug" in portal ? portal : null;
   // Modelo nueva con portal: recibira los ultimos 40 videos asignados a las demas y los que se asignen a partir de ahora (lo hace el editor en un minuto)
   const espejo = creado ? await registrarEspejo(creado.modelo_id).catch(() => false) : false;

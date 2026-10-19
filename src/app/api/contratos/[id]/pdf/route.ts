@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { getR2Object } from "@/lib/r2";
 import { generarPdfContrato } from "@/lib/contratoPdf";
+import { varianteDe } from "@/lib/contratoVariantesDb";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       dni: c.dni as string | null,
       firmadoAt: c.firmado_at as string | null,
       firmanteIp: c.firmante_ip as string | null,
+      variante: await varianteDe(c.token as string),
     });
   }
   const nombreArchivo = `Contrato-${String(c.nombre).replace(/[^\w.-]+/g, "_")}${c.estado === "firmado" ? "-firmado" : ""}.pdf`;

@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { ContratoPublico } from "./ContratoPublico";
+import { preguntasFrecuentesDe, resumenEsencialDe } from "@/lib/contratoExplicacion";
+import { varianteDe } from "@/lib/contratoVariantesDb";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -28,8 +30,11 @@ export default async function ContratoPage({ params }: { params: Promise<{ token
   // Primera vez que abre el enlace: queda marcado como visto (para saber si lo ha leido)
   if (c.estado === "enviado") await db.from("contratos_modelos").update({ estado: "visto", visto_at: new Date().toISOString() }).eq("id", c.id).eq("estado", "enviado");
 
+  const variante = await varianteDe(token);
   return (
     <ContratoPublico
+      resumen={resumenEsencialDe(variante)}
+      preguntas={preguntasFrecuentesDe(variante)}
       token={token}
       nombre={c.nombre as string}
       fechaInicio={c.fecha_inicio as string}
