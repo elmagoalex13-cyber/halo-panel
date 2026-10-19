@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { estadoLabel, formatDate, tipoVideoLabel } from "@/lib/utils";
 import { urlR2, videoBrutoAlternativas, videoEditado } from "@/lib/media";
 import { AvatarModelo } from "@/components/AvatarModelo";
-import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
+import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
 import { OPCIONES_VELOCIDAD, leerVelocidad, textoVelocidad } from "@/lib/velocidadHablados";
 
@@ -386,6 +386,7 @@ export function MesaClient({
   const [originalOpen, setOriginalOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [modeloFiltro, setModeloFiltro] = useState("todos");
+  const [busquedaModelo, setBusquedaModelo] = useState("");
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [publicando, setPublicando] = useState(false);
   const [borrandoArchivos, setBorrandoArchivos] = useState(false);
@@ -420,6 +421,9 @@ export function MesaClient({
   }, [rows]);
   // Si la modelo filtrada se queda sin videos (ej. los acabas de marcar como publicados), vuelve a "Todas".
   const filtroModelo = modeloFiltro !== "todos" && !modelosChips.some((m) => m.clave === modeloFiltro) ? "todos" : modeloFiltro;
+  // Buscador de modelos: sin distinguir mayusculas ni acentos
+  const sinAcentos = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const modelosBuscadas = modelosChips.filter((m) => !busquedaModelo.trim() || sinAcentos(m.nombre).includes(sinAcentos(busquedaModelo.trim())));
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
@@ -799,33 +803,58 @@ export function MesaClient({
         </select>
 
         {modelosChips.length > 0 ? (
-          <div className="flex w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-            <button
-              type="button"
-              onClick={() => setModeloFiltro("todos")}
-              className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                filtroModelo === "todos" ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"
-              }`}
-            >
-              Todas
-              <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{rows.length}</span>
-            </button>
-            {modelosChips.map((m) => (
+          <div className="w-full space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                key={m.clave}
                 type="button"
-                onClick={() => setModeloFiltro(filtroModelo === m.clave ? "todos" : m.clave)}
-                aria-pressed={filtroModelo === m.clave}
-                className={`flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition ${
-                  filtroModelo === m.clave ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"
+                onClick={() => setModeloFiltro("todos")}
+                className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  filtroModelo === "todos" ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"
                 }`}
               >
-                <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-6 w-6 text-[10px]" />
-                {esDueno && m.id ? <PuntoAmbito ambito={ambitos[m.id]} /> : null}
-                {m.nombre}
-                <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{m.total}</span>
+                Todas
+                <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{rows.length}</span>
               </button>
-            ))}
+              <div className="relative ml-auto w-44">
+                <input
+                  value={busquedaModelo}
+                  onChange={(event) => setBusquedaModelo(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setBusquedaModelo("");
+                    if (event.key === "Enter" && modelosBuscadas.length === 1) {
+                      setModeloFiltro(modelosBuscadas[0].clave);
+                      setBusquedaModelo("");
+                    }
+                  }}
+                  placeholder="Buscar…"
+                  aria-label="Buscar modelo"
+                  className="input-base w-full py-1.5 pr-7 text-xs"
+                />
+                {busquedaModelo ? (
+                  <button type="button" onClick={() => setBusquedaModelo("")} aria-label="Borrar búsqueda" className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-white/40 hover:text-white">
+                    ✕
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {modelosBuscadas.map((m) => (
+                <button
+                  key={m.clave}
+                  type="button"
+                  onClick={() => setModeloFiltro(filtroModelo === m.clave ? "todos" : m.clave)}
+                  aria-pressed={filtroModelo === m.clave}
+                  className={`flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition ${
+                    filtroModelo === m.clave ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"
+                  }`}
+                >
+                  <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-6 w-6 text-[10px]" />
+                  {m.nombre}
+                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{m.total}</span>
+                </button>
+              ))}
+              {busquedaModelo.trim() && !modelosBuscadas.length ? <span className="text-xs text-white/35">Ninguna modelo se llama «{busquedaModelo}».</span> : null}
+            </div>
           </div>
         ) : null}
 
