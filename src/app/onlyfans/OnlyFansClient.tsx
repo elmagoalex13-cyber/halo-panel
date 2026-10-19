@@ -7,7 +7,7 @@ import { ETIQUETA_TIPO, formatoTamano, type TipoColeccion } from "@/lib/onlyfans
 import type { ResumenColeccion } from "@/lib/ofResumen";
 import type { FotosPerfilVistas } from "@/lib/fotosPerfil";
 import { FotosPerfilModelo } from "@/components/FotosPerfilPanel";
-import { SelectorAmbito, PuntoAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
+import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 const CLAVE_VISTA = "of_vista"; // la vista que tenias (modelo, pestaña, filtros)
 const CLAVE_VOLVER = "of_volver"; // 1 = acabas de abrir un script/pack/post: al volver se recupera la vista
@@ -149,6 +149,32 @@ export function OnlyFansClient({
   const porSubirOF = delModelo.filter((c) => c.estado === "entregado" && c.subidosOF < c.archivos).length;
   const espacio = delModelo.reduce((s, c) => s + c.bytes, 0);
 
+  // Selector de modelos «por prioridad»: con novedades, con contenido y sin contenido (plegadas), con buscador
+  const [busqueda, setBusqueda] = useState("");
+  const [verVacias, setVerVacias] = useState(false);
+  const sinAcentos = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const buscando = busqueda.trim() !== "";
+  const encontradas = modelos.filter((m) => !buscando || sinAcentos(m.nombre).includes(sinAcentos(busqueda.trim())));
+  const resumenDe = (id: string) => {
+    const n = colecciones.filter((c) => c.modelo_id === id);
+    return { total: n.length, nuevos: n.filter((c) => c.nuevo).length };
+  };
+  const conNovedades = encontradas.filter((m) => resumenDe(m.id).nuevos > 0).sort((a, b) => resumenDe(b.id).nuevos - resumenDe(a.id).nuevos || a.nombre.localeCompare(b.nombre, "es"));
+  const conContenido = encontradas.filter((m) => resumenDe(m.id).total > 0 && resumenDe(m.id).nuevos === 0).sort((a, b) => resumenDe(b.id).total - resumenDe(a.id).total || a.nombre.localeCompare(b.nombre, "es"));
+  const sinContenido = encontradas.filter((m) => resumenDe(m.id).total === 0).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  // Las vacías se abren solas al buscar o si la modelo elegida es una de ellas
+  const vaciasAbiertas = verVacias || buscando || sinContenido.some((m) => m.id === modeloActivo);
+  const chipModelo = (m: { id: string; nombre: string; foto: number | null }, conBadge: boolean) => {
+    const r = resumenDe(m.id);
+    return (
+      <button key={m.id} onClick={() => setModelo(m.id)} className={`${chip(modeloActivo === m.id)} flex items-center gap-1.5 ${r.total ? "" : "opacity-60"}`}>
+        <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-4 w-4 text-[8px]" />
+        {m.nombre} ({r.total})
+        {conBadge && r.nuevos ? <span className="rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[10px] text-white">{r.nuevos} nuevo{r.nuevos === 1 ? "" : "s"}</span> : null}
+      </button>
+    );
+  };
+
   const chip = (activo: boolean) =>
     `rounded-full border px-3 py-1.5 text-xs font-semibold transition ${activo ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/20 text-white" : "border-white/[0.08] bg-white/[0.03] text-white/50 hover:text-white/80"}`;
 
@@ -158,23 +184,57 @@ export function OnlyFansClient({
         <SelectorAmbito esDueno={esDueno} valor={filtroAmbito} onChange={setFiltroAmbito} cuenta={(f) => modelosTodas.filter((m) => ambitoCoincide(f, ambitos[m.id])).length} />
       )}
       {sinFiltroModelo ? null : (
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => setModelo("todas")} className={chip(modeloActivo === "todas")}>
-            Todas las modelos ({colecciones.length})
-            {colecciones.some((c) => c.nuevo) ? <span className="ml-1.5 rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[10px] text-white">{colecciones.filter((c) => c.nuevo).length} nuevo{colecciones.filter((c) => c.nuevo).length === 1 ? "" : "s"}</span> : null}
-          </button>
-          {modelos.map((m) => {
-            const n = colecciones.filter((c) => c.modelo_id === m.id);
-            const nuevos = n.filter((c) => c.nuevo).length;
-            return (
-              <button key={m.id} onClick={() => setModelo(m.id)} className={`${chip(modeloActivo === m.id)} flex items-center gap-1.5 ${n.length ? "" : "opacity-50"}`}>
-                <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-4 w-4 text-[8px]" />
-                {esDueno ? <PuntoAmbito ambito={ambitos[m.id]} /> : null}
-                {m.nombre} ({n.length})
-                {nuevos ? <span className="rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[10px] text-white">{nuevos} nuevo{nuevos === 1 ? "" : "s"}</span> : null}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setModelo("todas")} className={chip(modeloActivo === "todas")}>
+              Todas las modelos ({colecciones.length})
+              {colecciones.some((c) => c.nuevo) ? <span className="ml-1.5 rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[10px] text-white">{colecciones.filter((c) => c.nuevo).length} nuevo{colecciones.filter((c) => c.nuevo).length === 1 ? "" : "s"}</span> : null}
+            </button>
+            <div className="relative ml-auto w-full sm:w-64">
+              <input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setBusqueda("");
+                  if (e.key === "Enter" && encontradas.length === 1) {
+                    setModelo(encontradas[0].id);
+                    setBusqueda("");
+                  }
+                }}
+                placeholder="Buscar modelo…"
+                aria-label="Buscar modelo"
+                className="input-base w-full py-1.5 pr-8 text-xs"
+              />
+              {busqueda ? (
+                <button onClick={() => setBusqueda("")} aria-label="Borrar búsqueda" className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-white/40 hover:text-white">
+                  ✕
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {buscando && !encontradas.length ? <p className="rounded-xl border border-white/[0.06] px-3 py-2 text-xs text-white/40">Ninguna modelo se llama «{busqueda}».</p> : null}
+
+          {conNovedades.length ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#8B5CF6]/30 bg-[#8B5CF6]/[0.07] p-2">
+              <span className="w-32 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#C4B5FD]">🔔 Con novedades</span>
+              {conNovedades.map((m) => chipModelo(m, true))}
+            </div>
+          ) : null}
+          {conContenido.length ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2">
+              <span className="w-32 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-white/40">📦 Con contenido</span>
+              {conContenido.map((m) => chipModelo(m, false))}
+            </div>
+          ) : null}
+          {sinContenido.length ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.04] p-2">
+              <button onClick={() => setVerVacias(!verVacias)} disabled={buscando} className="w-32 shrink-0 text-left text-[11px] font-semibold uppercase tracking-wider text-white/30 hover:text-white/60 disabled:cursor-default">
+                ◌ Sin contenido ({sinContenido.length}) {buscando ? "" : vaciasAbiertas ? "▲" : "▼"}
               </button>
-            );
-          })}
+              {vaciasAbiertas ? sinContenido.map((m) => chipModelo(m, false)) : null}
+            </div>
+          ) : null}
         </div>
       )}
 
