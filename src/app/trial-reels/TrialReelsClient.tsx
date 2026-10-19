@@ -31,6 +31,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
   const [original, setOriginal] = useState<string | null>(null);
+  const [grande, setGrande] = useState<{ pedido: PedidoVista; i: number } | null>(null); // version abierta a pantalla grande
 
   const virales = useMemo(
     () => todos.filter((v) => ambitoCoincide(filtroAmbito, v.modelo_id ? ambitos[v.modelo_id] : null)).filter((v) => verCopias || !esCopia.has(v.codigo)),
@@ -264,8 +265,17 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
                       <div className={`grid gap-3 ${p.variantes.length === 1 ? "max-w-[10rem] grid-cols-1" : p.variantes.length === 2 ? "max-w-[20rem] grid-cols-2" : "grid-cols-3"}`}>
                         {p.variantes.map((x) => (
                           <div key={x.n} className="space-y-1.5">
-                            <div className="aspect-[9/16] overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
+                            <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
                               {x.vista ? <video src={x.vista} controls playsInline preload="metadata" className="h-full w-full object-contain" /> : null}
+                              <button
+                                type="button"
+                                onClick={() => setGrande({ pedido: p, i: p.variantes.findIndex((y) => y.n === x.n) })}
+                                title="Ver en grande"
+                                aria-label="Ver en grande"
+                                className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-sm text-white backdrop-blur transition hover:bg-black/85"
+                              >
+                                ⤢
+                              </button>
                             </div>
                             <p className="text-[11px] font-semibold text-white/80">Versión {x.n}</p>
                             <p className="text-[10px] leading-snug text-white/35">{x.resumen.join(" · ")}</p>
@@ -314,7 +324,48 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
         </div>
       ) : null}
 
+      {grande ? <VisorVersiones pedido={grande.pedido} indice={grande.i} onCambiar={(i) => setGrande({ pedido: grande.pedido, i })} onCerrar={() => setGrande(null)} /> : null}
       {original ? <VisorVideo src={original} onCerrar={() => setOriginal(null)} /> : null}
+    </div>
+  );
+}
+
+/** Las versiones de una tanda a pantalla grande, dentro de la app: flechas (o ← →) para pasar de una a otra, Esc o clic fuera para cerrar. */
+function VisorVersiones({ pedido, indice, onCambiar, onCerrar }: { pedido: PedidoVista; indice: number; onCambiar: (i: number) => void; onCerrar: () => void }) {
+  const lista = pedido.variantes;
+  const v = lista[indice];
+  useEffect(() => {
+    const t = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCerrar();
+      if (e.key === "ArrowLeft" && lista.length > 1) onCambiar((indice - 1 + lista.length) % lista.length);
+      if (e.key === "ArrowRight" && lista.length > 1) onCambiar((indice + 1) % lista.length);
+    };
+    window.addEventListener("keydown", t);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", t);
+      document.body.style.overflow = overflow;
+    };
+  }, [indice, lista.length, onCambiar, onCerrar]);
+  if (!v) return null;
+  const flecha = "grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-xl text-white transition hover:bg-white/25";
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-black/90 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={onCerrar}>
+      <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-white/70" onClick={(e) => e.stopPropagation()}>
+        <span>
+          Versión {v.n} de {lista.length} <span className="hidden text-white/40 sm:inline">· {v.resumen.join(" · ")}</span>
+        </span>
+        <div className="flex items-center gap-2">
+          <a href={v.descarga} className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/25">Descargar</a>
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white hover:bg-white/25">✕</button>
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center gap-3 px-3 pb-4">
+        {lista.length > 1 ? <button type="button" onClick={(e) => { e.stopPropagation(); onCambiar((indice - 1 + lista.length) % lista.length); }} className={flecha} aria-label="Anterior">‹</button> : null}
+        <video key={v.n} src={v.vista} controls autoPlay playsInline onClick={(e) => e.stopPropagation()} className="max-h-full min-h-0 max-w-full rounded-xl bg-black object-contain" style={{ height: "100%", aspectRatio: "9 / 16" }} />
+        {lista.length > 1 ? <button type="button" onClick={(e) => { e.stopPropagation(); onCambiar((indice + 1) % lista.length); }} className={flecha} aria-label="Siguiente">›</button> : null}
+      </div>
     </div>
   );
 }
