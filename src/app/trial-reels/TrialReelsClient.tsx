@@ -26,6 +26,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
   const [cantidad, setCantidad] = useState(3); // versiones que se piden por cada vídeo (1 a 3)
   const [seleccion, setSeleccion] = useState<string[]>([]);
   const [verCopias, setVerCopias] = useState(false);
+  const [verProgramados, setVerProgramados] = useState(false);
   const esCopia = useMemo(() => new Set(copias), [copias]);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
@@ -56,7 +57,11 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
     return m;
   }, [pedidos]);
   const enMarcha = useCallback((id: string) => (porViral.get(id) ?? []).some((p) => p.estado === "pendiente" || p.estado === "procesando"), [porViral]);
-  const tieneListos = useCallback((id: string) => (porViral.get(id) ?? []).some((p) => p.estado === "listo"), [porViral]);
+  // Las versiones ya programadas no se vuelven a usar nunca: se esconden (el original sigue guardado). Una tanda con todas programadas desaparece.
+  const visibleVars = useCallback((p: PedidoVista) => (verProgramados ? p.variantes : p.variantes.filter((x) => !x.programado_at)), [verProgramados]);
+  const tandaOculta = useCallback((p: PedidoVista) => p.estado === "listo" && p.variantes.length > 0 && visibleVars(p).length === 0, [visibleVars]);
+  const nProgramadas = useMemo(() => pedidos.reduce((t, p) => t + p.variantes.filter((x) => x.programado_at).length, 0), [pedidos]);
+  const tieneListos = useCallback((id: string) => (porViral.get(id) ?? []).some((p) => p.estado === "listo" && !tandaOculta(p)), [porViral, tandaOculta]);
 
   const visibles = useMemo(
     () =>
@@ -117,7 +122,10 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
   const alternar = (id: string) => setSeleccion((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const marcar = (ids: string[]) => setSeleccion(ids);
   const textoVersiones = (n: number) => (n === 1 ? "1 reel" : `${n} reels`);
-  const programado = (p: PedidoVista, n: number, valor: boolean) => void llamar(`${p.id}-${n}`, { method: "POST", body: JSON.stringify({ accion: "programado", pedido_id: p.id, n, valor }) });
+  const programado = (p: PedidoVista, n: number, valor: boolean) =>
+    void llamar(`${p.id}-${n}`, { method: "POST", body: JSON.stringify({ accion: "programado", pedido_id: p.id, n, valor }) }).then((j) => {
+      if (j && valor) setAviso({ ok: true, texto: "Marcado como programado: ya no se muestra aquí (el original sigue guardado). Si quieres verlo, marca «Ver ya programados»." });
+    });
   function borrar(p: PedidoVista) {
     if (!window.confirm(`¿Borrar ${p.variantes.length === 1 ? "esta versión" : `estas ${p.variantes.length || ""} versiones`}? Se borran los archivos para siempre.`)) return;
     void llamar(p.id, { method: "DELETE" }, `/api/trial-reels/manual?id=${p.id}`);
@@ -142,6 +150,11 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
           </button>
         ))}
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {nProgramadas ? (
+            <label className="flex items-center gap-1.5 text-xs text-white/50">
+              <input type="checkbox" checked={verProgramados} onChange={(e) => setVerProgramados(e.target.checked)} className="accent-[#8B5CF6]" /> Ver ya programados ({nProgramadas})
+            </label>
+          ) : null}
           {nCopias ? (
             <label className="flex items-center gap-1.5 text-xs text-white/50">
               <input type="checkbox" checked={verCopias} onChange={(e) => setVerCopias(e.target.checked)} className="accent-[#8B5CF6]" /> Ver copias nuestras ({nCopias})
@@ -263,7 +276,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
                   )}
                 </div>
 
-                {lista.map((p) => (
+                {lista.filter((p) => !tandaOculta(p)).map((p) => (
                   <div key={p.id} className="mt-3 space-y-2 rounded-xl border border-white/[0.06] bg-black/20 p-3">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="text-white/45">Pedido el {fecha(p.at)}{p.por ? ` · ${p.por}` : ""}</span>
@@ -275,15 +288,15 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
                       </button>
                     </div>
                     {p.estado === "error" ? <p className="text-xs text-red-300">{p.error ?? "No se pudo generar."} Pulsa «Borrar tanda» y vuelve a generar.</p> : null}
-                    {p.variantes.length ? (
-                      <div className={`grid gap-3 ${p.variantes.length === 1 ? "max-w-[10rem] grid-cols-1" : p.variantes.length === 2 ? "max-w-[20rem] grid-cols-2" : "grid-cols-3"}`}>
-                        {p.variantes.map((x) => (
+                    {visibleVars(p).length ? (
+                      <div className={`grid gap-3 ${visibleVars(p).length === 1 ? "max-w-[10rem] grid-cols-1" : visibleVars(p).length === 2 ? "max-w-[20rem] grid-cols-2" : "grid-cols-3"}`}>
+                        {visibleVars(p).map((x) => (
                           <div key={x.n} className="space-y-1.5">
                             <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
                               {x.vista ? <video src={x.vista} controls playsInline preload="metadata" className="h-full w-full object-contain" /> : null}
                               <button
                                 type="button"
-                                onClick={() => setGrande({ pedido: p, i: p.variantes.findIndex((y) => y.n === x.n) })}
+                                onClick={() => setGrande({ pedido: { ...p, variantes: visibleVars(p) }, i: visibleVars(p).findIndex((y) => y.n === x.n) })}
                                 title="Ver en grande"
                                 aria-label="Ver en grande"
                                 className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-sm text-white backdrop-blur transition hover:bg-black/85"
