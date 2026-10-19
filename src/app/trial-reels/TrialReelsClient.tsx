@@ -106,11 +106,12 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
     }
   }
 
-  async function generar(ids: string[]) {
-    const j = await llamar(ids.length === 1 ? ids[0] : "lote", { method: "POST", body: JSON.stringify({ accion: "generar", viral_ids: ids, cantidad }) });
+  // `cuantas`: las que se piden (por defecto las del selector de arriba); los botones 1·2·3 de cada vídeo piden las suyas
+  async function generar(ids: string[], cuantas = cantidad) {
+    const j = await llamar(ids.length === 1 ? ids[0] : "lote", { method: "POST", body: JSON.stringify({ accion: "generar", viral_ids: ids, cantidad: cuantas }) });
     if (j) {
       setSeleccion([]);
-      setAviso({ ok: true, texto: `${j.nuevos ?? ids.length} ${j.nuevos === 1 ? "vídeo en cola" : "vídeos en cola"}: en unos minutos tendrás ${cantidad === 1 ? "su versión" : `sus ${cantidad} versiones`} aquí.` });
+      setAviso({ ok: true, texto: `${j.nuevos ?? ids.length} ${j.nuevos === 1 ? "vídeo en cola" : "vídeos en cola"}: en unos minutos tendrás ${cuantas === 1 ? "su versión" : `sus ${cuantas} versiones`} aquí.` });
     }
   }
   const alternar = (id: string) => setSeleccion((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -241,13 +242,25 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
                       Ver original
                     </button>
                   ) : null}
-                  <button
-                    disabled={ocupado !== null || enMarcha(v.id) || !v.video_key}
-                    onClick={() => void generar([v.id])}
-                    className="rounded-lg bg-[#8B5CF6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#7C3AED] disabled:opacity-40"
-                  >
-                    {enMarcha(v.id) ? "Generando…" : lista.some((p) => p.estado === "listo") ? `Generar otros ${textoVersiones(cantidad)}` : `Generar ${textoVersiones(cantidad)}`}
-                  </button>
+                  {enMarcha(v.id) ? (
+                    <span className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/60">Generando…</span>
+                  ) : (
+                    <div className="flex items-center gap-1 rounded-lg bg-[#8B5CF6]/15 p-1" title="Cuántas versiones quieres de este vídeo">
+                      <span className="px-2 text-xs font-semibold text-[#C4B5FD]">{lista.some((p) => p.estado === "listo") ? "Generar otros" : "Generar"}</span>
+                      {[1, 2, 3].map((n) => (
+                        <button
+                          key={n}
+                          disabled={ocupado !== null || !v.video_key}
+                          onClick={() => void generar([v.id], n)}
+                          aria-label={`Generar ${n} ${n === 1 ? "reel" : "reels"}`}
+                          title={`Generar ${n} ${n === 1 ? "reel" : "reels"}`}
+                          className="grid h-7 w-7 place-items-center rounded-md bg-[#8B5CF6] text-xs font-bold text-white transition hover:bg-[#7C3AED] disabled:opacity-40"
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {lista.map((p) => (
