@@ -43,17 +43,17 @@ export async function POST(req: NextRequest) {
     const db = createAdminClient();
     const alcance = await alcanceActual();
     const [virales, cuentas] = await Promise.all([
-      soloVisibles(db.from("virales_propios").select("id, codigo, cuenta_id, modelo_id, video_key").in("id", ids), alcance),
+      soloVisibles(db.from("virales_propios").select("id, codigo, cuenta_id, modelo_id, video_key, estado").in("id", ids), alcance),
       soloVisibles(db.from("cuentas_instagram").select("id, modelo_id"), alcance),
     ]);
     const modeloDeCuenta = new Map((cuentas.data ?? []).map((c) => [c.id as string, (c.modelo_id as string | null) ?? null]));
     // Las copias nuestras ya publicadas no son originales: los trials salen siempre del vídeo original
     const copias = await codigosDeCopias();
     const validos = (virales.data ?? [])
-      .filter((v) => v.video_key && !copias.has(v.codigo as string))
+      .filter((v) => v.video_key && !copias.has(v.codigo as string) && (v.estado === "aprobado" || v.estado === "subido")) // solo los que se han aprobado
       .map((v) => ({ viral_id: v.id as string, modelo_id: ((v.modelo_id as string | null) ?? modeloDeCuenta.get(v.cuenta_id as string) ?? null) as string | null }))
       .filter((v) => veModelo(alcance, v.modelo_id));
-    if (!validos.length) return NextResponse.json({ error: "Esos vídeos no están disponibles" }, { status: 404 });
+    if (!validos.length) return NextResponse.json({ error: "Esos vídeos no están disponibles (solo se generan trials de los virales aprobados)" }, { status: 404 });
     const r = await crearPedidos(validos, quien, Number(b.cantidad) || 3);
     if (!r.ok) return NextResponse.json({ error: "No se pudo guardar, inténtalo otra vez" }, { status: 500 });
     return NextResponse.json({ ok: true, nuevos: r.nuevos, pedidos: await pedidosVisibles() });

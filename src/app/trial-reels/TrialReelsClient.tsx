@@ -17,12 +17,11 @@ function urlVideo(key: string | null) {
 }
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
 
-export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, esDueno, ambitos }: { virales: ViralPropio[]; pedidos: PedidoVista[]; copias: string[]; esDueno: boolean; ambitos: Record<string, string> }) {
+export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, guardados, esDueno, ambitos }: { virales: ViralPropio[]; pedidos: PedidoVista[]; copias: string[]; guardados: number; esDueno: boolean; ambitos: Record<string, string> }) {
   const [pedidos, setPedidos] = useState(iniciales);
   const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
   const [modelo, setModelo] = useState("todas");
   const [mostrar, setMostrar] = useState<Mostrar>("todos");
-  const [conDescartados, setConDescartados] = useState(true); // los que descartaste en «Virales propios» tambien valen para trials
   const [orden, setOrden] = useState<"vistas" | "reciente">("vistas");
   const [cantidad, setCantidad] = useState(3); // versiones que se piden por cada vídeo (1 a 3)
   const [seleccion, setSeleccion] = useState<string[]>([]);
@@ -62,7 +61,6 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
   const visibles = useMemo(
     () =>
       virales
-        .filter((v) => (conDescartados ? true : v.estado !== "descartado"))
         .filter((v) => modelo === "todas" || v.modelo_id === modelo)
         .filter((v) => {
           if (mostrar === "sin_generar") return !(porViral.get(v.id) ?? []).length;
@@ -71,7 +69,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
           return true;
         })
         .sort((a, b) => (orden === "vistas" ? b.vistas - a.vistas : new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime())),
-    [virales, conDescartados, modelo, mostrar, orden, porViral, enMarcha, tieneListos],
+    [virales, modelo, mostrar, orden, porViral, enMarcha, tieneListos],
   );
   const sinGenerar = visibles.filter((v) => !(porViral.get(v.id) ?? []).length);
   const hayEnMarcha = pedidos.some((p) => p.estado === "pendiente" || p.estado === "procesando");
@@ -128,6 +126,12 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
 
   return (
     <div className="space-y-4">
+      {guardados > 0 ? (
+        <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-white/50">
+          Aquí solo salen los virales que apruebas. Hay <span className="font-semibold text-white/80">{guardados}</span> más guardados (por revisar o descartados) en{" "}
+          <a href="/instagram?tab=propios" className="font-semibold text-[#A78BFA] hover:underline">Instagram → Virales propios</a>.
+        </p>
+      ) : null}
       <SelectorAmbito esDueno={esDueno} valor={filtroAmbito} onChange={setFiltroAmbito} cuenta={(f) => todos.filter((v) => ambitoCoincide(f, v.modelo_id ? ambitos[v.modelo_id] : null)).length} />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -142,9 +146,6 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
               <input type="checkbox" checked={verCopias} onChange={(e) => setVerCopias(e.target.checked)} className="accent-[#8B5CF6]" /> Ver copias nuestras ({nCopias})
             </label>
           ) : null}
-          <label className="flex items-center gap-1.5 text-xs text-white/50">
-            <input type="checkbox" checked={conDescartados} onChange={(e) => setConDescartados(e.target.checked)} className="accent-[#8B5CF6]" /> Incluir descartados
-          </label>
           <select value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} className="input-base py-1.5 text-xs">
             <option value="vistas">Más visitas</option>
             <option value="reciente">Más recientes</option>
@@ -197,7 +198,7 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, e
 
       {visibles.length === 0 ? (
         <div className="grid min-h-[30vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 text-center text-sm text-white/35">
-          {todos.length === 0 ? "Todavía no hay vídeos virales de tus modelos. Búscalos en Instagram → Virales propios." : "Nada con esos filtros."}
+          {todos.length === 0 ? "Todavía no has aprobado ningún viral. Apruébalos en Instagram → Virales propios y aparecerán aquí." : "Nada con esos filtros."}
         </div>
       ) : (
         <div className="space-y-4">

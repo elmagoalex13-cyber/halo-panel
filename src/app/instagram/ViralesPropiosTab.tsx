@@ -91,7 +91,7 @@ export function ViralesPropiosTab({ virales: iniciales, esDueno = false, ambitos
       <SelectorAmbito esDueno={esDueno} valor={filtroAmbito} onChange={setFiltroAmbito} cuenta={(f) => viralesTodos.filter((v) => ambitoCoincide(f, v.modelo_id ? ambitos[v.modelo_id] : null)).length} />
       <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
         <p className="mb-2 text-sm text-white/60">
-          Los reels más virales de las cuentas de tus modelos (últimas semanas). Apruébalos, descárgalos y súbelos como trial reels.
+          Los reels más virales de las cuentas de tus modelos (últimas semanas). Los que apruebes pasan a la sección «Trial reels» para sacar sus versiones; el resto se queda guardado aquí.
         </p>
         <ExtensionBoton modo="propias" />
       </div>
