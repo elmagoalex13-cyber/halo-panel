@@ -27,7 +27,7 @@ export const FASES: FaseScript[] = [
     resumen: "1 foto + 1 vídeo breve (5-10 s)",
     slots: [
       { slot: "video", tipo: "video", etiqueta: "Vídeo", n: 1, ayuda: "5-10 s enseñando cómo estás", minSeg: 4, maxSeg: 12 },
-      { slot: "foto", tipo: "foto", etiqueta: "Foto", n: 1, ayuda: "Lencería muy coqueta, selfie sencilla" },
+      { slot: "foto", tipo: "foto", etiqueta: "Foto", n: 1, ayuda: "Ropa sexy y ligeramente sugerente, que incite a querer ver más (selfie sencilla)" },
     ],
   },
   {

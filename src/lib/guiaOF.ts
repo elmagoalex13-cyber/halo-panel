@@ -25,7 +25,7 @@ export const GUIA_SCRIPT = {
       {
         titulo: "Fase 1 - TEASER",
         resumen: "1 foto + 1 video",
-        puntos: ["FOTO 1: lencería muy coqueta (foto tipo selfie sencilla).", "1 video breve (5-10 seg) enseñando cómo estás"],
+        puntos: ["FOTO 1: con ropa que se vea sexy y ligeramente sugerente, que incite al cliente a querer ver más (foto tipo selfie sencilla).", "1 video breve (5-10 seg) enseñando cómo estás"],
       },
       {
         titulo: "Fase 2 - CALENTAMIENTO (TEASING SENSUAL)",
