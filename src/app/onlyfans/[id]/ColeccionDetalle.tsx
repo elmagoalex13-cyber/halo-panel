@@ -12,6 +12,7 @@ import {
   archivosDeSlot,
   duracionVsPedido,
   formatoDuracion,
+  estadoRevision,
   formatoTamano,
   progresoScript,
   type ArchivoOF,
@@ -240,6 +241,11 @@ export function ColeccionDetalle({
         </p>
       </GlassCard>
 
+      {estadoRevision(coleccion) === "repetido" ? (
+        <p className="rounded-xl border border-sky-400/30 bg-sky-400/[0.08] px-4 py-3 text-sm text-sky-100">
+          🔁 La modelo lo ha <b>repetido</b> después de tu feedback{coleccion.revision_texto ? <> («{coleccion.revision_texto}»)</> : null}. Revísalo de nuevo y vuelve a marcarlo como aprobado o a mejorar.
+        </p>
+      ) : null}
       <RevisionOF coleccionId={coleccion.id} tipo={coleccion.tipo} inicial={coleccion.revision ?? null} textoInicial={coleccion.revision_texto ?? null} />
 
       {esScript ? (

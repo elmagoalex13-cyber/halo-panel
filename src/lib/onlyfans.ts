@@ -152,7 +152,22 @@ export type ColeccionOF = {
   created_at: string;
   revision?: "aprobado" | "mejorar" | null; // revision de la agencia (la modelo la ve en su portal)
   revision_texto?: string | null;
+  revision_at?: string | null;
 };
+
+/**
+ * Como esta la revision de la agencia sobre un script/pack/post:
+ *  - "aprobado" / "mejorar": el feedback que le diste (se ve hasta que ella lo repita)
+ *  - "repetido": ella lo ha vuelto a entregar DESPUES de tu feedback -> toca revisarlo de nuevo (el feedback anterior ya no es el estado actual)
+ *  - "pendiente": entregado y aun sin revisar
+ *  - null: en curso y sin revisar
+ */
+export type EstadoRevision = "aprobado" | "mejorar" | "repetido" | "pendiente" | null;
+export function estadoRevision(c: { revision?: "aprobado" | "mejorar" | null; revision_at?: string | null; entregado_at?: string | null; estado: string }): EstadoRevision {
+  if (c.revision && c.entregado_at && c.revision_at && new Date(c.entregado_at).getTime() > new Date(c.revision_at).getTime()) return "repetido";
+  if (c.revision) return c.revision;
+  return c.estado === "entregado" ? "pendiente" : null;
+}
 
 /** Cuantos archivos hay en un hueco de un script. */
 export const archivosDeSlot = (archivos: ArchivoOF[], fase: number, slot: string) =>

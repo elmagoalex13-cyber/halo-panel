@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AvatarModelo } from "@/components/AvatarModelo";
-import { ETIQUETA_TIPO, formatoTamano, type TipoColeccion } from "@/lib/onlyfans";
+import { ETIQUETA_TIPO, estadoRevision, formatoTamano, type TipoColeccion } from "@/lib/onlyfans";
 import type { ResumenColeccion } from "@/lib/ofResumen";
 import type { FotosPerfilVistas } from "@/lib/fotosPerfil";
 import { FotosPerfilModelo } from "@/components/FotosPerfilPanel";
@@ -55,8 +55,8 @@ export function OnlyFansClient({
   const [modelo, setModelo] = useState(modeloInicial && modelosTodas.some((m) => m.id === modeloInicial) ? modeloInicial : "todas");
   const [verPerfil, setVerPerfil] = useState(Boolean(fotosPerfil) && tipoInicial === "perfil");
   const [tipo, setTipo] = useState<TipoColeccion>(tipoInicial === "pack" || tipoInicial === "post" ? tipoInicial : "script");
-  const [estado, setEstado] = useState<"todos" | "entregado" | "en_curso" | "por_subir">(
-    estadoInicial === "entregado" || estadoInicial === "en_curso" || estadoInicial === "por_subir" ? estadoInicial : "todos",
+  const [estado, setEstado] = useState<"todos" | "entregado" | "en_curso" | "por_subir" | "por_revisar" | "a_mejorar" | "aprobados">(
+    estadoInicial === "entregado" || estadoInicial === "en_curso" || estadoInicial === "por_subir" || estadoInicial === "por_revisar" || estadoInicial === "a_mejorar" || estadoInicial === "aprobados" ? estadoInicial : "todos",
   );
 
   // Al volver de abrir un script, pack o post (con «← OnlyFans» o con el «atrás» del navegador) la pagina puede llegar tal como estaba al entrar,
@@ -140,7 +140,15 @@ export function OnlyFansClient({
     () =>
       delModelo
         .filter((c) => c.tipo === tipo)
-        .filter((c) => estado === "todos" || (estado === "por_subir" ? c.estado === "entregado" && c.subidosOF < c.archivos : c.estado === estado)),
+        .filter((c) => {
+          if (estado === "todos") return true;
+          if (estado === "por_subir") return c.estado === "entregado" && c.subidosOF < c.archivos;
+          // Revision de la agencia: «por revisar» = entregado sin feedback o repetido por la modelo despues de tu feedback
+          if (estado === "por_revisar") return ["pendiente", "repetido"].includes(estadoRevision(c) ?? "");
+          if (estado === "a_mejorar") return estadoRevision(c) === "mejorar";
+          if (estado === "aprobados") return estadoRevision(c) === "aprobado";
+          return c.estado === estado;
+        }),
     [delModelo, tipo, estado],
   );
 
@@ -280,6 +288,9 @@ export function OnlyFansClient({
           <option value="en_curso">En curso (la modelo lo está subiendo)</option>
           <option value="entregado">Entregados</option>
           <option value="por_subir">Entregados · por subir a OnlyFans</option>
+          <option value="por_revisar">Por revisar (entregados sin feedback o repetidos)</option>
+          <option value="a_mejorar">A mejorar (les diste feedback)</option>
+          <option value="aprobados">Aprobados</option>
         </select>
       </div>
 
@@ -336,6 +347,33 @@ export function OnlyFansClient({
                     ) : null}
                   </div>
                 </Link>
+
+                {(() => {
+                  const r = estadoRevision(c);
+                  if (r === "aprobado")
+                    return (
+                      <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.07] px-2.5 py-1.5 text-xs text-emerald-100/90">
+                        <span className="font-semibold text-emerald-300">✅ Aprobado</span>
+                        {c.revision_texto ? <span className="mt-0.5 block whitespace-pre-wrap text-emerald-100/70">💬 {c.revision_texto}</span> : null}
+                      </div>
+                    );
+                  if (r === "mejorar")
+                    return (
+                      <div className="rounded-lg border border-amber-400/30 bg-amber-400/[0.08] px-2.5 py-1.5 text-xs text-amber-100/90">
+                        <span className="font-semibold text-amber-300">⚠️ A mejorar · esperando que lo repita</span>
+                        {c.revision_texto ? <span className="mt-0.5 block whitespace-pre-wrap text-amber-100/80">💬 {c.revision_texto}</span> : <span className="mt-0.5 block text-amber-100/50">(sin comentario)</span>}
+                      </div>
+                    );
+                  if (r === "repetido")
+                    return (
+                      <div className="rounded-lg border border-sky-400/30 bg-sky-400/[0.08] px-2.5 py-1.5 text-xs text-sky-100/90">
+                        <span className="font-semibold text-sky-300">🔁 La modelo lo ha repetido · revísalo de nuevo</span>
+                        {c.revision_texto ? <span className="mt-0.5 block whitespace-pre-wrap text-sky-100/60">Tu feedback anterior ({c.revision === "aprobado" ? "aprobado" : "a mejorar"}): {c.revision_texto}</span> : null}
+                      </div>
+                    );
+                  if (r === "pendiente") return <span className="w-fit rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/55">Entregado · por revisar</span>;
+                  return null;
+                })()}
 
                 {abierta?.tipo === "nota" ? (
                   <div className="space-y-1.5">

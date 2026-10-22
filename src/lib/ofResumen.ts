@@ -20,6 +20,9 @@ export type ResumenColeccion = {
   sinDescargar: number;
   subidosOF: number;
   fasesCompletas: number | null;
+  revision: "aprobado" | "mejorar" | null; // revision de la agencia
+  revision_texto: string | null; // el feedback que se le dio
+  revision_at: string | null;
   nota: string | null; // nota interna (solo la ven la agencia y el socio)
   nuevo: boolean; // la modelo ha subido algo desde la ultima vez que lo abriste
 };
@@ -74,6 +77,9 @@ export async function cargarResumenOF(modeloId?: string) {
         sinDescargar: as.filter((a) => !a.descargado_at).length,
         subidosOF: as.filter((a) => a.subido_of_at).length,
         fasesCompletas: pr?.fasesCompletas ?? null,
+        revision: c.revision ?? null,
+        revision_texto: c.revision_texto ?? null,
+        revision_at: c.revision_at ?? null,
         nota: (notas as Record<string, { texto: string }>)[c.id]?.texto ?? null,
         nuevo: Boolean(ultimo) && (!c.visto_at || ultimo > c.visto_at),
       };
