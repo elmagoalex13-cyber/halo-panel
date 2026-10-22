@@ -4,6 +4,8 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { alcanceActual, soloVisibles } from "@/lib/alcance";
 import { resumenCaptacion, type ResumenCaptacion } from "@/lib/captacion";
+import { onboardingsSinRevisar } from "@/lib/onboardingAvisos";
+import Link from "next/link";
 import type { CuentaInstagram, Modelo } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +66,9 @@ async function loadModelos() {
 
 export default async function ModelosPage() {
   const { modelos, cuentas, pipelineByModelo, onboardingByModelo, fotoByModelo, esDueno, papelera, captacion } = await loadModelos();
+  // Lo pendiente que explica el numero del menu «Modelos»: QUIEN y POR QUE
+  const listasCuenta = captacion.filter((c) => c.progreso.cumplido && !c.tieneCuenta);
+  const onboardingsNuevos = await onboardingsSinRevisar(await alcanceActual());
 
   return (
     <PanelLayout>
@@ -73,6 +78,32 @@ export default async function ModelosPage() {
           <h1 className="mt-2 font-display text-4xl font-semibold text-white">Modelos</h1>
         </div>
       </div>
+      {listasCuenta.length || onboardingsNuevos.length ? (
+        <section className="mb-6 space-y-3 rounded-2xl border border-cyan-400/30 bg-cyan-400/[0.06] p-4">
+          <p className="font-display text-base font-semibold text-cyan-100">Pendiente en Modelos</p>
+          {onboardingsNuevos.length ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-white/70">📝 Onboarding recibido (sin abrir):</span>
+              {onboardingsNuevos.map((o) => (
+                <Link key={o.modelo_id} href={`/modelos/${o.modelo_id}#onboarding`} className="rounded-lg border border-emerald-300/40 bg-emerald-300/15 px-2.5 py-1 text-sm font-semibold text-emerald-50 hover:bg-emerald-300/25">
+                  {o.nombre}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+          {listasCuenta.length ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-white/70">🎯 Listas para crearles la cuenta de Instagram:</span>
+              {listasCuenta.map((c) => (
+                <Link key={c.modelo_id} href={`/modelos/${c.modelo_id}`} className="rounded-lg border border-cyan-300/40 bg-cyan-300/15 px-2.5 py-1 text-sm font-semibold text-cyan-50 hover:bg-cyan-300/25">
+                  {c.nombre}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       <ModelosClient modelos={modelos} cuentas={cuentas} pipelineByModelo={pipelineByModelo} onboardingByModelo={onboardingByModelo} fotoByModelo={fotoByModelo} esDueno={esDueno} papelera={papelera} captacion={captacion} />
     </PanelLayout>
   );

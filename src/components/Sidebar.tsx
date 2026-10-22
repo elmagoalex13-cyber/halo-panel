@@ -102,7 +102,10 @@ function AvatarMini({ modelo }: { modelo: ModeloMenu }) {
 // Cada pagina monta su propia barra lateral, asi que al navegar se desmonta y se vuelve a montar:
 // sin esto la lista de modelos y los contadores se vaciaban unos instantes (parpadeo). El modulo
 // sobrevive a la navegacion en el navegador; en el servidor nunca se rellena (solo lo hacen efectos).
-const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number; actividad: number; historias: number; cuentas: number } | null; denegadas: AreaId[] | null } = {
+type PendienteModelo = { id: string; nombre: string; motivo: "cuenta" | "onboarding" };
+const TEXTO_MOTIVO = { cuenta: "🎯 lista para crearle la cuenta de Instagram", onboarding: "📝 onboarding recibido sin abrir" } as const;
+
+const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number; actividad: number; historias: number; cuentas: number; detalle: PendienteModelo[] } | null; denegadas: AreaId[] | null } = {
   modelos: [],
   modelosAbierto: null,
   counts: null,
@@ -120,7 +123,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0 });
+  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] as PendienteModelo[] });
   // Secciones que este usuario no puede ver (un socio sin acceso a Leads, etc.): se quitan del menu
   const [denegadas, setDenegadas] = useState<AreaId[]>(cache.denegadas ?? []);
   useEffect(() => {
@@ -196,7 +199,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
       try {
         const res = await fetch("/api/panel/counts", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { approval?: number; leads?: number; onlyfans?: number; actividad?: number; historias?: number; cuentas?: number };
+        const data = (await res.json()) as { approval?: number; leads?: number; onlyfans?: number; actividad?: number; historias?: number; cuentas?: number; detalle?: PendienteModelo[] };
         cache.counts = {
           approval: Number(data.approval ?? 0),
           leads: Number(data.leads ?? 0),
@@ -204,6 +207,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
           actividad: Number(data.actividad ?? 0),
           historias: Number(data.historias ?? 0),
           cuentas: Number(data.cuentas ?? 0),
+          detalle: Array.isArray(data.detalle) ? data.detalle : [],
         };
         if (!disposed) setCounts(cache.counts);
       } catch {
@@ -292,6 +296,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                   <span className="flex-1">{label}</span>
                   {badgeText ? (
                     <span
+                      title={"modelosBadge" in item && item.modelosBadge && counts.detalle.length ? counts.detalle.map((d) => `${d.nombre}: ${TEXTO_MOTIVO[d.motivo]}`).join("\n") : undefined}
                       className={`min-w-[18px] rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold text-white shadow-[0_0_10px_-2px_rgba(139,92,246,0.8)] ${
                         colorBadge(item)
                       }`}
@@ -343,6 +348,13 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
                               >
                                 <AvatarMini modelo={m} />
                                 <span className="truncate">{m.nombre}</span>
+                                {counts.detalle
+                                  .filter((d) => d.id === m.id)
+                                  .map((d) => (
+                                    <span key={d.motivo} title={`${m.nombre}: ${TEXTO_MOTIVO[d.motivo]}`} className="shrink-0 text-xs">
+                                      {d.motivo === "cuenta" ? "🎯" : "📝"}
+                                    </span>
+                                  ))}
                               </Link>
                               {m.portal_token ? (
                                 <a

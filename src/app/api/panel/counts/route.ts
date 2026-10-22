@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!canUseSupabase()) {
-    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0 });
+    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] });
   }
 
   try {
@@ -37,6 +37,15 @@ export async function GET() {
       historias,
     ]);
 
+    // «Modelos»: QUE modelos tienen algo pendiente y por que (lista para su cuenta de Instagram / onboarding recibido sin abrir)
+    const listasIds = (await leerListasParaCuenta()).filter((id) => veModelo(alcance, id));
+    const onboardings = await onboardingsSinRevisar(alcance);
+    const { data: nombresListas } = listasIds.length ? await supabase.from("modelos").select("id, nombre").in("id", listasIds) : { data: [] };
+    const detalle = [
+      ...(nombresListas ?? []).map((m) => ({ id: m.id as string, nombre: m.nombre as string, motivo: "cuenta" as const })),
+      ...onboardings.map((o) => ({ id: o.modelo_id, nombre: o.nombre, motivo: "onboarding" as const })),
+    ];
+
     return NextResponse.json({
       approval: approvalResult.count ?? 0,
       leads: leadsResult.count ?? 0,
@@ -44,9 +53,10 @@ export async function GET() {
       actividad: actividad.count ?? 0,
       historias: historiasNuevas,
       // Pendientes en «Modelos»: las que ya cumplen todos los minimos y aun no tienen cuenta de Instagram + los onboardings recibidos sin abrir
-      cuentas: (await leerListasParaCuenta()).filter((id) => veModelo(alcance, id)).length + (await onboardingsSinRevisar(alcance)).length,
+      cuentas: detalle.length,
+      detalle, // quien es y por que (para el desplegable del contador y los puntitos de la lista de modelos)
     });
   } catch {
-    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0 });
+    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] });
   }
 }
