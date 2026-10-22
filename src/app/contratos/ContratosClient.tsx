@@ -20,6 +20,7 @@ type Contrato = {
   modelo_id?: string | null;
   nota_interna?: string | null;
   variante?: VarianteContrato;
+  ambito?: "compartido" | "privado";
 };
 
 type ModeloOpcion = { id: string; nombre: string };
@@ -56,13 +57,16 @@ export function ContratosClient() {
   const [telefono, setTelefono] = useState("");
   const [fecha, setFecha] = useState(hoy());
   const [variante, setVariante] = useState<VarianteContrato>("70-30");
+  const [dueno, setDueno] = useState(false);
+  const [ambito, setAmbito] = useState<"compartido" | "privado">("compartido"); // para quien es (solo el dueño puede elegir «solo yo»)
   const [enviando, setEnviando] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string; enlace?: string; nombre?: string; telefono?: string } | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const [c, f] = await Promise.all([fetch("/api/contratos", { cache: "no-store" }), fetch("/api/contratos/firma", { cache: "no-store" })]);
-    const j = (await c.json().catch(() => ({}))) as { contratos?: Contrato[]; modelos?: ModeloOpcion[]; resend?: boolean; sinTabla?: boolean };
+    const j = (await c.json().catch(() => ({}))) as { contratos?: Contrato[]; modelos?: ModeloOpcion[]; resend?: boolean; sinTabla?: boolean; dueno?: boolean };
+    setDueno(Boolean(j.dueno));
     setSinTabla(Boolean(j.sinTabla));
     setResend(j.resend !== false);
     setLista(j.contratos ?? []);
@@ -86,7 +90,7 @@ export function ContratosClient() {
     setEnviando(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/contratos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre, email, fecha_inicio: fecha, firma_agencia: firmaNueva ?? undefined, variante }) });
+      const res = await fetch("/api/contratos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre, email, fecha_inicio: fecha, firma_agencia: firmaNueva ?? undefined, variante, ambito }) });
       const j = (await res.json().catch(() => ({}))) as { error?: string; enlace?: string; email?: { enviado: boolean; error?: string; sinConfigurar?: boolean; omitido?: boolean } };
       if (!res.ok) throw new Error(j.error ?? "No se pudo crear el contrato");
       if (firmaNueva) {
@@ -176,6 +180,29 @@ export function ContratosClient() {
               <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="input-base w-full" />
             </label>
           </div>
+
+          {dueno ? (
+            <div className="space-y-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-white/40">¿Para quién es?</span>
+              <div className="flex flex-wrap gap-2">
+                {([["compartido", "👥 Para los dos (tú y tu socio)"], ["privado", "🔒 Solo para mí"]] as const).map(([id, texto]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setAmbito(id)}
+                    className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${ambito === id ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/20 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"}`}
+                  >
+                    {texto}
+                  </button>
+                ))}
+              </div>
+              <span className="block text-[11px] text-white/30">
+                {ambito === "privado"
+                  ? "Tu socio no verá este contrato, ni la modelo que se cree al firmarlo, ni recibirá ningún aviso suyo (el de Telegram te llega solo a tu chat privado)."
+                  : "Lo verán los dos y la modelo quedará en el grupo compartido."}
+              </span>
+            </div>
+          ) : null}
 
           <div className="space-y-1.5">
             <span className="text-xs font-semibold uppercase tracking-wider text-white/40">Reparto del contrato</span>
@@ -268,6 +295,7 @@ export function ContratosClient() {
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-sm">
                     <span className="font-semibold text-white">{c.nombre}</span>
                     {c.variante === "60-40" ? <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-[11px] font-bold text-amber-200" title="Reparto 60 % agencia / 40 % creadora desde el primer día">60/40</span> : null}
+                    {c.ambito === "privado" ? <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-white/70" title="Solo lo ves tú: tu socio no lo ve">🔒 Solo yo</span> : null}
                     <span className="text-xs text-white/40">{c.email || "sin email (por enlace)"}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${ESTADO[c.estado].clase}`}>{ESTADO[c.estado].texto}</span>
                     <span className="text-xs text-white/35">
@@ -313,6 +341,7 @@ export function ContratosClient() {
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] px-3 py-2.5 text-sm">
                     <span className="font-semibold text-white">{c.nombre}</span>
                     {c.variante === "60-40" ? <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-[11px] font-bold text-amber-200" title="Reparto 60 % agencia / 40 % creadora desde el primer día">60/40</span> : null}
+                    {c.ambito === "privado" ? <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-white/70" title="Solo lo ves tú: tu socio no lo ve">🔒 Solo yo</span> : null}
                     <span className="text-xs text-white/40">firmado {cuando(c.firmado_at)}</span>
                     <label className="flex items-center gap-1.5 text-xs text-white/45">
                       Ficha:

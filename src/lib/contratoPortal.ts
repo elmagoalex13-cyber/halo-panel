@@ -7,7 +7,7 @@ import { mismoNombre } from "@/lib/contratos";
 
 export type PortalCreado = { modelo_id: string; slug: string; usuario: string; password: string; modeloNueva: boolean };
 
-export async function crearPortalTrasFirma(contrato: { id: string; nombre: string; porcentajeAgencia?: number }, nombreFirmante: string): Promise<PortalCreado | { modelo_id: string; yaTenia: true; modelo_nombre: string } | null> {
+export async function crearPortalTrasFirma(contrato: { id: string; nombre: string; porcentajeAgencia?: number; ambito?: "compartido" | "privado" }, nombreFirmante: string): Promise<PortalCreado | { modelo_id: string; yaTenia: true; modelo_nombre: string } | null> {
   try {
     const db = createAdminClient();
     const { data: modelos, error: eMod } = await db.from("modelos").select("id, nombre, portal_token").is("eliminada_at", null);
@@ -35,7 +35,7 @@ export async function crearPortalTrasFirma(contrato: { id: string; nombre: strin
         porcentaje_comision: contrato.porcentajeAgencia ?? 70,
         activa: true,
         fecha_alta: new Date().toISOString().split("T")[0],
-        ambito: "compartido",
+        ambito: contrato.ambito === "privado" ? "privado" : "compartido", // privado = una modelo del dueño, que el socio no ve
       };
       const objetivos = { objetivo_videos: 30, objetivo_scripts: 4, objetivo_packs: 5, objetivo_posts: 30 };
       let r = await db.from("modelos").insert({ ...base, ...objetivos }).select("id").single();

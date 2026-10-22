@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { enlaceContrato, enviarEmailContrato } from "@/lib/contratos";
 import { varianteDe } from "@/lib/contratoVariantesDb";
+import { puedeVerContratoId } from "@/lib/contratoAmbito";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
+  if (!(await puedeVerContratoId(id))) return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
   const { accion, modelo_id, nota } = (await req.json().catch(() => ({}))) as { accion?: string; modelo_id?: string | null; nota?: unknown };
   const db = createAdminClient();
   const { data: c } = await db.from("contratos_modelos").select("id, token, nombre, email, fecha_inicio, estado").eq("id", id).maybeSingle();
@@ -52,6 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
+  if (!(await puedeVerContratoId(id))) return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
   const db = createAdminClient();
   const { data: c } = await db.from("contratos_modelos").select("id, estado").eq("id", id).maybeSingle();
   if (!c) return NextResponse.json({ ok: true }); // ya no esta

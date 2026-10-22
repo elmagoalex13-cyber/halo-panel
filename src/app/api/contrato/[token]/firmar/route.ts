@@ -4,6 +4,7 @@ import { uploadToR2 } from "@/lib/r2";
 import { generarPdfContrato } from "@/lib/contratoPdf";
 import { varianteDe } from "@/lib/contratoVariantesDb";
 import { porcentajeAgenciaDe } from "@/lib/contratoVariantes";
+import { ambitoDe } from "@/lib/contratoAmbito";
 import { enviarCopiaFirmada } from "@/lib/contratos";
 import { encolarTelegram } from "@/lib/telegramCola";
 import { crearPortalTrasFirma } from "@/lib/contratoPortal";
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!marcado?.length) return NextResponse.json({ error: "Este contrato ya está firmado." }, { status: 409 });
 
   const variante = await varianteDe(token); // el reparto que lleva ESTE contrato (el mismo que vio al firmar)
+  const ambito = await ambitoDe(token); // para quien es: los dos o solo el dueño
   // PDF firmado: se guarda en R2 y se manda copia por email; si algo de esto falla, la firma ya esta registrada y se puede regenerar
   let pdf: Uint8Array | null = null;
   try {
@@ -54,13 +56,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   } catch (e) {
     console.error("[contratos] pdf firmado:", e instanceof Error ? e.message : e);
   }
-  if (pdf) await enviarCopiaFirmada({ nombre: c.nombre, email: c.email }, pdf).catch(() => undefined);
+  if (pdf) await enviarCopiaFirmada({ nombre: c.nombre, email: c.email }, pdf, { sinCopiaAgencia: ambito === "privado" }).catch(() => undefined); // privado: no va copia al buzon compartido
   // Ficha + portal de la modelo, al momento: usuario y contraseña se le enseñan en la pantalla de «contrato firmado»
-  const portal = await crearPortalTrasFirma({ id: c.id as string, nombre: c.nombre as string, porcentajeAgencia: porcentajeAgenciaDe(variante) }, nombreFirmante);
+  const portal = await crearPortalTrasFirma({ id: c.id as string, nombre: c.nombre as string, porcentajeAgencia: porcentajeAgenciaDe(variante), ambito }, nombreFirmante);
   const creado = portal && "slug" in portal ? portal : null;
   // Modelo nueva con portal: recibira los ultimos 40 videos asignados a las demas y los que se asignen a partir de ahora (lo hace el editor en un minuto)
   const espejo = creado ? await registrarEspejo(creado.modelo_id).catch(() => false) : false;
   await encolarTelegram("contrato_firmado", null, {
+    ambito, // privado: el aviso va solo al chat privado del dueño, no al grupo
     nombre: c.nombre,
     enviado_por: c.enviado_por ?? null,
     ...(portal ? { modelo_id: portal.modelo_id } : {}),

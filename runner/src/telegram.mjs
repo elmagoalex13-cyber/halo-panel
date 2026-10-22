@@ -110,7 +110,7 @@ async function colaInmediata(supabase) {
         ? `\n🔑 ${d.modelo_nueva ? "Se ha creado su ficha y su portal" : "Se ha creado su portal"} (usuario: <code>${esc(d.portal_usuario ?? d.portal_slug)}</code>). Ella ha visto la contraseña en pantalla; si la pierde, genérale otra desde su ficha.${d.videos_al_dia ? "\n🎬 Dentro de una hora se le asignarán en su portal los últimos 40 vídeos asignados a las demás (una sola vez)." : ""}${d.modelo_id ? enlace(`/modelos/${d.modelo_id}`) : ""}`
         : "";
       texto = `✍️ <b>${esc(d.nombre ?? "Una modelo nueva")}</b> ha firmado el contrato.${portalTxt}${enlace("/contratos")}`;
-      chat = config.telegramChat; // es de una modelo que aun no existe en el panel: va al grupo
+      chat = d.ambito === "privado" ? config.telegramChatPrivado || null : config.telegramChat; // modelo que aun no existe en el panel: al grupo; si el contrato es privado, solo al chat privado del dueño
     }
     else if (e.tipo === "prueba") {
       texto = "✅ Telegram conectado: los avisos del panel llegarán a este grupo.";

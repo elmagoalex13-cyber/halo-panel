@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { puedeVerContratoId } from "@/lib/contratoAmbito";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
+  if (!(await puedeVerContratoId(id))) return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
   const quien = req.nextUrl.searchParams.get("quien") === "modelo" ? "firma_creadora" : "firma_agencia";
   const { data } = await createAdminClient().from("contratos_modelos").select("firma_agencia, firma_creadora").eq("id", id).maybeSingle();
   const url = (data as Record<string, string | null> | null)?.[quien];

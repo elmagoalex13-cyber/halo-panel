@@ -6,6 +6,8 @@ import { CAMPOS_LISTA, emailValido, enlaceContrato, enviarEmailContrato, ligarCo
 import { CLAVE_FIRMA_AGENCIA } from "@/lib/contratoFirma";
 import { esVarianteContrato } from "@/lib/contratoVariantes";
 import { guardarVariante, variantesDe } from "@/lib/contratoVariantesDb";
+import { guardarAmbito, tokensPrivados } from "@/lib/contratoAmbito";
+import { alcanceActual, soloVisibles } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +29,20 @@ export async function GET(req: NextRequest) {
     const falta = /contratos|relation|schema cache/i.test(error.message);
     return NextResponse.json({ error: falta ? SIN_TABLA : error.message, sinTabla: falta, resend: emailConfigurado() }, { status: falta ? 409 : 500 });
   }
-  const { data: modelos } = await db.from("modelos").select("id, nombre").is("eliminada_at", null).order("nombre");
+  // Solo las modelos que esta persona puede ver (las privadas del dueño no salen al socio, ni siquiera en la lista para ligar un contrato)
+  const { data: modelos } = await soloVisibles(db.from("modelos").select("id, nombre").is("eliminada_at", null).order("nombre"), await alcanceActual(), "id");
   const origen = req.nextUrl.origin;
-  const variantes = await variantesDe(((data ?? []) as unknown as ContratoFila[]).map((c) => c.token));
+  const filas = (data ?? []) as unknown as ContratoFila[];
+  const variantes = await variantesDe(filas.map((c) => c.token));
+  // Contratos privados (solo del dueño): el socio no los ve ni sabe que existen
+  const sesion = await sesionPanelActual();
+  const dueno = Boolean(sesion?.dueno);
+  const privados = await tokensPrivados(filas.map((c) => c.token));
   return NextResponse.json({
     resend: emailConfigurado(),
+    dueno,
     modelos: modelos ?? [],
-    contratos: ((data ?? []) as unknown as ContratoFila[]).map((c) => ({ ...c, enlace: enlaceContrato(origen, c.token), variante: variantes[c.token] ?? "70-30" })),
+    contratos: filas.filter((c) => dueno || !privados.has(c.token)).map((c) => ({ ...c, enlace: enlaceContrato(origen, c.token), variante: variantes[c.token] ?? "70-30", ambito: privados.has(c.token) ? "privado" : "compartido" })),
   });
 }
 
@@ -41,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const sesion = await sesionPanelActual();
   if (!sesion) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  const body = (await req.json().catch(() => ({}))) as { nombre?: unknown; email?: unknown; fecha_inicio?: unknown; firma_agencia?: unknown; variante?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { nombre?: unknown; email?: unknown; fecha_inicio?: unknown; firma_agencia?: unknown; variante?: unknown; ambito?: unknown };
   const nombre = typeof body.nombre === "string" ? body.nombre.trim().replace(/\s+/g, " ").slice(0, 120) : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase().slice(0, 200) : "";
   const fecha = typeof body.fecha_inicio === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha_inicio) ? body.fecha_inicio : "";
@@ -72,6 +81,9 @@ export async function POST(req: NextRequest) {
   // Reparto de ESTE contrato (60-40 o el de siempre): lo leen el email, la pagina de firma y el PDF
   const variante = esVarianteContrato(body.variante) ? body.variante : "70-30";
   if (variante !== "70-30") await guardarVariante(token, variante);
+  // «Para quien es»: privado (solo yo) solo lo puede elegir el dueño; el socio siempre crea contratos para los dos
+  const ambito = sesion.dueno && body.ambito === "privado" ? "privado" : "compartido";
+  if (ambito === "privado") await guardarAmbito(token, "privado");
 
   const enlace = enlaceContrato(req.nextUrl.origin, token);
   // Con email y el envio configurado, sale por email; si no, queda el enlace para mandarlo por WhatsApp

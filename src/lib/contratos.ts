@@ -65,21 +65,27 @@ export async function enviarEmailContrato(c: { nombre: string; email: string; fe
 }
 
 /** Copia del contrato firmado (PDF adjunto) para la modelo y, si esta configurado, para la agencia (CCO). */
-export async function enviarCopiaFirmada(c: { nombre: string; email: string }, pdf: Uint8Array) {
+export async function enviarCopiaFirmada(c: { nombre: string; email: string }, pdf: Uint8Array, opts: { sinCopiaAgencia?: boolean } = {}) {
   const nombre = primerNombre(c.nombre);
   const adjunto: EmailAdjunto = { filename: "Contrato-Halo-Models.pdf", content: Buffer.from(pdf).toString("base64") };
   const html = `<!doctype html><html><body style="margin:0;background:#f4f2fa;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"><div style="max-width:560px;margin:0 auto;padding:24px 16px"><div style="background:#ffffff;border-radius:16px;padding:28px 24px;border:1px solid #e6e1f5">
 <h1 style="margin:0 0 12px;font-size:21px;color:#1b1530">¡Gracias${nombre ? `, ${esc(nombre)}` : ""}! Contrato firmado ✅</h1>
 <p style="margin:0 0 12px;color:#4a4560;font-size:15px;line-height:1.6">Hemos recibido tu firma. Te adjuntamos una copia del contrato firmado en PDF: guárdala por si la necesitas.</p>
 <p style="margin:0;color:#4a4560;font-size:15px;line-height:1.6">En breve nos pondremos en contacto contigo para los siguientes pasos. Si tienes cualquier duda, responde a este email.</p></div></div></body></html>`;
-  return enviarEmail({ to: c.email, subject: "Tu contrato firmado con Halo Models", html, text: "Gracias. Adjuntamos una copia del contrato firmado.", adjuntos: [adjunto], bcc: process.env.CONTRATOS_COPIA_EMAIL || undefined });
+  return enviarEmail({ to: c.email, subject: "Tu contrato firmado con Halo Models", html, text: "Gracias. Adjuntamos una copia del contrato firmado.", adjuntos: [adjunto], bcc: opts.sinCopiaAgencia ? undefined : process.env.CONTRATOS_COPIA_EMAIL || undefined });
 }
 
 /** Avisos del dashboard: contratos firmados esta semana y contratos enviados que llevan 3 dias o mas sin firmar (para recordarselo). */
 export async function avisosContratos(): Promise<Array<{ id: string; nivel: "verde" | "amarillo"; texto: string; href: string }>> {
   try {
     const { createAdminClient } = await import("@/lib/supabase/server");
-    const { data } = await createAdminClient().from("contratos_modelos").select("nombre, estado, created_at, firmado_at").in("estado", ["enviado", "visto", "firmado"]).order("created_at", { ascending: false }).limit(200);
+    const { data: bruto } = await createAdminClient().from("contratos_modelos").select("token, nombre, estado, created_at, firmado_at").in("estado", ["enviado", "visto", "firmado"]).order("created_at", { ascending: false }).limit(200);
+    // Los contratos privados (solo del dueño) no salen en los avisos del socio
+    const { sesionPanelActual } = await import("@/lib/panelUsuarios");
+    const { tokensPrivados } = await import("@/lib/contratoAmbito");
+    const dueno = Boolean((await sesionPanelActual())?.dueno);
+    const privados = dueno ? new Set<string>() : await tokensPrivados((bruto ?? []).map((c) => c.token as string));
+    const data = (bruto ?? []).filter((c) => !privados.has(c.token as string));
     const ahora = Date.now();
     const filas = (data ?? []) as Array<{ nombre: string; estado: EstadoContrato; created_at: string; firmado_at: string | null }>;
     const firmados = filas.filter((c) => c.estado === "firmado" && c.firmado_at && ahora - new Date(c.firmado_at).getTime() < 7 * 86400000);
