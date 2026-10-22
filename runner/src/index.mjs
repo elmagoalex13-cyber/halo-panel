@@ -90,6 +90,19 @@ async function avisarPanel() {
 }
 setInterval(avisarPanel, 10 * 60000);
 
+// Barrido de captacion: el panel mira que modelos ya cumplen todos los minimos y aun no tienen cuenta de Instagram, avisa por Telegram (y recuerda cada dia)
+async function barridoCaptacion() {
+  if (!config.panelUrl || !config.cronSecret) return;
+  try {
+    const res = await fetch(`${config.panelUrl}/api/mantenimiento/umbral`, { method: "POST", headers: { Authorization: `Bearer ${config.cronSecret}` } });
+    if (!res.ok) console.error(`[panel] barrido de captacion respondio ${res.status}`);
+  } catch (err) {
+    console.error("[panel] barrido de captacion:", err.message);
+  }
+}
+setTimeout(barridoCaptacion, 90000);
+setInterval(barridoCaptacion, 10 * 60000);
+
 // Facturacion de Venuz.ai: refresca cada VENUZ_HORAS y cuando el panel pulsa "Sync Venuz" (se mira cada 30 s)
 setTimeout(() => cicloVenuz(supabase), 15000);
 setInterval(() => cicloVenuz(supabase), 30000);

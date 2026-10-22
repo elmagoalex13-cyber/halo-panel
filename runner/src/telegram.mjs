@@ -58,7 +58,7 @@ async function colaInmediata(supabase) {
   const descartar = [];
   for (const e of cola) {
     // caducados y tipos que ya no generan aviso (subida suelta, lote aprobado): se limpian sin enviar
-    if (ahora - new Date(e.created_at).getTime() > CADUCA_MS || e.tipo === "subida" || e.tipo === "lote") descartar.push(e.id);
+    if (ahora - new Date(e.created_at).getTime() > (e.tipo === "umbral" ? 3 * 24 * 3600000 : CADUCA_MS) || e.tipo === "subida" || e.tipo === "lote") descartar.push(e.id);
     else vivos.push(e);
   }
   await marcar(descartar);
@@ -95,7 +95,9 @@ async function colaInmediata(supabase) {
     if (e.tipo === "umbral") {
       const d = e.datos ?? {};
       const mins = [d.reels && `${d.reels} reels`, d.scripts && `${d.scripts} scripts aprobados`, d.packs && `${d.packs} packs`, d.posts && `${d.posts} posts`].filter(Boolean).join(", ");
-      texto = `✅ <b>${nombre}</b> ya cumple todos los mínimos${mins ? ` (${mins})` : ""}.\n👉 Crea su cuenta de Instagram y revisa/aprueba sus reels.${enlace("/modelos")}`;
+      texto = d.recordatorio
+        ? `⏰ <b>Recordatorio:</b> <b>${nombre}</b> lleva ${d.dias ?? 1} día${(d.dias ?? 1) === 1 ? "" : "s"} con todos los mínimos cumplidos y todavía <b>no tiene su cuenta de Instagram</b>.\n👉 Créale la cuenta (en cuanto la añadas en su ficha, dejo de recordártelo).${e.modelo_id ? enlace(`/modelos/${e.modelo_id}`) : enlace("/modelos")}`
+        : `✅ <b>${nombre}</b> ya cumple todos los mínimos${mins ? ` (${mins})` : ""}.\n👉 Crea su cuenta de Instagram y revisa/aprueba sus reels. Te lo seguiré recordando cada día hasta que esté creada.${e.modelo_id ? enlace(`/modelos/${e.modelo_id}`) : enlace("/modelos")}`;
     }
     else if (e.tipo === "accesos") texto = `🔑 <b>${nombre}</b> ha ${e.datos?.actualizacion ? "actualizado" : "enviado"} ${e.datos?.parcial ? "su acceso de OnlyFans" : "sus accesos de OnlyFans y Skrill"} (está en el Vault${m?.ambito === "compartido" ? " compartido" : ""}).${enlace("/vault")}`;
     else if (e.tipo === "contrato_firmado") {

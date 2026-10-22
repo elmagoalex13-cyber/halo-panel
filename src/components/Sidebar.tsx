@@ -40,7 +40,7 @@ const NAV = [
     ],
   },
   { href: "/landings", label: "Landings", icon: "◇" },
-  { href: "/modelos", label: "Modelos", icon: "◉" },
+  { href: "/modelos", label: "Modelos", icon: "◉", modelosBadge: true },
   { href: "/frases", label: "Frases", icon: "✦" },
   { href: "/logs", label: "Actividad", icon: "◌", actBadge: true },
   { href: "/vault", label: "Vault", icon: "◆" },
@@ -102,7 +102,7 @@ function AvatarMini({ modelo }: { modelo: ModeloMenu }) {
 // Cada pagina monta su propia barra lateral, asi que al navegar se desmonta y se vuelve a montar:
 // sin esto la lista de modelos y los contadores se vaciaban unos instantes (parpadeo). El modulo
 // sobrevive a la navegacion en el navegador; en el servidor nunca se rellena (solo lo hacen efectos).
-const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number; actividad: number; historias: number } | null; denegadas: AreaId[] | null } = {
+const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number; actividad: number; historias: number; cuentas: number } | null; denegadas: AreaId[] | null } = {
   modelos: [],
   modelosAbierto: null,
   counts: null,
@@ -120,7 +120,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0, actividad: 0, historias: 0 });
+  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0 });
   // Secciones que este usuario no puede ver (un socio sin acceso a Leads, etc.): se quitan del menu
   const [denegadas, setDenegadas] = useState<AreaId[]>(cache.denegadas ?? []);
   useEffect(() => {
@@ -196,13 +196,14 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
       try {
         const res = await fetch("/api/panel/counts", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { approval?: number; leads?: number; onlyfans?: number; actividad?: number; historias?: number };
+        const data = (await res.json()) as { approval?: number; leads?: number; onlyfans?: number; actividad?: number; historias?: number; cuentas?: number };
         cache.counts = {
           approval: Number(data.approval ?? 0),
           leads: Number(data.leads ?? 0),
           onlyfans: Number(data.onlyfans ?? 0),
           actividad: Number(data.actividad ?? 0),
           historias: Number(data.historias ?? 0),
+          cuentas: Number(data.cuentas ?? 0),
         };
         if (!disposed) setCounts(cache.counts);
       } catch {
@@ -242,12 +243,13 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
     if (item.leadsBadge && counts.leads > 0) return counts.leads > 99 ? "99+" : String(counts.leads);
     if ("ofBadge" in item && item.ofBadge && counts.onlyfans > 0) return counts.onlyfans > 99 ? "99+" : String(counts.onlyfans);
     if ("histBadge" in item && item.histBadge && counts.historias > 0) return counts.historias > 99 ? "99+" : String(counts.historias);
+    if ("modelosBadge" in item && item.modelosBadge && counts.cuentas > 0) return counts.cuentas > 99 ? "99+" : String(counts.cuentas);
     if ("actBadge" in item && item.actBadge && counts.actividad > 0) return counts.actividad > 99 ? "99+" : String(counts.actividad);
     return null;
   }
 
   // Rojo para lo sensible de tu socio, turquesa para leads, violeta para el resto
-  const colorBadge = (item: (typeof NAV)[number]) => ("actBadge" in item && item.actBadge ? "bg-red-500" : "histBadge" in item && item.histBadge ? "bg-pink-500" : item.leadsBadge ? "bg-[#06B6D4]" : "bg-[#8B5CF6]");
+  const colorBadge = (item: (typeof NAV)[number]) => ("actBadge" in item && item.actBadge ? "bg-red-500" : "histBadge" in item && item.histBadge ? "bg-pink-500" : "modelosBadge" in item && item.modelosBadge ? "bg-[#06B6D4]" : item.leadsBadge ? "bg-[#06B6D4]" : "bg-[#8B5CF6]");
 
   const primaryItems = NAV_VISIBLE.filter((item) => MOBILE_PRIMARY.includes(item.href));
   const moreItems = NAV_VISIBLE.filter((item) => !MOBILE_PRIMARY.includes(item.href));

@@ -300,6 +300,26 @@ export default async function DashboardPage({
         <SelectorGrupo actual={grupo ?? "todas"} totales={{ todas: Object.keys(ambitos).length, mias: Object.keys(ambitos).length - nCompartidas, compartidas: nCompartidas }} periodo={periodoParam} creadoras={creadorasParam} />
       ) : null}
 
+      {(() => {
+        const listas = captacion.filter((c) => c.progreso.cumplido && !c.tieneCuenta);
+        if (!listas.length) return null;
+        return (
+          <section className="mb-4 rounded-2xl border border-cyan-400/40 bg-cyan-400/[0.08] p-4">
+            <p className="font-display text-lg font-semibold text-cyan-100">
+              🎯 {listas.length === 1 ? "1 modelo lista" : `${listas.length} modelos listas`} para crearles la cuenta de Instagram
+            </p>
+            <p className="mt-0.5 text-sm text-cyan-100/60">Ya han cumplido todos los mínimos (reels, scripts, packs y posts). Este aviso se quita solo cuando les crees la cuenta.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {listas.map((c) => (
+                <Link key={c.modelo_id} href={`/modelos/${c.modelo_id}`} className="rounded-xl border border-cyan-300/40 bg-cyan-300/15 px-3 py-2 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-300/25">
+                  {c.nombre} → crear su cuenta
+                </Link>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
+
       <AvisosDashboard avisos={notificaciones} />
 
       <AvisarModelos />
