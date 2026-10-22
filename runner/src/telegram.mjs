@@ -99,6 +99,7 @@ async function colaInmediata(supabase) {
         ? `⏰ <b>Recordatorio:</b> <b>${nombre}</b> lleva ${d.dias ?? 1} día${(d.dias ?? 1) === 1 ? "" : "s"} con todos los mínimos cumplidos y todavía <b>no tiene su cuenta de Instagram</b>.\n👉 Créale la cuenta (en cuanto la añadas en su ficha, dejo de recordártelo).${e.modelo_id ? enlace(`/modelos/${e.modelo_id}`) : enlace("/modelos")}`
         : `✅ <b>${nombre}</b> ya cumple todos los mínimos${mins ? ` (${mins})` : ""}.\n👉 Crea su cuenta de Instagram y revisa/aprueba sus reels. Te lo seguiré recordando cada día hasta que esté creada.${e.modelo_id ? enlace(`/modelos/${e.modelo_id}`) : enlace("/modelos")}`;
     }
+    else if (e.tipo === "onboarding") texto = `📝 <b>${nombre}</b> ha ${e.datos?.actualizacion ? "actualizado y vuelto a enviar" : "completado"} su onboarding.${e.modelo_id ? enlace(`/modelos/${e.modelo_id}#onboarding`) : enlace("/modelos")}`;
     else if (e.tipo === "accesos") texto = `🔑 <b>${nombre}</b> ha ${e.datos?.actualizacion ? "actualizado" : "enviado"} ${e.datos?.parcial ? "su acceso de OnlyFans" : "sus accesos de OnlyFans y Skrill"} (está en el Vault${m?.ambito === "compartido" ? " compartido" : ""}).${enlace("/vault")}`;
     else if (e.tipo === "contrato_firmado") {
       const d = e.datos ?? {};

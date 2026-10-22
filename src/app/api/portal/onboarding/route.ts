@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { sanearDatos, validarOnboarding, type DatosOnboarding } from "@/lib/onboarding";
+import { encolarTelegram } from "@/lib/telegramCola";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,9 @@ export async function PUT(req: NextRequest) {
     ? await supabase.from("modelo_onboarding").update(fila).eq("modelo_id", sesion.modeloId)
     : await supabase.from("modelo_onboarding").insert(fila);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Onboarding enviado: aviso al momento (la primera vez; si lo reenvia, solo si ha cambiado algo)
+  if (enviar && (actual?.estado !== "enviado" || cambio)) await encolarTelegram("onboarding", sesion.modeloId, { actualizacion: actual?.estado === "enviado" });
 
   return NextResponse.json({ ok: true, estado, guardado_at: ahora });
 }

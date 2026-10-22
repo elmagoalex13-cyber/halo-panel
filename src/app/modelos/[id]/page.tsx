@@ -26,6 +26,7 @@ import { FotosPerfilModelo } from "./FotosPerfilModelo";
 import { vistasFotosPerfil } from "@/lib/fotosPerfil";
 import { estadoEspejo } from "@/lib/espejoVideos";
 import { leerNotas, ordenarNotas } from "@/lib/notasModelo";
+import { marcarOnboardingVisto } from "@/lib/onboardingAvisos";
 
 export const revalidate = 0;
 
@@ -186,6 +187,8 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
 
   const pctOnboarding = progresoOnboarding(onboardingDatos);
   const onboardingEnviado = onboarding?.estado === "enviado";
+  // Abrir la ficha = ver su onboarding: el aviso del dashboard / menu se quita (si lo vuelve a enviar, vuelve a salir)
+  if (onboardingEnviado && onboarding?.enviado_at) await marcarOnboardingVisto(modelo.id, onboarding.enviado_at).catch(() => undefined);
 
   const kpis: Array<[string, string, string?]> = [
     ["Ingresos mes", facturacionMes ? formatCurrency(Number(facturacionMes.ingresos_brutos)) : "—"],

@@ -19,6 +19,7 @@ import { avisosActividad } from "@/lib/actividad";
 import { ahoraMadrid, estadoSemanal } from "@/lib/rondaVirales";
 import { avisosSistema, leerSistema } from "@/lib/sistema";
 import { avisosCaptacion, resumenCaptacion } from "@/lib/captacion";
+import { leerOnboardingVistos } from "@/lib/onboardingAvisos";
 import { modelosConAccesosInvalidos, modelosSinAccesos, modelosSinPin } from "@/lib/accesosModelo";
 import { loadCuentasIG, loadCuentasInstagramReales } from "@/lib/cuentasIG";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
@@ -198,9 +199,11 @@ export default async function DashboardPage({
     return !ult || new Date(ult).getTime() < d7ago;
   });
   const onboardingPorModelo = new Map(onboarding.map((o) => [o.modelo_id, o]));
-  const onboardingNuevos = modelos.filter((m) => {
+  // Onboardings enviados que nadie ha abierto todavia (el aviso se quita al abrir la ficha de la modelo)
+  const onboardingVistos = await leerOnboardingVistos();
+  const onboardingSinRevisar = modelos.filter((m) => {
     const o = onboardingPorModelo.get(m.id);
-    return o?.estado === "enviado" && o.enviado_at && new Date(o.enviado_at).getTime() >= d7ago;
+    return m.activa && o?.estado === "enviado" && o.enviado_at && (!onboardingVistos[m.id] || new Date(onboardingVistos[m.id]).getTime() < new Date(o.enviado_at).getTime());
   });
   const onboardingPendientes = modelos.filter((m) => m.activa && onboardingPorModelo.get(m.id)?.estado !== "enviado");
   type NotifNivel = "rojo" | "amarillo" | "verde";
@@ -261,9 +264,6 @@ export default async function DashboardPage({
     ...(runnerError > 0
       ? [{ id: "runner-error", nivel: "rojo" as NotifNivel, texto: `${runnerError} vídeo${runnerError > 1 ? "s" : ""} con error en el runner de edición`, href: "/aprobacion" }]
       : []),
-    ...(onboardingNuevos.length > 0
-      ? [{ id: `onb-recibido|${onboardingNuevos.map((m) => m.nombre).sort().join(",")}`, nivel: "verde" as NotifNivel, texto: `Onboarding recibido: ${onboardingNuevos.map((m) => m.nombre).join(", ")}`, href: `/modelos/${onboardingNuevos[0].id}#onboarding` }]
-      : []),
     ...(onboardingPendientes.length > 0
       ? [{ id: `onb-pendiente|${onboardingPendientes.map((m) => m.nombre).sort().join(",")}`, nivel: "amarillo" as NotifNivel, texto: `Onboarding sin enviar: ${onboardingPendientes.map((m) => m.nombre).join(", ")}` }]
       : []),
@@ -319,6 +319,22 @@ export default async function DashboardPage({
           </section>
         );
       })()}
+
+      {onboardingSinRevisar.length ? (
+        <section className="mb-4 rounded-2xl border border-emerald-400/40 bg-emerald-400/[0.07] p-4">
+          <p className="font-display text-lg font-semibold text-emerald-100">
+            📝 {onboardingSinRevisar.length === 1 ? "1 onboarding recibido" : `${onboardingSinRevisar.length} onboardings recibidos`}
+          </p>
+          <p className="mt-0.5 text-sm text-emerald-100/60">Han completado el formulario. Este aviso se quita cuando abres su onboarding.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {onboardingSinRevisar.map((m) => (
+              <Link key={m.id} href={`/modelos/${m.id}#onboarding`} className="rounded-xl border border-emerald-300/40 bg-emerald-300/15 px-3 py-2 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-300/25">
+                {m.nombre} → ver su onboarding
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <AvisosDashboard avisos={notificaciones} />
 

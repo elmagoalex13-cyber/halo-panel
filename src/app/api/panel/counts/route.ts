@@ -5,6 +5,7 @@ import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { alcanceActual, soloVisibles } from "@/lib/alcance";
 import { resumenHistorias } from "@/lib/historiasIG";
 import { leerListasParaCuenta } from "@/lib/captacion";
+import { onboardingsSinRevisar } from "@/lib/onboardingAvisos";
 import { veModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +43,8 @@ export async function GET() {
       onlyfans: of.count,
       actividad: actividad.count ?? 0,
       historias: historiasNuevas,
-      // Modelos que ya cumplen todos los minimos y aun no tienen cuenta de Instagram (las que esta persona puede ver)
-      cuentas: (await leerListasParaCuenta()).filter((id) => veModelo(alcance, id)).length,
+      // Pendientes en «Modelos»: las que ya cumplen todos los minimos y aun no tienen cuenta de Instagram + los onboardings recibidos sin abrir
+      cuentas: (await leerListasParaCuenta()).filter((id) => veModelo(alcance, id)).length + (await onboardingsSinRevisar(alcance)).length,
     });
   } catch {
     return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0 });
