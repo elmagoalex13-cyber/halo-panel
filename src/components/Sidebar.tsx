@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { areaDePath, type AreaId } from "@/lib/areas";
 
@@ -105,6 +105,10 @@ function AvatarMini({ modelo }: { modelo: ModeloMenu }) {
 type PendienteModelo = { id: string; nombre: string; motivo: "cuenta" | "onboarding" };
 const TEXTO_MOTIVO = { cuenta: "🎯 lista para crearle la cuenta de Instagram", onboarding: "📝 onboarding recibido sin abrir" } as const;
 
+// Posicion del scroll del menu lateral: al abrir el perfil de una modelo se cambia de pagina y el menu se vuelve a montar; sin esto volvia siempre arriba.
+const scrollMenu = { aside: 0, nav: 0 };
+const useLayoutEfectoSeguro = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number; actividad: number; historias: number; cuentas: number; detalle: PendienteModelo[] } | null; denegadas: AreaId[] | null } = {
   modelos: [],
   modelosAbierto: null,
@@ -144,8 +148,20 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
     const area = areaDePath(item.href);
     return !area || !denegadas.includes(area);
   });
+  const asideRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLElement>(null);
   const [modelos, setModelos] = useState<ModeloMenu[]>(cache.modelos);
   const [modelosAbierto, setModelosAbierto] = useState(cache.modelosAbierto ?? true);
+  // Vuelve a dejar el menu donde estaba (al montarse y cuando llega la lista de modelos, que cambia su altura)
+  useLayoutEfectoSeguro(() => {
+    const poner = () => {
+      if (asideRef.current && asideRef.current.scrollTop !== scrollMenu.aside) asideRef.current.scrollTop = scrollMenu.aside;
+      if (navRef.current && navRef.current.scrollTop !== scrollMenu.nav) navRef.current.scrollTop = scrollMenu.nav;
+    };
+    poner();
+    const t = setTimeout(poner, 60); // por si el contenido aun no tenia su altura final
+    return () => clearTimeout(t);
+  }, [modelos.length]);
   // Desplegables de OnlyFans e Instagram: se abren solos al entrar en una de sus paginas; ademas se pueden abrir y cerrar con la flecha
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
 
@@ -262,6 +278,8 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
     <>
       {/* Escritorio: panel de cristal fijo */}
       <aside
+        ref={asideRef}
+        onScroll={(e) => (scrollMenu.aside = e.currentTarget.scrollTop)}
         className="sidebar fixed left-0 top-0 z-30 hidden h-screen w-[224px] shrink-0 flex-col overflow-y-auto md:flex"
       >
         <div className="border-b border-white/[0.08] p-5">
@@ -275,7 +293,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
             </div>
           </div>
         </div>
-        <nav className="flex-1 overflow-y-auto py-4">
+        <nav ref={navRef} onScroll={(e) => (scrollMenu.nav = e.currentTarget.scrollTop)} className="flex-1 overflow-y-auto py-4">
           <div className="flex flex-col gap-1 px-3">
             {NAV_VISIBLE.map((item) => {
               const { href, label, icon } = item;
