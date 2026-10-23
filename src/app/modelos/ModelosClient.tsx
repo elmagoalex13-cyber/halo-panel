@@ -178,10 +178,23 @@ export function ModelosClient({
   }
 
   async function eliminarModelo(modelo: Modelo) {
-    // Sin ventana de confirmacion: va a la papelera y se puede restaurar
+    // Eliminar BORRA para siempre sus credenciales y todos sus archivos (para liberar espacio); la ficha queda en la papelera
+    if (!window.confirm(`¿Eliminar a ${modelo.nombre}?
+
+Se borrarán PARA SIEMPRE sus credenciales (OnlyFans, Skrill, portal) y todos sus archivos: vídeos originales y editados, contenido de OnlyFans, virales y trial reels. No se puede deshacer.
+
+Su ficha (datos, notas, facturación) se queda en la papelera.`)) return;
     const res = await fetch(`/api/modelos/${modelo.id}`, { method: "DELETE" });
-    if (res.ok) setModelos((prev) => prev.filter((m) => m.id !== modelo.id));
-    else window.alert(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo eliminar");
+    const j = (await res.json().catch(() => ({}))) as { error?: string; archivos?: number; credenciales?: number; fallos?: number };
+    if (res.ok) {
+      setModelos((prev) => prev.filter((m) => m.id !== modelo.id));
+      window.alert(
+        `${modelo.nombre} eliminada. Se han borrado ${j.archivos ?? 0} archivo${j.archivos === 1 ? "" : "s"} y ${j.credenciales ?? 0} credencial${j.credenciales === 1 ? "" : "es"}.` +
+          (j.fallos ? `
+
+⚠️ ${j.fallos} elemento(s) no se pudieron borrar: usa «Borrar para siempre» desde la papelera para terminar de limpiarlo.` : ""),
+      );
+    } else window.alert(j.error ?? "No se pudo eliminar");
   }
 
   async function borrarParaSiempre() {
@@ -606,7 +619,7 @@ export function ModelosClient({
       {esDueno && papelera.length ? (
         <details className="mt-8 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
           <summary className="cursor-pointer text-sm font-semibold text-white/80">
-            Papelera ({papelera.length}) <span className="font-normal text-white/40">· modelos eliminadas, con todo su contenido guardado</span>
+            Papelera ({papelera.length}) <span className="font-normal text-white/40">· modelos eliminadas (su ficha); sus archivos y credenciales ya están borrados</span>
           </summary>
           <ul className="mt-4 divide-y divide-white/[0.06]">
             {papelera.map((m) => (

@@ -82,9 +82,19 @@ export async function inventarioDeModelo(modeloId: string): Promise<Inventario> 
     [bucketR2(), `procesadas/${modeloId}/`],
     [bucketOF(), `onlyfans/${modeloId}/`],
     [bucketOF(), `historias/${modeloId}/`], // fotos de historias de Instagram
+    [bucketOF(), `onlyfans-perfil/${modeloId}/`], // foto de perfil y banner que subio ella
   ];
   const listas = await Promise.all(barridos.map(([b, p]) => listarClavesR2(p, 200000, b).then((ks) => [b, ks] as const).catch(() => [b, [] as string[]] as const)));
   for (const [b, ks] of listas) for (const k of ks) anadir(inv.r2, b, k);
+
+  // Versiones de trial reels generadas de sus virales (los pedidos de esta modelo en panel_config)
+  try {
+    const { data: ped } = await db.from("panel_config").select("value").eq("key", "trial_reels_pedidos").maybeSingle();
+    const pedidos = ((ped?.value as { pedidos?: Array<{ modelo_id?: string | null; variantes?: Array<{ key?: string }> }> } | null)?.pedidos ?? []).filter((p) => p.modelo_id === modeloId);
+    for (const p of pedidos) for (const v of p.variantes ?? []) if (v.key?.startsWith("trial-reels/")) anadir(inv.r2, bucketR2(), v.key);
+  } catch {
+    /* sin pedidos de trial reels */
+  }
 
   anadir(inv.supabase, "fotos-modelos", modeloId); // la foto de perfil se llama como la modelo (si no existe, borrarla no hace nada)
   const subidas = await listarStorage("portal-uploads", modeloId).catch(() => []);
@@ -124,4 +134,52 @@ export async function borrarInventario(inv: Inventario): Promise<{ total: number
     }
   }
   return { total: contarArchivos(inv), fallos };
+}
+
+/**
+ * VACIAR a una modelo al eliminarla: borra para siempre sus CREDENCIALES (OnlyFans, Skrill, acceso al portal y cualquier entrada del Vault suya, con sus checks y sus
+ * copias de la papelera) y TODOS sus archivos del almacen (originales, editados, vistas previas, OnlyFans, virales, trial reels, fotos...), para que no ocupen espacio.
+ * La ficha (nombre, notas, cifras, facturacion) se queda en la papelera por si hay que restaurarla; lo borrado no vuelve.
+ * Contratos firmados: se conservan (son la prueba legal).
+ */
+export async function vaciarModelo(modeloId: string): Promise<{ archivos: number; credenciales: number; fallos: string[] }> {
+  if (!UUID.test(modeloId)) throw new Error("Id de modelo no valido");
+  const db = createAdminClient();
+  const fallos: string[] = [];
+
+  // 1) Credenciales: todas las entradas del Vault ligadas a la modelo (incluidas las ya en la papelera del Vault) + su acceso al portal
+  const { data: a } = await db.from("vault_panel").select("id").eq("modelo_id", modeloId);
+  const { data: b } = await db.from("vault_panel").select("id").eq("nombre", `portal:${modeloId}`);
+  const ids = [...new Set([...(a ?? []), ...(b ?? [])].map((x) => x.id as string))];
+  if (ids.length) {
+    await db.from("panel_config").delete().in("key", ids.map((i) => `vault_checks:${i}`));
+    const { error } = await db.from("vault_panel").delete().in("id", ids);
+    if (error) fallos.push(`credenciales: ${error.message}`);
+    await db.from("papelera_filas").delete().eq("tabla", "vault_panel").or(ids.map((i) => `fila->>id.eq.${i}`).join(",")).then(() => undefined, () => undefined);
+  }
+
+  // 2) Archivos del almacen
+  let archivos = 0;
+  try {
+    const r = await borrarInventario(await inventarioDeModelo(modeloId));
+    archivos = r.total;
+    fallos.push(...r.fallos);
+  } catch (e) {
+    fallos.push(`archivos: ${e instanceof Error ? e.message : "error"}`);
+  }
+
+  // 3) Datos sueltos de la modelo en panel_config (notas, fotos de perfil, notas de OnlyFans, pedidos de trial reels)
+  await db.from("panel_config").delete().in("key", [`notas_modelo:${modeloId}`, `fotos_perfil:${modeloId}`, `notas_of:${modeloId}`]).then(() => undefined, () => undefined);
+  try {
+    for (let i = 0; i < 5; i++) {
+      const { data } = await db.from("panel_config").select("value, updated_at").eq("key", "trial_reels_pedidos").maybeSingle();
+      const lista = ((data?.value as { pedidos?: Array<{ modelo_id?: string | null }> } | null)?.pedidos ?? []);
+      if (!data || !lista.some((p) => p.modelo_id === modeloId)) break;
+      const { data: ok } = await db.from("panel_config").update({ value: { pedidos: lista.filter((p) => p.modelo_id !== modeloId) }, updated_at: new Date().toISOString() }).eq("key", "trial_reels_pedidos").eq("updated_at", data.updated_at).select("key");
+      if (ok?.length) break;
+    }
+  } catch {
+    /* no es critico */
+  }
+  return { archivos, credenciales: ids.length, fallos };
 }

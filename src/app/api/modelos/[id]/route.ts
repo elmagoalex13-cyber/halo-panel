@@ -3,6 +3,9 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, modeloProhibido, veModelo } from "@/lib/alcance";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { errorDb } from "@/lib/erroresDb";
+import { vaciarModelo } from "@/lib/borradoModelo";
+
+export const maxDuration = 60; // vaciar a una modelo (borrar sus archivos) puede tardar
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -63,7 +66,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       if (/eliminada/i.test(error.message)) return NextResponse.json({ error: "Falta ejecutar el SQL 20261016_papelera.sql en Supabase." }, { status: 409 });
       throw error;
     }
-    return NextResponse.json({ ok: true });
+    // Al eliminar: se borran para siempre sus credenciales y todos sus archivos (originales, copias, OnlyFans, virales, trial reels...) para que no ocupen espacio.
+    // La ficha queda en la papelera; si falla algo del almacen, la modelo ya esta eliminada y se avisa (se puede reintentar con «Borrar para siempre»).
+    const vaciado = await vaciarModelo(id).catch((e) => ({ archivos: 0, credenciales: 0, fallos: [e instanceof Error ? e.message : "error"] }));
+    return NextResponse.json({ ok: true, archivos: vaciado.archivos, credenciales: vaciado.credenciales, fallos: vaciado.fallos.length });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Error interno" }, { status: 500 });
   }
