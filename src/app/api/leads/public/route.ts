@@ -76,6 +76,18 @@ function asAdjuntos(value: unknown) {
     .slice(0, 80);
 }
 
+/** La web de la que viene el lead (halomodels.com.ar, halomodelsagency.com…): el «origen» que manda la web y, si no manda uno util, el dominio de la pagina. */
+function webDe(req: NextRequest, body: LeadPayload) {
+  const bruto = asString(body.origen, 120)?.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "") ?? null;
+  if (bruto && bruto !== "web") return bruto;
+  const url = asString(body.page_url, 1000) ?? req.headers.get("origin") ?? req.headers.get("referer");
+  try {
+    return new URL(url ?? "").host.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return bruto ?? "web";
+  }
+}
+
 function isAuthorized(req: NextRequest) {
   const expected = process.env.LEADS_INGEST_KEY ?? process.env.HALO_LEADS_INGEST_KEY;
   if (!expected) return true;
@@ -128,7 +140,7 @@ export async function POST(req: NextRequest) {
         necesidades: asStringArray(body.necesidades),
         otro_mensaje: asString(body.otro_mensaje, 2000),
         acepta_privacidad: body.acepta_privacidad === true,
-        origen: asString(body.origen, 120) ?? "web",
+        origen: webDe(req, body),
         landing_slug: asString(body.landing_slug, 160),
         page_url: getPageUrl(req, body),
         referrer: asString(body.referrer, 1000) ?? req.headers.get("referer"),

@@ -92,27 +92,41 @@ function iconTone(tone: "violet" | "cyan" | "emerald" | "amber" | "red") {
   }[tone];
 }
 
+/** Nombre de la web de un lead (su «origen»): sin www y en minusculas. */
+const webDeLead = (l: { origen?: string | null }) => (l.origen ?? "").toLowerCase().replace(/^www\./, "").trim() || "sin origen";
+const COLORES_WEB = ["border-[#8B5CF6]/50 bg-[#8B5CF6]/15 text-[#DDD6FE]", "border-cyan-400/50 bg-cyan-400/15 text-cyan-100", "border-amber-300/50 bg-amber-300/15 text-amber-100", "border-emerald-400/50 bg-emerald-400/15 text-emerald-100"];
+
 export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLeads: Lead[]; plantillasIniciales: PlantillasLeads }) {
   const [leads, setLeads] = useState(initialLeads);
   const [plantillas, setPlantillas] = useState(plantillasIniciales);
   const [active, setActive] = useState<LeadEstado>("nuevo");
+  const [web, setWeb] = useState("todas"); // filtro por la web de la que vino el lead
   const [savingId, setSavingId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ title: string; items: LeadAdjunto[]; index: number } | null>(null);
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialLeads.map((lead) => [lead.id, lead.notas ?? ""])),
   );
 
+  // Webs de las que han llegado leads (con cuantos), ordenadas de mas a menos
+  const webs = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of leads) if (l.estado !== "eliminado") m.set(webDeLead(l), (m.get(webDeLead(l)) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [leads]);
+  const colorWeb = (w: string) => COLORES_WEB[Math.max(0, webs.findIndex(([n]) => n === w)) % COLORES_WEB.length];
+  const leadsWeb = useMemo(() => (web === "todas" ? leads : leads.filter((l) => webDeLead(l) === web)), [leads, web]);
+
   const counts = useMemo(() => {
-    return leads.reduce<Record<LeadEstado, number>>(
+    return leadsWeb.reduce<Record<LeadEstado, number>>(
       (acc, lead) => {
         acc[lead.estado] += 1;
         return acc;
       },
       { nuevo: 0, contactado: 0, captado: 0, futuro: 0, descartado: 0, eliminado: 0 },
     );
-  }, [leads]);
+  }, [leadsWeb]);
 
-  const visible = leads.filter((lead) => lead.estado === active);
+  const visible = leadsWeb.filter((lead) => lead.estado === active);
   const currentAdjunto = viewer?.items[viewer.index] ?? null;
 
   async function updateLead(id: string, body: Record<string, unknown>) {
@@ -179,12 +193,26 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
         </div>
       </div>
 
+      {webs.length > 1 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-white/35">Web</span>
+          <button onClick={() => setWeb("todas")} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${web === "todas" ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"}`}>
+            Todas ({webs.reduce((n, [, c]) => n + c, 0)})
+          </button>
+          {webs.map(([w, c]) => (
+            <button key={w} onClick={() => setWeb(web === w ? "todas" : w)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${web === w ? colorWeb(w) : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"}`}>
+              🌐 {w} ({c})
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <PlantillasMensajes plantillas={plantillas} onGuardado={setPlantillas} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         {TABS.map((tab) => {
           const Icon = tab.icon;
-          const total = Math.max(1, leads.filter((lead) => lead.estado !== "eliminado").length);
+          const total = Math.max(1, leadsWeb.filter((lead) => lead.estado !== "eliminado").length);
           const pct = Math.round((counts[tab.estado] / total) * 100);
           return (
           <div key={tab.estado} className={`rounded-2xl border p-4 ${tabTone(tab.tone, active === tab.estado)}`}>
@@ -221,8 +249,9 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
                         <h2 className="font-display text-xl font-semibold text-white">{lead.nombre ?? "Lead sin datos"}</h2>
                         <span className={`badge ${statusClass(lead.estado)}`}>{ESTADO_LABEL[lead.estado]}</span>
                         <span className="badge">{lead.pais ?? "-"}</span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${colorWeb(webDeLead(lead))}`} title="Web de la que llegó este lead">🌐 {webDeLead(lead)}</span>
                       </div>
-                      <p className="mt-1 text-xs text-white/35">Entró el {formatDate(lead.created_at)} · {lead.origen}</p>
+                      <p className="mt-1 text-xs text-white/35">Entró el {formatDate(lead.created_at)}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {wa ? (
