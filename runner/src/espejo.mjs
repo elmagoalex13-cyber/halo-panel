@@ -77,8 +77,11 @@ export async function asignarUltimos(sb, modeloId) {
   const { data: propios } = await sb.from("encargos").select("referencia_id").eq("modelo_id", modeloId).not("referencia_id", "is", null).limit(5000);
   const tiene = new Set((propios ?? []).map((e) => e.referencia_id));
 
-  const { data: mods } = await sb.from("modelos").select("id, nombre");
+  const { data: mods } = await sb.from("modelos").select("id, nombre, ambito");
   const excluidas = new Set([modeloId, ...(mods ?? []).filter((m) => /test|prueba/i.test(m.nombre ?? "")).map((m) => m.id)]);
+  // Privacidad: a una modelo COMPARTIDA no se le copian los videos que se asignaron a modelos PRIVADAS del dueño (el socio los veria en su portal)
+  const destino = (mods ?? []).find((m) => m.id === modeloId);
+  if (destino?.ambito !== "privado") for (const m of mods ?? []) if (m.ambito === "privado") excluidas.add(m.id);
   const soloBanco = await codigosSoloBanco(sb);
 
   // Los encargos mas nuevos de modelos reales (del mas nuevo al mas viejo), un video distinto cada vez
