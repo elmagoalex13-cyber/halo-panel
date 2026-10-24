@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { PiezaEnEspera } from "@/lib/captacionPiezas";
@@ -14,11 +14,13 @@ function Tarjeta({
   modeloId,
   elegida,
   onElegir,
+  onAmpliar,
 }: {
   p: PiezaEnEspera;
   modeloId: string;
   elegida: boolean;
   onElegir: () => void;
+  onAmpliar: () => void;
 }) {
   const [tipo, setTipo] = useState<"bien" | "mejorar" | null>(p.feedback_tipo);
   const [texto, setTexto] = useState(p.feedback_texto ?? "");
@@ -50,7 +52,12 @@ function Tarjeta({
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative mx-auto aspect-[9/16] w-40 shrink-0 overflow-hidden rounded-xl bg-black/40 sm:mx-0">
           {p.preview ? (
-            <video src={p.preview.video} poster={p.preview.poster} controls preload="none" playsInline className="h-full w-full object-contain" />
+            <>
+              <video src={p.preview.video} poster={p.preview.poster} controls preload="none" playsInline className="h-full w-full object-contain" />
+              <button type="button" onClick={onAmpliar} title="Ver en grande" aria-label="Ver en grande" className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-sm text-white backdrop-blur transition hover:bg-black/85">
+                ⤢
+              </button>
+            </>
           ) : (
             <div className="grid h-full place-items-center p-3 text-center text-xs text-white/40">Preparando la vista previa… (unos minutos)</div>
           )}
@@ -138,6 +145,7 @@ export function CaptacionRevision({
 }) {
   const router = useRouter();
   const [elegidas, setElegidas] = useState<Set<string>>(new Set());
+  const [grande, setGrande] = useState<number | null>(null); // reel abierto a pantalla grande (indice entre los que tienen vista previa)
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pct = Math.min(100, Math.round((subidos / objetivo) * 100));
@@ -262,11 +270,52 @@ export function CaptacionRevision({
           {error ? <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p> : null}
           <ul className="space-y-3">
             {piezas.map((p) => (
-              <Tarjeta key={p.id} p={p} modeloId={modeloId} elegida={elegidas.has(p.id)} onElegir={() => alternar(p.id)} />
+              <Tarjeta key={p.id} p={p} modeloId={modeloId} elegida={elegidas.has(p.id)} onElegir={() => alternar(p.id)} onAmpliar={() => setGrande(piezas.filter((x) => x.preview).findIndex((x) => x.id === p.id))} />
             ))}
           </ul>
+          {grande !== null ? <VisorReels piezas={piezas.filter((x) => x.preview)} indice={grande} onCambiar={setGrande} onCerrar={() => setGrande(null)} /> : null}
         </>
       )}
+    </div>
+  );
+}
+
+
+/** Los reels en espera a pantalla grande, dentro de la app: flechas (o ← →) para pasar de uno a otro, Esc o clic fuera para cerrar. */
+function VisorReels({ piezas, indice, onCambiar, onCerrar }: { piezas: PiezaEnEspera[]; indice: number; onCambiar: (i: number) => void; onCerrar: () => void }) {
+  const p = piezas[indice];
+  useEffect(() => {
+    const t = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCerrar();
+      if (e.key === "ArrowLeft" && piezas.length > 1) onCambiar((indice - 1 + piezas.length) % piezas.length);
+      if (e.key === "ArrowRight" && piezas.length > 1) onCambiar((indice + 1) % piezas.length);
+    };
+    window.addEventListener("keydown", t);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", t);
+      document.body.style.overflow = overflow;
+    };
+  }, [indice, piezas.length, onCambiar, onCerrar]);
+  if (!p?.preview) return null;
+  const flecha = "grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-xl text-white transition hover:bg-white/25";
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-black/90 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={onCerrar}>
+      <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-white/70" onClick={(e) => e.stopPropagation()}>
+        <span className="min-w-0 truncate">
+          {indice + 1} / {piezas.length} · {p.archivo ?? p.titulo ?? "Reel"}
+        </span>
+        <div className="flex items-center gap-2">
+          <a href={`/api/descargar?id=${p.id}&tipo=original`} className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/25">Descargar original</a>
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white hover:bg-white/25">✕</button>
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center gap-3 px-3 pb-4">
+        {piezas.length > 1 ? <button type="button" onClick={(e) => { e.stopPropagation(); onCambiar((indice - 1 + piezas.length) % piezas.length); }} className={flecha} aria-label="Anterior">‹</button> : null}
+        <video key={p.id} src={p.preview.video} poster={p.preview.poster} controls autoPlay playsInline onClick={(e) => e.stopPropagation()} className="max-h-full min-h-0 max-w-full rounded-xl bg-black object-contain" style={{ height: "100%", aspectRatio: "9 / 16" }} />
+        {piezas.length > 1 ? <button type="button" onClick={(e) => { e.stopPropagation(); onCambiar((indice + 1) % piezas.length); }} className={flecha} aria-label="Siguiente">›</button> : null}
+      </div>
     </div>
   );
 }

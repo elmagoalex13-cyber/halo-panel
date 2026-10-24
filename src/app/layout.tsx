@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Outfit } from "next/font/google";
 import "./globals.css";
+import { SoloUnVideo } from "@/components/SoloUnVideo";
 
 const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"] });
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
@@ -24,7 +25,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`${outfit.variable} ${inter.variable} ${jetbrains.variable}`}>
-      <body>{children}</body>
+      <body>
+        <SoloUnVideo />
+        {children}
+      </body>
     </html>
   );
 }
