@@ -1,7 +1,7 @@
 /**
  * Vistas previas de los ORIGINALES que suben las modelos (pagina "Originales" del panel).
  * Los .MOV de iPhone suelen venir en HEVC y muchos navegadores no los reproducen, asi que para cada
- * original se genera una miniatura (jpg) y una copia ligera en H.264 (360x640 aprox.) que si se ve en
+ * original se genera una miniatura (jpg) y una copia en H.264 de buena calidad (720x1280, para poder verla en grande sin que se vea borrosa) que si se ve en
  * cualquier navegador. El original NO se toca: es solo para echarle un vistazo.
  *   previews/<hash>.jpg   miniatura
  *   previews/<hash>.mp4   copia ligera para reproducir (se sube la ultima: su existencia = "listo")
@@ -50,16 +50,16 @@ async function generar(supabase, clave) {
     await descargarOriginal(supabase, clave, entrada);
     // Miniatura (fotograma al segundo 1; si el video es mas corto, el primero)
     try {
-      await ffmpeg(["-ss", "1", "-i", entrada, "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", poster]);
+      await ffmpeg(["-ss", "1", "-i", entrada, "-frames:v", "1", "-vf", "scale=720:-2", "-q:v", "3", poster]);
     } catch {
-      await ffmpeg(["-i", entrada, "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", poster]);
+      await ffmpeg(["-i", entrada, "-frames:v", "1", "-vf", "scale=720:-2", "-q:v", "3", poster]);
     }
-    // Copia ligera para reproducir (alto 640, hasta 2 min)
+    // Copia para reproducir: alto 1280 (sin ampliar los que son mas pequeños), calidad buena (antes 640 y crf 30: se veia borrosa al ampliarla), hasta 2 min
     await ffmpeg([
       "-i", entrada, "-t", "120",
-      "-vf", "scale=-2:640:flags=bicubic,format=yuv420p",
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-threads", "2",
-      "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart",
+      "-vf", "scale=-2:'min(1280,ih)':flags=lanczos,format=yuv420p",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-threads", "2",
+      "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart",
       video,
     ]);
     await uploadToR2(poster, `previews/${h}.jpg`, "image/jpeg");
