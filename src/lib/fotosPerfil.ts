@@ -1,6 +1,6 @@
-// Foto de perfil y foto de banner de cada modelo (las sube ella desde su portal, tal cual, sin recomprimir). Van a R2 y aqui solo se guarda cual es la
-// actual de cada una (panel_config, clave fotos_perfil:<modelo>, sin tabla nueva), con «comparar y cambiar» (updated_at).
-// La agencia las marca como publicadas, las elimina o le pide a la modelo que la suba de nuevo (con un motivo opcional que ella ve en su portal).
+// Foto de perfil y foto de banner de cada modelo (las sube ella desde su portal, tal cual, sin recomprimir). Van a R2 y aqui se guardan TODAS las opciones que ha
+// subido de cada una (panel_config, clave fotos_perfil:<modelo>, sin tabla nueva), con «comparar y cambiar» (updated_at): la mas reciente primero.
+// La agencia las marca como publicadas, las elimina o le pide a la modelo que suba otra (con un motivo opcional que ella ve en su portal).
 import { createAdminClient } from "@/lib/supabase/server";
 import { borrarObjetoOF, urlDescarga, urlVista } from "@/lib/r2/onlyfans";
 
@@ -8,14 +8,32 @@ export type TipoFotoPerfil = "perfil" | "banner";
 export const TIPOS_FOTO_PERFIL: TipoFotoPerfil[] = ["perfil", "banner"];
 export type FotoPerfil = { key: string; nombre: string; size: number; mime: string | null; at: string; publicada_at?: string; publicada_por?: string };
 export type PedirFoto = { motivo: string | null; at: string; por: string };
-export type FotosPerfil = { perfil?: FotoPerfil; banner?: FotoPerfil; pedir?: { perfil?: PedirFoto; banner?: PedirFoto } };
-export type FotoPerfilVista = { nombre: string; size: number; at: string; vista: string; descarga: string; publicada_at: string | null; publicada_por: string | null };
-export type FotosPerfilVistas = { perfil: FotoPerfilVista | null; banner: FotoPerfilVista | null; pedir: { perfil: PedirFoto | null; banner: PedirFoto | null } };
+// perfil / banner (una sola foto) es el formato de antes; ahora se guardan en perfiles / banners (todas las opciones subidas)
+export type FotosPerfil = { perfil?: FotoPerfil; banner?: FotoPerfil; perfiles?: FotoPerfil[]; banners?: FotoPerfil[]; pedir?: { perfil?: PedirFoto; banner?: PedirFoto } };
+export type FotoPerfilVista = { key: string; nombre: string; size: number; at: string; vista: string; descarga: string; publicada_at: string | null; publicada_por: string | null };
+export type FotosPerfilVistas = {
+  perfil: FotoPerfilVista | null; // la mas reciente
+  banner: FotoPerfilVista | null;
+  perfilOpciones: FotoPerfilVista[]; // todas las que ha subido (la mas reciente primero)
+  bannerOpciones: FotoPerfilVista[];
+  pedir: { perfil: PedirFoto | null; banner: PedirFoto | null };
+};
 
 export const claveFotosPerfil = (modeloId: string) => `fotos_perfil:${modeloId}`;
 export const prefijoFotosPerfil = (modeloId: string) => `onlyfans-perfil/${modeloId}/`;
 export const esTipoFotoPerfil = (t: unknown): t is TipoFotoPerfil => t === "perfil" || t === "banner";
 export const EXT_FOTO_PERFIL = new Set(["jpg", "jpeg", "png", "webp", "heic", "heif"]);
+const MAX_OPCIONES = 10; // las mas antiguas se van borrando al pasar de aqui
+
+const lista = (v: FotosPerfil, tipo: TipoFotoPerfil): FotoPerfil[] => {
+  const arr = tipo === "perfil" ? v.perfiles : v.banners;
+  if (arr) return arr;
+  const uno = v[tipo];
+  return uno ? [uno] : [];
+};
+/** Mismo registro con las dos listas ya en el formato nuevo (y sin los campos antiguos). */
+const normal = (v: FotosPerfil, perfiles = lista(v, "perfil"), banners = lista(v, "banner")): FotosPerfil => ({ perfiles, banners, pedir: { ...(v.pedir ?? {}) } });
+const conLista = (v: FotosPerfil, tipo: TipoFotoPerfil, nueva: FotoPerfil[]): FotosPerfil => (tipo === "perfil" ? normal(v, nueva, lista(v, "banner")) : normal(v, lista(v, "perfil"), nueva));
 
 export async function leerFotosPerfil(modeloId: string): Promise<FotosPerfil> {
   const { data } = await createAdminClient().from("panel_config").select("value").eq("key", claveFotosPerfil(modeloId)).maybeSingle();
@@ -41,35 +59,42 @@ export async function cambiarFotosPerfil(modeloId: string, fn: (actual: FotosPer
   return false;
 }
 
-/** Apunta la foto nueva como la actual de ese tipo (y quita el «sube otra» pendiente de ese tipo). */
+/** Añade la foto nueva como una opcion MAS de ese tipo (la mas reciente queda la primera) y quita el «sube otra» pendiente de ese tipo. */
 export async function guardarFotoPerfil(modeloId: string, tipo: TipoFotoPerfil, foto: FotoPerfil): Promise<boolean> {
-  return cambiarFotosPerfil(modeloId, (v) => {
-    const pedir = { ...(v.pedir ?? {}) };
-    delete pedir[tipo];
-    return { ...v, [tipo]: foto, pedir };
-  });
-}
-
-/** Quita la foto: borra el archivo y el registro. Con `pedir`, deja anotado que la modelo tiene que subirla de nuevo (y el motivo). */
-export async function quitarFotoPerfil(modeloId: string, tipo: TipoFotoPerfil, pedir?: { motivo: string | null; por: string }): Promise<boolean> {
-  const antes = (await leerFotosPerfil(modeloId))[tipo];
+  let sobrantes: FotoPerfil[] = [];
   const ok = await cambiarFotosPerfil(modeloId, (v) => {
-    const nuevo: FotosPerfil = { ...v, pedir: { ...(v.pedir ?? {}) } };
-    delete nuevo[tipo];
-    if (pedir) nuevo.pedir![tipo] = { motivo: pedir.motivo, at: new Date().toISOString(), por: pedir.por };
-    else delete nuevo.pedir![tipo];
-    return nuevo;
+    const todas = [foto, ...lista(v, tipo).filter((f) => f.key !== foto.key)];
+    sobrantes = todas.slice(MAX_OPCIONES);
+    const n = conLista(v, tipo, todas.slice(0, MAX_OPCIONES));
+    delete n.pedir![tipo];
+    return n;
   });
-  if (ok && antes?.key && antes.key.startsWith(prefijoFotosPerfil(modeloId))) await borrarObjetoOF(antes.key).catch(() => undefined);
+  if (ok) await Promise.all(sobrantes.filter((f) => f.key.startsWith("onlyfans-perfil/")).map((f) => borrarObjetoOF(f.key).catch(() => undefined)));
   return ok;
 }
 
-/** Marca (o desmarca) la foto como publicada en OnlyFans. */
-export async function marcarFotoPublicada(modeloId: string, tipo: TipoFotoPerfil, publicada: boolean, por: string): Promise<boolean> {
+/** Quita una opcion (la de esa `key`, o todas las de ese tipo si no se dice): borra el archivo y el registro. Con `pedir`, deja anotado que la modelo tiene que subir otra (y el motivo). */
+export async function quitarFotoPerfil(modeloId: string, tipo: TipoFotoPerfil, pedir?: { motivo: string | null; por: string }, key?: string): Promise<boolean> {
+  let quitadas: FotoPerfil[] = [];
+  const ok = await cambiarFotosPerfil(modeloId, (v) => {
+    const todas = lista(v, tipo);
+    quitadas = key ? todas.filter((f) => f.key === key) : todas;
+    const n = conLista(v, tipo, key ? todas.filter((f) => f.key !== key) : []);
+    if (pedir) n.pedir![tipo] = { motivo: pedir.motivo, at: new Date().toISOString(), por: pedir.por };
+    else delete n.pedir![tipo];
+    return n;
+  });
+  if (ok) await Promise.all(quitadas.filter((f) => f.key.startsWith(prefijoFotosPerfil(modeloId))).map((f) => borrarObjetoOF(f.key).catch(() => undefined)));
+  return ok;
+}
+
+/** Marca (o desmarca) una opcion como publicada en OnlyFans (la de esa `key`, o la mas reciente si no se dice). */
+export async function marcarFotoPublicada(modeloId: string, tipo: TipoFotoPerfil, publicada: boolean, por: string, key?: string): Promise<boolean> {
   return cambiarFotosPerfil(modeloId, (v) => {
-    const f = v[tipo];
-    if (!f) return null;
-    const nueva: FotoPerfil = { ...f };
+    const todas = lista(v, tipo);
+    const i = key ? todas.findIndex((f) => f.key === key) : 0;
+    if (i < 0 || !todas[i]) return null;
+    const nueva: FotoPerfil = { ...todas[i] };
     if (publicada) {
       nueva.publicada_at = new Date().toISOString();
       nueva.publicada_por = por;
@@ -77,27 +102,30 @@ export async function marcarFotoPublicada(modeloId: string, tipo: TipoFotoPerfil
       delete nueva.publicada_at;
       delete nueva.publicada_por;
     }
-    return { ...v, [tipo]: nueva };
+    return conLista(v, tipo, todas.map((f, j) => (j === i ? nueva : f)));
   });
 }
 
-async function vistaDe(tipo: TipoFotoPerfil, v: FotosPerfil): Promise<FotoPerfilVista | null> {
-  const x = v[tipo];
-  if (!x) return null;
+async function vistaDe(tipo: TipoFotoPerfil, x: FotoPerfil): Promise<FotoPerfilVista | null> {
   try {
     const [vista, descarga] = await Promise.all([urlVista(x.key), urlDescarga(x.key, `${tipo === "perfil" ? "foto_perfil" : "banner"}_${x.nombre}`)]);
-    return { nombre: x.nombre, size: x.size, at: x.at, vista, descarga, publicada_at: x.publicada_at ?? null, publicada_por: x.publicada_por ?? null };
+    return { key: x.key, nombre: x.nombre, size: x.size, at: x.at, vista, descarga, publicada_at: x.publicada_at ?? null, publicada_por: x.publicada_por ?? null };
   } catch {
     return null;
   }
 }
 
 async function vistasDe(v: FotosPerfil): Promise<FotosPerfilVistas> {
-  const [perfil, banner] = await Promise.all([vistaDe("perfil", v), vistaDe("banner", v)]);
-  return { perfil, banner, pedir: { perfil: v.pedir?.perfil ?? null, banner: v.pedir?.banner ?? null } };
+  const [p, b] = await Promise.all([
+    Promise.all(lista(v, "perfil").map((x) => vistaDe("perfil", x))),
+    Promise.all(lista(v, "banner").map((x) => vistaDe("banner", x))),
+  ]);
+  const perfilOpciones = p.filter((x): x is FotoPerfilVista => Boolean(x));
+  const bannerOpciones = b.filter((x): x is FotoPerfilVista => Boolean(x));
+  return { perfil: perfilOpciones[0] ?? null, banner: bannerOpciones[0] ?? null, perfilOpciones, bannerOpciones, pedir: { perfil: v.pedir?.perfil ?? null, banner: v.pedir?.banner ?? null } };
 }
 
-/** Enlaces temporales para ver y descargar las dos fotos de una modelo. */
+/** Enlaces temporales para ver y descargar las fotos de una modelo. */
 export async function vistasFotosPerfil(modeloId: string): Promise<FotosPerfilVistas> {
   return vistasDe(await leerFotosPerfil(modeloId).catch(() => ({}) as FotosPerfil));
 }

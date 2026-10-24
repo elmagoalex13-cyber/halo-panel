@@ -53,7 +53,7 @@ export function SubirFotoPerfil({ tipo, actual, pedida, onSubida }: { tipo: "per
             <img src={actual.vista} alt={`Tu ${etiqueta}`} className="h-10 w-10 shrink-0 rounded-lg object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
           ) : null}
           <p className="min-w-0 text-sm text-emerald-300">
-            ✓ Ya la hemos recibido
+            ✓ Ya la hemos recibido (puedes subir más opciones y la agencia elige)
             <span className="block truncate text-xs text-white/45">{actual.nombre}</span>
           </p>
         </div>
@@ -72,7 +72,7 @@ export function SubirFotoPerfil({ tipo, actual, pedida, onSubida }: { tipo: "per
         onClick={() => input.current?.click()}
         className="relative flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[#8B5CF6]/25 px-3 text-sm font-semibold text-white transition hover:bg-[#8B5CF6]/35 disabled:opacity-70"
       >
-        {progreso !== null ? `Subiendo… ${progreso}%` : actual ? `Cambiar mi ${etiqueta}` : `Subir mi ${etiqueta}`}
+        {progreso !== null ? `Subiendo… ${progreso}%` : actual ? `Subir otra opción de mi ${etiqueta}` : `Subir mi ${etiqueta}`}
       </button>
       {error ? <p className="text-xs text-red-300">{error}</p> : null}
     </div>

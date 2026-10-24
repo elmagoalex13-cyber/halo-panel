@@ -430,7 +430,7 @@ function PerfilYBanner({
   fotos: Record<string, FotosPerfilVistas>;
   onCambio: (id: string, f: FotosPerfilVistas) => void;
 }) {
-  const vacias: FotosPerfilVistas = { perfil: null, banner: null, pedir: { perfil: null, banner: null } };
+  const vacias: FotosPerfilVistas = { perfil: null, banner: null, perfilOpciones: [], bannerOpciones: [], pedir: { perfil: null, banner: null } };
   const de = (id: string) => fotos[id] ?? vacias;
   const n = (id: string) => Number(Boolean(de(id).perfil)) + Number(Boolean(de(id).banner));
   const ordenadas = [...modelos].sort((a, b) => n(b.id) - n(a.id) || a.nombre.localeCompare(b.nombre, "es"));
