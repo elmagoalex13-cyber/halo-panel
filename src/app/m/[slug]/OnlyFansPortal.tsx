@@ -7,6 +7,7 @@ import {
   NOMBRE_CARPETA_POSTS,
   FASES,
   archivosDeSlot,
+  estadoRevision,
   formatoTamano,
   progresoScript,
   resumenPortal,
@@ -19,6 +20,79 @@ import { VisorFotos } from "@/components/VisorFotos";
 import { FotosPerfilSubida, type FotosPerfilEstado } from "./FotosPerfilSubida";
 
 export type ArchivoVista = ArchivoOF & { vista?: string | null };
+
+/** Fases que cita el comentario de la agencia («la fase 1…», «fases 2 y 3…»), para marcarlas en el script. */
+export function fasesCitadas(texto: string | null | undefined): number[] {
+  const salida = new Set<number>();
+  for (const m of String(texto ?? "").matchAll(/fases?\s+(\d+(?:\s*(?:,|y|e|\/|-)\s*\d+)*)/gi)) for (const n of m[1].match(/\d+/g) ?? []) if (Number(n) >= 1 && Number(n) <= 8) salida.add(Number(n));
+  return [...salida].sort((a, b) => a - b);
+}
+
+/** Lo que la modelo ve de la revision de la agencia: que hay que cambiar (con pasos claros), que esta aprobado o que ya esta reenviado. */
+function RevisionAviso({ col }: { col: ColeccionOF }) {
+  const estado = estadoRevision(col);
+  const que = col.tipo === "script" ? "script" : col.tipo === "pack" ? "pack" : "post";
+  const fases = col.tipo === "script" ? fasesCitadas(col.revision_texto) : [];
+  if (estado === "mejorar") {
+    return (
+      <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-4">
+        <p className="font-semibold text-amber-100">⚠️ Tu agencia te pide cambios en este {que}</p>
+        {col.revision_texto ? (
+          <div className="mt-2 rounded-xl bg-black/25 px-3 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-200/70">Lo que tienes que cambiar</p>
+            <p className="mt-1 text-sm leading-relaxed text-white">{col.revision_texto}</p>
+          </div>
+        ) : null}
+        <ol className="mt-3 space-y-1.5 text-sm text-amber-50/85">
+          <li>1. Lee lo que te piden aquí arriba.</li>
+          <li>
+            2. Abre {fases.length ? `la ${fases.length === 1 ? "fase" : "fases"} ${fases.join(", ")} (marcada${fases.length === 1 ? "" : "s"} abajo)` : "la fase que toque"}, quita con la ✕ el vídeo o la foto que no sirve y sube el nuevo.
+          </li>
+          <li>
+            3. Cuando termines, pulsa <b>«Volver a entregar»</b> al final de la página.
+          </li>
+        </ol>
+      </div>
+    );
+  }
+  if (estado === "repetido") {
+    return (
+      <div className="rounded-2xl border border-sky-400/30 bg-sky-400/10 p-4">
+        <p className="font-semibold text-sky-100">🔄 Ya lo has vuelto a entregar</p>
+        <p className="mt-1 text-sm text-sky-50/70">Tu agencia lo revisará otra vez y te avisará. No tienes que hacer nada más.</p>
+        {col.revision_texto ? <p className="mt-2 text-xs text-white/45">Lo que te pidieron: «{col.revision_texto}»</p> : null}
+      </div>
+    );
+  }
+  if (estado === "aprobado") {
+    return (
+      <div className="rounded-2xl border border-emerald-400/40 bg-emerald-400/10 p-4">
+        <p className="font-semibold text-emerald-100">✅ Aprobado por tu agencia</p>
+        <p className="mt-1 text-sm text-emerald-50/70">Está perfecto, no tienes que cambiar nada.{col.revision_texto ? ` Su comentario: «${col.revision_texto}»` : ""}</p>
+      </div>
+    );
+  }
+  if (estado === "pendiente") {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+        <p className="font-semibold text-white">⏳ Entregado: tu agencia lo está revisando</p>
+        <p className="mt-1 text-sm text-white/50">Cuando lo revise te saldrá aquí (y te avisamos por Telegram si lo tienes activado).</p>
+      </div>
+    );
+  }
+  return null;
+}
+
+/** Etiqueta de estado para la lista de scripts, packs y posts. */
+function EstadoColeccion({ c }: { c: ColeccionOF }) {
+  const e = estadoRevision(c);
+  const base = "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold";
+  if (e === "mejorar") return <span className={`${base} bg-amber-400/20 text-amber-200`}>⚠️ Cambios pedidos</span>;
+  if (e === "aprobado") return <span className={`${base} bg-emerald-500/15 text-emerald-300`}>✅ Aprobado</span>;
+  if (e === "repetido") return <span className={`${base} bg-sky-400/15 text-sky-200`}>🔄 Reenviado</span>;
+  if (e === "pendiente") return <span className={`${base} bg-white/10 text-white/60`}>⏳ En revisión</span>;
+  return <span className={`${base} bg-amber-400/15 text-amber-300`}>En curso</span>;
+}
 
 const BTN_SUBIR = "relative flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[#8B5CF6]/25 px-3 text-sm font-semibold text-white transition hover:bg-[#8B5CF6]/35 disabled:opacity-70";
 
@@ -171,12 +245,14 @@ export function OnlyFansPortal({
   fotos,
   onFotos,
   abrirFotos = 0,
+  abrirColeccion = null,
 }: {
   colecciones: ColeccionOF[];
   archivos: ArchivoVista[];
   fotos: FotosPerfilEstado;
   onFotos: (f: FotosPerfilEstado) => void;
   abrirFotos?: number; // cada vez que cambia, abre la pestaña «Fotos» (desde la lista de cosas por hacer)
+  abrirColeccion?: { id: string; n: number } | null; // abre ese script/pack/post (desde el aviso de cambios pedidos)
 }) {
   const [verFotos, setVerFotos] = useState(false);
   useEffect(() => {
@@ -187,6 +263,16 @@ export function OnlyFansPortal({
   const [tipo, setTipo] = useState<TipoColeccion>("script");
   const [abierta, setAbierta] = useState<string | null>(null);
   const [faseAbierta, setFaseAbierta] = useState<number | null>(1);
+  useEffect(() => {
+    if (!abrirColeccion) return;
+    const c = colecciones.find((x) => x.id === abrirColeccion.id);
+    if (!c) return;
+    setVerFotos(false);
+    setTipo(c.tipo);
+    setAbierta(c.id);
+    setFaseAbierta(fasesCitadas(c.revision_texto)[0] ?? 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abrirColeccion?.n]);
   const [nuevo, setNuevo] = useState<{ nombre: string; descripcion: string } | null>(null);
   const [creando, setCreando] = useState(false);
   const [ocupadas, setOcupadas] = useState(0);
@@ -259,12 +345,13 @@ export function OnlyFansPortal({
   async function entregar(c: ColeccionOF) {
     const pr = c.tipo === "script" ? progresoScript(delCol(c.id)) : null;
     const falta = pr && pr.subidos < pr.total ? `Faltan ${pr.total - pr.subidos} archivos de este script. ` : "";
-    if (!window.confirm(`${falta}¿Marcar como entregado? Después no podrás cambiar los archivos.`)) return;
+    const repite = estadoRevision(c) === "mejorar";
+    if (!window.confirm(`${falta}${repite ? "¿Volver a entregar con los cambios hechos?" : "¿Marcar como entregado?"} Después no podrás cambiar los archivos.`)) return;
     const res = await fetch("/api/portal/of/entregar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coleccion_id: c.id }) });
     const j = (await res.json().catch(() => ({}))) as { error?: string; entregado_at?: string };
     if (!res.ok) return setAviso({ ok: false, texto: j.error ?? "No se pudo entregar" });
     setColecciones((p) => p.map((x) => (x.id === c.id ? { ...x, estado: "entregado", entregado_at: j.entregado_at ?? new Date().toISOString() } : x)));
-    setAviso({ ok: true, texto: "¡Entregado! Tu agencia ya lo tiene." });
+    setAviso({ ok: true, texto: repite ? "¡Entregado otra vez! Tu agencia lo revisará de nuevo." : "¡Entregado! Tu agencia ya lo tiene." });
   }
 
   const alSubir = (r: { archivo: ArchivoOF; vista: string | null }) => setArchivos((p) => [...p, { ...r.archivo, vista: r.vista }]);
@@ -290,18 +377,16 @@ export function OnlyFansPortal({
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
-              {bloqueado ? <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">Entregado</span> : null}
-              {col.revision === "aprobado" ? <span className="text-xs font-semibold text-emerald-300">✅ Aprobado por la agencia</span> : null}
-              {col.revision === "mejorar" ? <span className="text-xs font-semibold text-amber-200">⚠️ A mejorar</span> : null}
+              <EstadoColeccion c={col} />
             </div>
           </div>
-          {col.revision_texto ? <p className="mt-3 rounded-xl bg-white/[0.06] px-3 py-2 text-sm leading-relaxed text-white/75">💬 {col.revision_texto}</p> : null}
           {pr ? (
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
               <div className="h-full rounded-full bg-[#8B5CF6]" style={{ width: `${(pr.subidos / pr.total) * 100}%` }} />
             </div>
           ) : null}
         </div>
+        <RevisionAviso col={col} />
         {aviso ? <p className={`rounded-xl px-3 py-2 text-sm ${aviso.ok ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300"}`}>{aviso.texto}</p> : null}
 
         {col.tipo === "script" ? (
@@ -318,7 +403,10 @@ export function OnlyFansPortal({
                       {completa ? <Check className="h-4 w-4" /> : f.fase}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white">Fase {f.fase} · {f.nombre}</p>
+                      <p className="text-sm font-semibold text-white">
+                        Fase {f.fase} · {f.nombre}
+                        {estadoRevision(col) === "mejorar" && fasesCitadas(col.revision_texto).includes(f.fase) ? <span className="ml-2 rounded-full bg-amber-400/25 px-2 py-0.5 text-[11px] font-bold text-amber-100">✏️ Cámbiala</span> : null}
+                      </p>
                       <p className="text-xs text-white/40">{resumenPortal(f)}</p>
                     </div>
                     <span className="shrink-0 text-xs text-white/50">{subidos}/{pedidos}</span>
@@ -391,7 +479,7 @@ export function OnlyFansPortal({
 
         {!bloqueado ? (
           <button type="button" disabled={ocupadas > 0 || !mios.length} onClick={() => entregar(col)} className="btn-primary h-12 w-full text-base disabled:opacity-40">
-            Marcar como entregado
+            {estadoRevision(col) === "mejorar" ? "Volver a entregar con los cambios" : "Marcar como entregado"}
           </button>
         ) : (
           <p className="text-center text-xs text-white/35">
@@ -518,11 +606,7 @@ export function OnlyFansPortal({
                       {new Date(c.created_at).toLocaleDateString("es-ES")}
                     </p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${c.estado === "entregado" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-400/15 text-amber-300"}`}>
-                    {c.estado === "entregado" ? "Entregado" : "En curso"}
-                  </span>
-                  {c.revision === "aprobado" ? <span className="shrink-0 text-xs font-semibold text-emerald-300">✅</span> : null}
-                  {c.revision === "mejorar" ? <span className="shrink-0 text-xs font-semibold text-amber-200">⚠️</span> : null}
+                  <EstadoColeccion c={c} />
                 </button>
               </li>
             );
@@ -576,8 +660,15 @@ function PostsCarpeta({
   const verFotos = fotos.filter((a) => a.vista);
   return (
     <div className="space-y-3">
-      {carpeta?.revision === "mejorar" ? <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-sm text-amber-100">⚠️ La agencia te pide mejorar algo de tus posts{carpeta.revision_texto ? `: ${carpeta.revision_texto}` : "."}</p> : null}
-      {carpeta?.revision === "aprobado" ? <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">✅ Tus posts están aprobados por la agencia.</p> : null}
+      {carpeta && estadoRevision(carpeta) === "mejorar" ? (
+        <p className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2.5 text-sm text-amber-100">
+          ⚠️ <b>Tu agencia te pide cambios en tus posts</b>
+          {carpeta.revision_texto ? <><br />«{carpeta.revision_texto}»</> : "."}
+          <br />
+          <span className="text-amber-100/70">Quita las fotos que no valen con la ✕ y sube otras nuevas.</span>
+        </p>
+      ) : null}
+      {carpeta && estadoRevision(carpeta) === "aprobado" ? <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">✅ Tus posts están aprobados por la agencia.</p> : null}
       <BotonSubida etiqueta="Subir fotos de posts" accept="image/*,video/*,.heic,.heif,.mov" coleccionId={obtenerCarpeta} onSubido={onSubido} onOcupado={onOcupado} />
       <p className="text-xs font-semibold uppercase tracking-wider text-white/40">
         Tus posts subidos ({todos.length})

@@ -31,7 +31,7 @@ export function RevisionOF({
       if (res.ok) {
         setRevision(nueva);
         setSucio(false);
-        setMsg({ ok: true, texto: nueva === "aprobado" ? "Aprobado: cuenta para los objetivos de la captación" : nueva === "mejorar" ? "Guardado: la modelo verá lo que debe mejorar" : "Revisión quitada" });
+        setMsg({ ok: true, texto: nueva === "aprobado" ? "Aprobado: cuenta para los objetivos de la captación" : nueva === "mejorar" ? "Guardado: se le reabre para que lo corrija, le sale arriba en su portal con tu comentario y le avisamos por Telegram" : "Revisión quitada" });
       } else setMsg({ ok: false, texto: j.error ?? "No se pudo guardar" });
     } finally {
       setGuardando(false);

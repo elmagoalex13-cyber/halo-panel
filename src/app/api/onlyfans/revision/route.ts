@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 // POST { coleccion_id, revision: "aprobado" | "mejorar" | null, texto? }
 // La agencia revisa un script, pack o post de OnlyFans. La modelo ve el resultado en su portal. Los scripts cuentan para la captacion
-// (cuenta de Instagram) solo cuando estan APROBADOS. revision null = quitar la revision.
+// (cuenta de Instagram) solo cuando estan APROBADOS. revision null = quitar la revision. «mejorar» reabre el script para que ella lo corrija y lo vuelva a entregar.
 export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const body = (await req.json().catch(() => null)) as { coleccion_id?: string; revision?: string | null; texto?: string } | null;
@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
   const db = createAdminClient();
   const { data, error } = await db
     .from("of_colecciones")
-    .update({ revision, revision_texto: revision ? texto || null : null, revision_at: revision ? new Date().toISOString() : null })
+    // «A mejorar» REABRE el script/pack: asi la modelo puede quitar y volver a subir lo que se pide (si siguiera «entregado» no podria tocar nada)
+    .update({ revision, revision_texto: revision ? texto || null : null, revision_at: revision ? new Date().toISOString() : null, ...(revision === "mejorar" ? { estado: "en_curso", entregado_at: null } : {}) })
     .eq("id", id)
     .select("modelo_id, nombre, tipo");
   if (error) {

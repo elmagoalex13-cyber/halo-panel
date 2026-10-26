@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { SubirBoton } from "./SubirBoton";
 import { OnboardingForm } from "./OnboardingForm";
 import { OnlyFansPortal, type ArchivoVista } from "./OnlyFansPortal";
-import type { ColeccionOF } from "@/lib/onlyfans";
+import { estadoRevision, type ColeccionOF } from "@/lib/onlyfans";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 import { GuiaOF, type ReferenciaVista } from "./GuiaOF";
 import { FotosPerfilSubida, type FotosPerfilEstado } from "./FotosPerfilSubida";
@@ -292,11 +292,19 @@ export function PortalClient({
   const [fotos, setFotos] = useState<FotosPerfilEstado>(fotosPerfil);
   const fotosCompletas = Boolean(fotos.perfil && fotos.banner);
   const [abrirFotos, setAbrirFotos] = useState(0);
+  const [abrirColeccion, setAbrirColeccion] = useState<{ id: string; n: number } | null>(null);
+  const irAColeccion = (id: string) => {
+    setPestana("contenido");
+    setAbrirColeccion((a) => ({ id, n: (a?.n ?? 0) + 1 }));
+    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 80);
+  };
   const irAFotos = () => {
     setPestana(contenidoOF ? "contenido" : "subir");
     setAbrirFotos((n) => n + 1);
     setTimeout(() => document.getElementById("fotos-perfil")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
   };
+  const cambiosOF = (contenidoOF?.colecciones ?? []).filter((c) => estadoRevision(c) === "mejorar");
+  const reelsConCambios = entregas.filter((e) => e.feedback_tipo === "mejorar");
   const [filtroTipo, setFiltroTipo] = useState<number | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState(false);
   const [videoAbierto, setVideoAbierto] = useState<Pendiente | null>(null);
@@ -398,16 +406,6 @@ export function PortalClient({
             );
           })()}
 
-          {(contenidoOF?.colecciones ?? []).some((c) => c.revision === "mejorar") ? (
-            <p className="mt-3 text-sm font-semibold text-amber-200">
-              Tienes {(contenidoOF?.colecciones ?? []).filter((c) => c.revision === "mejorar").length} script, pack o post a mejorar: míralo en «Contenido OnlyFans».
-            </p>
-          ) : null}
-          {entregas.some((e) => e.feedback_tipo === "mejorar") ? (
-            <p className="mt-3 text-sm font-semibold text-amber-200">
-              Tienes {entregas.filter((e) => e.feedback_tipo === "mejorar").length} reel{entregas.filter((e) => e.feedback_tipo === "mejorar").length === 1 ? "" : "s"} con comentarios del equipo: míralos en «Subidos».
-            </p>
-          ) : null}
         </section>
       ) : null}
 
@@ -422,6 +420,38 @@ export function PortalClient({
           <a href={telegram.url} target="_blank" rel="noreferrer" className="btn-primary shrink-0 px-4 py-2.5 text-sm">
             Activar avisos en Telegram
           </a>
+        </section>
+      ) : null}
+
+      {cambiosOF.length || reelsConCambios.length ? (
+        <section className="space-y-3 rounded-2xl border border-amber-400/50 bg-amber-400/10 p-4">
+          <div>
+            <p className="font-display text-lg font-semibold text-amber-100">💬 Tu agencia te ha respondido</p>
+            <p className="text-sm text-amber-50/70">Hay cosas que tienes que cambiar. Pulsa en cada una para ver qué te piden y cómo corregirlo.</p>
+          </div>
+          <ul className="space-y-2">
+            {cambiosOF.map((c) => (
+              <li key={c.id} className="rounded-xl bg-black/25 p-3">
+                <p className="text-sm font-semibold text-white">
+                  {c.tipo === "script" ? "📝 Script" : c.tipo === "pack" ? "📦 Pack" : "🖼 Posts"} «{c.nombre}»
+                </p>
+                {c.revision_texto ? <p className="mt-1 text-sm leading-relaxed text-white/80">«{c.revision_texto}»</p> : null}
+                <button type="button" onClick={() => irAColeccion(c.id)} className="mt-2 flex min-h-10 w-full items-center justify-center rounded-xl bg-amber-400 px-4 text-sm font-bold text-black transition hover:bg-amber-300">
+                  Ver y corregir
+                </button>
+              </li>
+            ))}
+            {reelsConCambios.length ? (
+              <li className="rounded-xl bg-black/25 p-3">
+                <p className="text-sm font-semibold text-white">
+                  🎬 {reelsConCambios.length} {reelsConCambios.length === 1 ? "reel tiene" : "reels tienen"} comentarios del equipo
+                </p>
+                <button type="button" onClick={() => setPestana("subidos")} className="mt-2 flex min-h-10 w-full items-center justify-center rounded-xl bg-amber-400 px-4 text-sm font-bold text-black transition hover:bg-amber-300">
+                  Ver los comentarios
+                </button>
+              </li>
+            ) : null}
+          </ul>
         </section>
       ) : null}
 
@@ -621,7 +651,7 @@ export function PortalClient({
         </p>
       ) : null}
       {pestana === "subir" && !contenidoOF ? <FotosPerfilSubida fotos={fotos} onCambio={setFotos} /> : null}
-      {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} fotos={fotos} onFotos={setFotos} abrirFotos={abrirFotos} /> : null}
+      {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} fotos={fotos} onFotos={setFotos} abrirFotos={abrirFotos} abrirColeccion={abrirColeccion} /> : null}
 
       {reelAbierto?.preview ? (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/95 p-3" role="dialog" aria-modal="true" onClick={() => setReelAbierto(null)}>

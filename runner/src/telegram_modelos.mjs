@@ -287,7 +287,8 @@ Entra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
         const d = e.datos ?? {};
         const etq = d.tipo === "script" ? "script" : d.tipo === "pack" ? "pack de fotos" : "post";
         const estado = d.revision === "aprobado" ? "✅ está aprobado, ¡buen trabajo!" : "⚠️ hay que mejorarlo";
-        await enviar(m.telegram_id, `📝 Tu ${etq}${d.nombre ? ` «${esc(d.nombre)}»` : ""}: ${estado}${d.texto ? `\n💬 ${esc(d.texto)}` : ""}${enlacePortal(m)}`);
+        const como = d.revision === "aprobado" ? "" : `\n\n👉 Entra en tu portal → «Contenido OnlyFans», abre el ${etq}, cambia lo que te piden (quita con la ✕ lo que no sirve y sube lo nuevo) y pulsa «Volver a entregar».`;
+        await enviar(m.telegram_id, `📝 Tu ${etq}${d.nombre ? ` «${esc(d.nombre)}»` : ""}: ${estado}${d.texto ? `\n💬 ${esc(d.texto)}` : ""}${como}${enlacePortal(m)}`);
         await marcar([e.id]);
       }
     } catch (e) {
