@@ -104,6 +104,10 @@ async function leerFoto(archivo) {
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 const esLimite = (e) => /HTTP 429|rate_limited|Please allow/i.test(String(e?.message ?? e));
+// Venuz a veces dice que la foto «ya no esta en el baul» cuando acaba de subirse (su copia del baul tarda en ponerse al dia): se reintenta mas tarde, sin volver a subir la foto
+const esFotoAunNoVista = (e) => /media_gone|no longer in the creator'?s OnlyFans vault/i.test(String(e?.message ?? e));
+const MAX_INTENTOS_FOTO = 8;
+const ESPERA_FOTO_MIN = 8;
 
 /** Repite el paso si OnlyFans pide esperar unos segundos (limite de velocidad), en lugar de dar el post por fallido. */
 async function conReintento(paso) {
@@ -174,7 +178,7 @@ async function procesarPost(supabase, sesion, p, cuentaId, fanOfId) {
       const foto = await leerFoto(archivo);
       mediaId = await conReintento(() => subirAlBaul(sesion, { cuentaId, fanOfId, nombre: foto.nombre, mime: foto.mime, bytes: foto.bytes }));
       await supabase.from("posts_programados").update({ venuz_media_id: mediaId }).eq("id", p.id);
-      await ponerEnCategoriaPosts(sesion, cuentaId, mediaId);
+      if (!(await ponerEnCategoriaPosts(sesion, cuentaId, mediaId))) console.warn(`[posts-venuz] ${p.id}: la foto no se pudo meter en la categoria POSTS del baul (se intenta programar igual)`);
     }
     const postId = await conReintento(async () => {
       await esperarHueco(cuentaId);
@@ -188,6 +192,14 @@ async function procesarPost(supabase, sesion, p, cuentaId, fanOfId) {
     console.log(`[posts-venuz] ${p.id} programado en Venuz para ${p.programar_para}`);
   } catch (e) {
     console.error(`[posts-venuz] ${p.id}:`, tapar(e.message));
+    if (esFotoAunNoVista(e)) {
+      const intento = (Number(String(p.error ?? "").match(/intento (\d+)/)?.[1]) || 0) + 1;
+      if (intento < MAX_INTENTOS_FOTO) {
+        await supabase.from("posts_programados").update({ estado: "aprobado", error: `Venuz aún no ve la foto en el baúl: se reintenta solo en unos minutos (intento ${intento} de ${MAX_INTENTOS_FOTO})`, enviado_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", p.id);
+        console.log(`[posts-venuz] ${p.id}: Venuz aun no ve la foto, reintento ${intento}/${MAX_INTENTOS_FOTO}`);
+        return;
+      }
+    }
     if (esLimite(e)) {
       // OnlyFans pidio esperar y se agotaron los reintentos: vuelve a la cola para la siguiente vuelta (la foto ya esta en el baul, no se vuelve a subir)
       await supabase.from("posts_programados").update({ estado: "aprobado", error: null, updated_at: new Date().toISOString() }).eq("id", p.id);
@@ -218,10 +230,11 @@ export async function cicloPostsVenuz(supabase) {
 
     const { data: posts } = await supabase
       .from("posts_programados")
-      .select("id, modelo_id, archivo_id, caption, programar_para, venuz_media_id")
+      .select("id, modelo_id, archivo_id, caption, programar_para, venuz_media_id, error")
       .eq("estado", "aprobado")
       .in("modelo_id", [...fan.keys()])
       .gt("programar_para", new Date(Date.now() + MARGEN_MIN * 60000).toISOString())
+      .or(`enviado_at.is.null,enviado_at.lt.${new Date(Date.now() - ESPERA_FOTO_MIN * 60000).toISOString()}`) // los reintentos esperan unos minutos
       .order("programar_para", { ascending: true })
       .limit(MAX_POR_CICLO);
     if (!posts?.length) return;
