@@ -37,6 +37,8 @@ type SupabaseApprovalRow = {
   recorte_fin?: number | null;
   notas_editor?: string | null;
   audio_referencia_url?: string | null;
+  feedback_tipo?: string | null;
+  feedback_texto?: string | null;
   modelo?: { nombre?: string | null } | null;
   cuenta?: { username?: string | null } | null;
 };
@@ -95,13 +97,14 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
     const supabase = createAdminClient();
     const fotos = await versionesFotos();
     const alcance = await alcanceActual();
-    const consulta = (sinBorrados: boolean) => {
+    const consulta = (sinBorrados: boolean, conFeedback = true) => {
       const q = supabase
       .from("library_content")
       .select(`
         id, modelo_id, titulo, tipo_video, tipo, estado, recibido_at, publicado_at,
         r2_key, r2_key_referencia, r2_key_original, video_procesado_url, estado_procesamiento, error_mensaje,
         caption, frase_quemada, correcciones, recorte_inicio, recorte_fin, notas_editor, audio_referencia_url,
+        ${conFeedback ? "feedback_tipo, feedback_texto," : ""}
         modelo:modelos(nombre),
         cuenta:cuentas_instagram(username)
       `)
@@ -113,6 +116,7 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
     };
     let primary = await consulta(true); // sin las piezas cuyos archivos se borraron a mano
     if (primary.error) primary = await consulta(false); // aun sin el SQL 20261020
+    if (primary.error) primary = await consulta(false, false); // aun sin el SQL 20261021 (feedback)
 
     const data = primary.data as unknown[] | null;
     const error = primary.error;
@@ -141,6 +145,8 @@ async function getRows(estado: ApprovalEstado): Promise<VideoRow[]> {
       recorte_fin: row.recorte_fin ?? null,
       notas_editor: row.notas_editor ?? null,
       audio_referencia_url: row.audio_referencia_url ?? null,
+      feedback_tipo: row.feedback_tipo === "bien" || row.feedback_tipo === "mejorar" ? row.feedback_tipo : null,
+      feedback_texto: row.feedback_texto ?? null,
       modelo_nombre: row.modelo?.nombre ?? "—",
       cuenta_username: row.cuenta?.username ?? null,
     }));

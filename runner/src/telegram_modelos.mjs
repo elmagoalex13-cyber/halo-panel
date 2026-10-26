@@ -7,11 +7,11 @@
  * Solo escribe a modelos que se han vinculado ellas mismas.
  */
 import { createHmac, timingSafeEqual } from "crypto";
-import { mkdtemp, readFile, rm } from "fs/promises";
+import { mkdtemp, readFile, rm, stat } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { config } from "./config.mjs";
-import { borrarDeR2, downloadFromR2, existeEnR2 } from "./r2.mjs";
+import { borrarDeR2, downloadFromR2, existeEnR2, keyDesdeUrl } from "./r2.mjs";
 import { hashOriginal } from "./previews.mjs";
 
 const ZONA = "Europe/Madrid";
@@ -52,16 +52,27 @@ async function enviarVideo(chat, ruta, caption) {
   if (!res.ok || j.ok === false) throw new Error(`Telegram sendVideo ${res.status}: ${String(j.description ?? "").slice(0, 140)}`);
 }
 
-/** El video de una pieza para mandarlo por Telegram: su vista previa (720p, ligera) o, si no existe, el original si cabe. null si no se puede. */
+const MAX_TELEGRAM = 45 * 1024 * 1024; // el limite del bot son 50 MB
+
+/**
+ * El video de una pieza para mandarlo por Telegram. Pieza en espera (sin editar): su vista previa (720p, ligera) o el original si cabe.
+ * Pieza ya editada (llega a la mesa de aprobacion): el video editado, que es el que ha visto el equipo, o si no cabe, la vista previa del original. null si no se puede.
+ */
 async function videoParaTelegram(pieza, destino) {
   const clave = pieza.r2_key_original ?? pieza.r2_key;
+  const editado = pieza.estado !== "recibido" && pieza.video_procesado_url ? keyDesdeUrl(pieza.video_procesado_url) : null;
+  if (editado && !editado.startsWith("supabase://") && (await existeEnR2(editado))) {
+    await downloadFromR2(editado, destino);
+    if ((await stat(destino)).size <= MAX_TELEGRAM) return destino;
+    await rm(destino, { force: true });
+  }
   if (!clave || clave.startsWith("supabase://")) return null;
   const prev = `previews/${hashOriginal(clave)}.mp4`;
   if (await existeEnR2(prev)) {
     await downloadFromR2(prev, destino);
     return destino;
   }
-  if ((pieza.size_bytes ?? 0) > 0 && pieza.size_bytes < 45 * 1024 * 1024 && (await existeEnR2(clave))) {
+  if ((pieza.size_bytes ?? 0) > 0 && pieza.size_bytes < MAX_TELEGRAM && (await existeEnR2(clave))) {
     await downloadFromR2(clave, destino);
     return destino;
   }
@@ -203,23 +214,31 @@ export async function avisosModelos(sb) {
 Entra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
           }
           if (piezaIds.length) {
-            const { data: piezas } = await sb.from("library_content").select("id, titulo, filename_original, r2_key, r2_key_original, size_bytes, estado, feedback_tipo, feedback_texto").in("id", piezaIds);
+            const { data: piezas } = await sb.from("library_content").select("id, titulo, filename_original, r2_key, r2_key_original, video_procesado_url, size_bytes, estado, feedback_tipo, feedback_texto").in("id", piezaIds);
             const tmp = await mkdtemp(path.join(tmpdir(), "fb-"));
             try {
               let sinVideo = 0;
               for (const p of piezas ?? []) {
                 if (p.feedback_tipo !== "bien" && p.feedback_tipo !== "mejorar") continue; // se quito el feedback antes de enviarlo
-                if (p.estado !== "recibido") continue; // ya se mando a editar: no se toca
                 if (p.feedback_tipo === "mejorar" && !p.feedback_texto) continue; // «Mejorar» sin comentario no se envia ni se retira: espera a que escribas que cambiar
                 const mejorar = p.feedback_tipo === "mejorar";
+                const enEspera = p.estado === "recibido"; // en captacion (sin editar): «Mejorar» lo retira. Ya editado (mesa de aprobacion): solo se le dice; el equipo decide si lo usa
                 const etiqueta = mejorar ? "⚠️ <b>Para mejorar</b>" : "✅ <b>Va bien</b>";
                 const base = `${etiqueta}${p.feedback_texto ? `\n💬 ${esc(p.feedback_texto)}` : ""}`;
                 const caption = `${base}\n\n<i>${esc(m.nombre)}, este es el comentario del equipo sobre este vídeo.</i>`;
                 try {
                   const ruta = await videoParaTelegram(p, path.join(tmp, `${p.id}.mp4`));
                   if (!ruta) throw new Error("sin video");
-                  await enviarVideo(m.telegram_id, ruta, mejorar ? `${base}\n\n<i>${esc(m.nombre)}, graba otro con este cambio y súbelo en «Subir vídeos». Este lo hemos retirado.</i>` : caption);
-                  if (mejorar) await retirarPieza(sb, p); // enviado: sale de la captacion (cuando suba el nuevo se revisa como uno mas)
+                  await enviarVideo(
+                    m.telegram_id,
+                    ruta,
+                    !enEspera
+                      ? `${base}\n\n<i>${esc(m.nombre)}, este es el vídeo ya editado. Tenlo en cuenta para los próximos que grabes.</i>`
+                      : mejorar
+                        ? `${base}\n\n<i>${esc(m.nombre)}, graba otro con este cambio y súbelo en «Subir vídeos». Este lo hemos retirado.</i>`
+                        : caption,
+                  );
+                  if (mejorar && enEspera) await retirarPieza(sb, p); // enviado: sale de la captacion (cuando suba el nuevo se revisa como uno mas)
                 } catch (err) {
                   // Si el video no se puede mandar, al menos el comentario va como texto
                   console.error("[telegram-modelos] video de feedback:", err.message);

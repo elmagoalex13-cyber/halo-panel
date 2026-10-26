@@ -8,6 +8,7 @@ import { AvatarModelo } from "@/components/AvatarModelo";
 import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 import { ConfirmacionDoble } from "@/components/ConfirmacionDoble";
 import { OPCIONES_VELOCIDAD, leerVelocidad, textoVelocidad } from "@/lib/velocidadHablados";
+import { FeedbackMesa } from "./FeedbackMesa";
 
 export interface VideoRow {
   id: string;
@@ -30,6 +31,8 @@ export interface VideoRow {
   recorte_fin?: number | null;
   notas_editor?: string | null;
   audio_referencia_url?: string | null;
+  feedback_tipo?: "bien" | "mejorar" | null;
+  feedback_texto?: string | null;
   modelo_nombre: string;
   cuenta_username: string | null;
   programado_at?: string | null;
@@ -991,6 +994,11 @@ export function MesaClient({
                       {tipoVideoLabel(row.tipo_video ?? "sin_clasificar")}
                     </span>
                     <span className="font-mono text-[10px] text-white/25">{formatDate(row.recibido_at)}</span>
+                    {row.feedback_tipo ? (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.feedback_tipo === "mejorar" ? "bg-amber-400/15 text-amber-200" : "bg-emerald-500/15 text-emerald-300"}`}>
+                        💬 Feedback: {row.feedback_tipo === "mejorar" ? "mejorar" : "va bien"}
+                      </span>
+                    ) : null}
                   </div>
                   {(row.caption || row.frase_quemada) ? (
                     <p className="mt-2 line-clamp-1 text-xs text-white/35">{row.caption || row.frase_quemada}</p>
@@ -1177,6 +1185,8 @@ export function MesaClient({
                   </p>
                 ) : null}
               </div>
+
+              <FeedbackMesa key={selected.id} piezaId={selected.id} modeloId={selected.modelo_id} tipoInicial={selected.feedback_tipo ?? null} textoInicial={selected.feedback_texto ?? ""} />
 
               <div>
                 <div className="mb-1 flex items-center justify-between">
