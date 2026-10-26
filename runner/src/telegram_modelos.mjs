@@ -214,7 +214,9 @@ export async function avisosModelos(sb) {
 Entra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
           }
           if (piezaIds.length) {
-            const { data: piezas } = await sb.from("library_content").select("id, titulo, filename_original, r2_key, r2_key_original, video_procesado_url, size_bytes, estado, feedback_tipo, feedback_texto").in("id", piezaIds);
+            const { data: piezas, error: errPiezas } = await sb.from("library_content").select("id, titulo, filename_original, r2_key, r2_key_original, video_procesado_url, size_bytes, estado, feedback_tipo, feedback_texto").in("id", piezaIds);
+            if (errPiezas) throw new Error("feedback: no se pudieron leer los videos: " + errPiezas.message); // no se marca como enviado: se reintenta
+            console.log("[telegram-modelos] feedback de " + m.nombre + ": " + (piezas ?? []).length + " video(s)");
             const tmp = await mkdtemp(path.join(tmpdir(), "fb-"));
             try {
               let sinVideo = 0;
@@ -229,6 +231,7 @@ Entra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
                 try {
                   const ruta = await videoParaTelegram(p, path.join(tmp, `${p.id}.mp4`));
                   if (!ruta) throw new Error("sin video");
+                  console.log("[telegram-modelos] enviando video de feedback (" + p.feedback_tipo + ", " + p.estado + ") a " + m.nombre);
                   await enviarVideo(
                     m.telegram_id,
                     ruta,
