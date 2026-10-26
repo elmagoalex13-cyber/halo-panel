@@ -18,6 +18,7 @@ import { readFile, rm, mkdir } from "fs/promises";
 import path from "path";
 import { config } from "./config.mjs";
 import { SesionVenuz } from "./venuz.mjs";
+import { agenciasVenuz, leerOrigen } from "./venuz_comun.mjs";
 import { downloadFromR2Bucket } from "./r2.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -163,7 +164,8 @@ async function procesarPost(supabase, sesion, p, cuentaId, fanOfId) {
 }
 
 export async function cicloPostsVenuz(supabase) {
-  if (ocupado || !config.venuzEmail || !config.venuzPassword) return;
+  const agencias = agenciasVenuz().filter((a) => a.email && a.password);
+  if (ocupado || !agencias.length) return;
   ocupado = true;
   try {
     // Lo que se quedo a medias (el editor se reinicio): se avisa, no se reintenta solo por si ya esta en la cola de Venuz
@@ -201,12 +203,27 @@ export async function cicloPostsVenuz(supabase) {
       porCuenta.set(cuentaId, [...(porCuenta.get(cuentaId) ?? []), p]);
     }
 
-    const sesion = new SesionVenuz(config.venuzEmail, config.venuzPassword);
+    // Cada creadora se programa con SU cuenta de Venuz (la tuya o la de tu socio): una sesion por cuenta
+    const origen = await leerOrigen(supabase);
+    const sesiones = new Map();
+    const sesionDe = (cuentaId) => {
+      const etiqueta = origen[cuentaId] ?? "dueno";
+      const ag = agencias.find((a) => a.etiqueta === etiqueta);
+      if (!ag) return null;
+      if (!sesiones.has(etiqueta)) sesiones.set(etiqueta, new SesionVenuz(ag.email, ag.password));
+      return sesiones.get(etiqueta);
+    };
     const colas = [...porCuenta.entries()];
     let siguiente = 0;
     const trabajador = async () => {
       while (siguiente < colas.length) {
         const [cuentaId, lista] = colas[siguiente++];
+        const sesion = sesionDe(cuentaId);
+        if (!sesion) {
+          const quien = (origen[cuentaId] ?? "dueno") === "socio" ? "tu socio" : "tu cuenta";
+          for (const p of lista) await supabase.from("posts_programados").update({ estado: "error", error: `Falta el usuario y la contraseña de Venuz de ${quien} en el servidor`, updated_at: new Date().toISOString() }).eq("id", p.id).eq("estado", "aprobado");
+          continue;
+        }
         for (const p of lista) await procesarPost(supabase, sesion, p, cuentaId, fan.get(p.modelo_id));
       }
     };

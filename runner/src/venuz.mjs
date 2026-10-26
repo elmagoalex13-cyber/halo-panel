@@ -10,6 +10,7 @@
  * Cada vuelta es idempotente (upsert): repetirla solo refresca los numeros.
  */
 import { config } from "./config.mjs";
+import { agenciasVenuz, desactivarAusentes, guardarOrigen, vincularNuevas } from "./venuz_comun.mjs";
 
 const API = "https://crm-api-next.venuz.ai";
 const ORIGEN = "https://app.venuz.ai";
@@ -25,14 +26,6 @@ const num = (v) => {
 const entero = (v) => (Number.isFinite(Number(v)) && v !== null && v !== undefined ? Math.round(Number(v)) : null);
 const ymd = (d) => d.toISOString().slice(0, 10);
 const sumarDias = (d, n) => new Date(d.getTime() + n * 86400000);
-const normalizar = (s) =>
-  String(s ?? "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
 /* ---------------------------- sesion con cookies ---------------------------- */
 
 export class SesionVenuz {
@@ -212,35 +205,11 @@ async function upsertEnTrozos(supabase, tabla, filas, onConflict) {
   }
 }
 
-/** Vincula a una modelo del panel las cuentas nuevas cuyo nombre coincida de forma inequivoca. */
-async function vincularNuevas(supabase) {
-  const [{ data: cuentas }, { data: modelos }] = await Promise.all([
-    supabase.from("venuz_cuentas").select("id, nombre, username, modelo_id, vinculo_manual"),
-    supabase.from("modelos").select("id, nombre"),
-  ]);
-  const yaUsadas = new Set((cuentas ?? []).filter((c) => c.modelo_id).map((c) => c.modelo_id));
-  let vinculadas = 0;
-  for (const c of (cuentas ?? []).filter((x) => !x.modelo_id && !x.vinculo_manual)) {
-    const claves = [normalizar(c.nombre), normalizar(c.username)].filter((k) => k.length >= 3);
-    const candidatas = (modelos ?? []).filter((m) => {
-      if (yaUsadas.has(m.id)) return false;
-      const n = normalizar(m.nombre);
-      return n.length >= 3 && claves.some((k) => k === n || (n.length >= 4 && k.includes(n)) || (k.length >= 4 && n.includes(k)));
-    });
-    if (candidatas.length !== 1) continue;
-    const { error } = await supabase.from("venuz_cuentas").update({ modelo_id: candidatas[0].id }).eq("id", c.id).is("modelo_id", null);
-    if (!error) {
-      yaUsadas.add(candidatas[0].id);
-      vinculadas++;
-    }
-  }
-  return vinculadas;
-}
-
 /* --------------------------------- sincronizar ------------------------------ */
 
-export async function sincronizarVenuz(supabase, { dias } = {}) {
-  const sesion = new SesionVenuz(config.venuzEmail, config.venuzPassword);
+export async function sincronizarVenuz(supabase, { dias, agencia } = {}) {
+  const etiqueta = agencia?.etiqueta ?? "dueno";
+  const sesion = new SesionVenuz(agencia?.email ?? config.venuzEmail, agencia?.password ?? config.venuzPassword);
   const hoy = new Date();
   const hoyStr = ymd(hoy);
 
@@ -266,10 +235,9 @@ export async function sincronizarVenuz(supabase, { dias } = {}) {
     "id",
   );
 
-  // Las cuentas que ya no estan en Venuz (borradas) dejan de contar y de salir en el panel; su historico se conserva
-  const idsLista = lista.map((a) => a.id).filter(Boolean);
-  const { data: sobrantes } = await supabase.from("venuz_cuentas").select("id").eq("activa", true).not("id", "in", `(${idsLista.join(",")})`);
-  if (sobrantes?.length) await supabase.from("venuz_cuentas").update({ activa: false, estado_conexion: "disconnected", updated_at: ahora }).in("id", sobrantes.map((s) => s.id));
+  // De que cuenta de Venuz es cada creadora y, las que ya no estan (borradas), fuera
+  const mapaOrigen = await guardarOrigen(supabase, etiqueta, lista.map((a) => a.id).filter(Boolean));
+  await desactivarAusentes(supabase, etiqueta, lista.map((a) => a.id).filter(Boolean), mapaOrigen);
 
   // Primera vez (sin datos): historico largo. Despues, solo una ventana reciente que se re-lee entera
   // porque Venuz ajusta los ultimos dias (reembolsos, ventas tardias).
@@ -339,7 +307,8 @@ async function registrar(supabase, resultado, accion, detalle, duracionMs) {
 /** Se llama cada ~30 s: lanza la sincronizacion si toca por horario o si el panel la ha pedido. */
 export async function cicloVenuz(supabase) {
   if (enMarcha) return;
-  if (!config.venuzEmail || !config.venuzPassword) {
+  const agencias = agenciasVenuz().filter((a) => a.email && a.password);
+  if (!agencias.length) {
     if (!avisadoSinCredenciales) {
       console.log("[venuz] sin VENUZ_EMAIL / VENUZ_PASSWORD en el .env: facturacion desactivada");
       avisadoSinCredenciales = true;
@@ -369,15 +338,17 @@ export async function cicloVenuz(supabase) {
 
     ultimoIntento = ahora;
     const t0 = Date.now();
-    try {
-      const r = await sincronizarVenuz(supabase);
-      const resultado = r.problemas.length && !r.diasGuardados ? "error" : "ok";
-      if (resultado === "ok") ultimaOk = Date.now();
-      await registrar(supabase, resultado, "sync", { origen: porPedido ? "manual" : "programado", ...r }, Date.now() - t0);
-      console.log(`[venuz] sync ${resultado}: ${r.cuentas} cuentas, ${r.diasGuardados} dias, ${r.mesesGuardados} resumenes mensuales${r.problemas.length ? `, ${r.problemas.length} avisos` : ""}`);
-    } catch (err) {
-      console.error("[venuz] sync fallida:", err.message);
-      await registrar(supabase, "error", "sync", { origen: porPedido ? "manual" : "programado", error: err.message }, Date.now() - t0);
+    for (const agencia of agencias) {
+      try {
+        const r = await sincronizarVenuz(supabase, { agencia });
+        const resultado = r.problemas.length && !r.diasGuardados ? "error" : "ok";
+        if (resultado === "ok") ultimaOk = Date.now();
+        await registrar(supabase, resultado, "sync", { origen: porPedido ? "manual" : "programado", cuenta_venuz: agencia.etiqueta, ...r }, Date.now() - t0);
+        console.log(`[venuz:${agencia.etiqueta}] sync ${resultado}: ${r.cuentas} cuentas, ${r.diasGuardados} dias, ${r.mesesGuardados} resumenes mensuales${r.problemas.length ? `, ${r.problemas.length} avisos` : ""}`);
+      } catch (err) {
+        console.error(`[venuz:${agencia.etiqueta}] sync fallida:`, err.message);
+        await registrar(supabase, "error", "sync", { origen: porPedido ? "manual" : "programado", cuenta_venuz: agencia.etiqueta, error: err.message }, Date.now() - t0);
+      }
     }
   } catch (err) {
     console.error("[venuz] error inesperado:", err.message);

@@ -1,14 +1,17 @@
 /**
- * Facturacion y enlaces de Venuz a traves de su API OFICIAL (open.venuz.ai/v1, con clave VENUZ_API_KEY en el .env del VPS).
- * Complementa al lector por sesion de venuz.mjs (que sigue ahi como respaldo y para el resumen mensual):
- *   - cuentas (creadoras) de Venuz: se guardan y las que ya NO estan en Venuz se desactivan (dejan de salir en el panel)
- *   - ingresos por dia y canal (neto y bruto) de las ultimas semanas: cada ~10 minutos se refrescan los ultimos dias (casi en tiempo real)
- *     y una vez por hora una ventana larga (Venuz ajusta reembolsos y ventas tardias)
- *   - enlaces de seguimiento (clics y suscriptores de cada uno) y ratio de contracargos -> panel_config «venuz_enlaces»
- * Solo LEE: esta clave no se usa para escribir nada en Venuz.
+ * Facturacion y enlaces de Venuz a traves de su API OFICIAL (open.venuz.ai/v1), con la clave de cada cuenta de Venuz (la tuya: VENUZ_API_KEY;
+ * la de tu socio, cuando la haya: VENUZ_API_KEY_SOCIO). Complementa al lector por sesion de venuz.mjs (que sigue como respaldo y para el resumen mensual):
+ *   - creadoras (cuentas) de Venuz: se guardan y vinculan a su modelo; las que ya NO estan en Venuz se desactivan (dejan de salir en el panel).
+ *     Se revisan cada minuto: una creadora nueva (o borrada) se nota en el panel en uno o dos minutos.
+ *   - ingresos por dia y canal (neto y bruto): cada ~10 minutos los ultimos dias (casi en tiempo real) y cada hora una ventana larga (Venuz ajusta reembolsos y ventas tardias)
+ *   - enlaces de seguimiento (clics y suscriptores) y ratio de contracargos -> panel_config «venuz_enlaces»
+ * Solo LEE: estas claves no se usan para escribir nada en Venuz.
  */
+import { agenciasVenuz, desactivarAusentes, guardarOrigen, vincularNuevas } from "./venuz_comun.mjs";
+
 const BASE = "https://open.venuz.ai/v1";
 const AGENTE = "venuz_sync";
+const CADA_CUENTAS_MS = 60000;
 const CADA_RAPIDO_MS = 10 * 60000;
 const CADA_LARGO_MS = 60 * 60000;
 const DIAS_RAPIDO = 3;
@@ -62,15 +65,25 @@ async function upsertEnTrozos(supabase, tabla, filas, onConflict) {
   }
 }
 
-/** Sincroniza cuentas, ingresos y enlaces. `dias` = ventana de ingresos (por defecto la corta). */
-export async function sincronizarVenuzApi(supabase, clave, { dias = DIAS_RAPIDO, enlaces = true } = {}) {
-  const hoy = new Date();
-  const ahora = hoy.toISOString();
+const vacias = new Map(); // etiqueta -> vueltas seguidas con la lista de cuentas vacia (para no desactivar todo por un fallo puntual)
 
+/** Creadoras de esta cuenta de Venuz: las guarda, anota de quien son, desactiva las borradas y vincula las nuevas. Devuelve la lista. */
+export async function sincronizarCuentas(supabase, clave, etiqueta) {
+  const ahora = new Date().toISOString();
   const resp = await llamar(clave, "/accounts");
   const lista = (resp.data ?? []).filter((a) => a?.id);
-  if (!lista.length) throw new Error("La clave de Venuz no ve ninguna cuenta (creadoras)");
+  if (!lista.length) {
+    const n = (vacias.get(etiqueta) ?? 0) + 1;
+    vacias.set(etiqueta, n);
+    if (n >= 2) {
+      const mapa = await guardarOrigen(supabase, etiqueta, []);
+      await desactivarAusentes(supabase, etiqueta, [], mapa);
+    }
+    return [];
+  }
+  vacias.set(etiqueta, 0);
 
+  const mapa = await guardarOrigen(supabase, etiqueta, lista.map((a) => a.id));
   await upsertEnTrozos(
     supabase,
     "venuz_cuentas",
@@ -86,12 +99,15 @@ export async function sincronizarVenuzApi(supabase, clave, { dias = DIAS_RAPIDO,
     })),
     "id",
   );
+  await desactivarAusentes(supabase, etiqueta, lista.map((a) => a.id), mapa);
+  await vincularNuevas(supabase);
+  return lista;
+}
 
-  // Las cuentas que ya no estan en Venuz (borradas) dejan de contar y de salir en el panel; su historico se conserva
-  const ids = lista.map((a) => a.id);
-  const { data: sobrantes } = await supabase.from("venuz_cuentas").select("id").eq("activa", true).not("id", "in", `(${ids.join(",")})`);
-  if (sobrantes?.length) await supabase.from("venuz_cuentas").update({ activa: false, estado_conexion: "disconnected", updated_at: ahora }).in("id", sobrantes.map((s) => s.id));
-
+/** Ingresos (ultimos `dias`) y enlaces de las cuentas de esta cuenta de Venuz. */
+export async function sincronizarIngresos(supabase, clave, lista, { dias = DIAS_RAPIDO, enlaces = true } = {}) {
+  const hoy = new Date();
+  const ahora = hoy.toISOString();
   const problemas = [];
   let diasGuardados = 0;
   const desde = ymd(sumarDias(hoy, -(dias - 1)));
@@ -132,17 +148,25 @@ export async function sincronizarVenuzApi(supabase, clave, { dias = DIAS_RAPIDO,
     }
   }
   if (enlaces && Object.keys(salida).length) {
-    await supabase.from("panel_config").upsert({ key: "venuz_enlaces", value: { at: ahora, cuentas: salida }, updated_at: ahora });
+    // Se conservan los enlaces de las cuentas de la OTRA cuenta de Venuz y se renuevan los de estas
+    const { data: previo } = await supabase.from("panel_config").select("value").eq("key", "venuz_enlaces").maybeSingle();
+    const cuentas = { ...((previo?.value?.cuentas ?? {})), ...salida };
+    await supabase.from("panel_config").upsert({ key: "venuz_enlaces", value: { at: ahora, cuentas }, updated_at: ahora });
   }
-  return { cuentas: lista.length, diasGuardados, ventanaDias: dias, problemas };
+  return { diasGuardados, ventanaDias: dias, problemas };
 }
 
-/* ------------------------- ciclo (cada ~10 min + peticiones del panel) ---------------------- */
+/** Todo de una vez (lo usan las pruebas y el boton de actualizar). */
+export async function sincronizarVenuzApi(supabase, clave, { etiqueta = "dueno", dias = DIAS_RAPIDO, enlaces = true } = {}) {
+  const lista = await sincronizarCuentas(supabase, clave, etiqueta);
+  if (!lista.length) throw new Error("La clave de Venuz no ve ninguna cuenta (creadoras)");
+  const r = await sincronizarIngresos(supabase, clave, lista, { dias, enlaces });
+  return { cuentas: lista.length, ...r };
+}
 
-let enMarcha = false;
-let ultimoRapido = 0;
-let ultimoLargo = 0;
-let ultimoErrorLog = 0;
+/* ------------------------- ciclo (cada minuto: cuentas; cada 10 min: ingresos; peticiones del panel) ---------------------- */
+
+const estado = new Map(); // etiqueta -> { enMarcha, cuentas, rapido, largo, errorLog }
 let sinClaveAvisado = false;
 
 async function registrar(supabase, resultado, detalle, ms) {
@@ -150,42 +174,49 @@ async function registrar(supabase, resultado, detalle, ms) {
   if (error) console.error("[venuz-api] no se pudo registrar en log_agentes:", error.message);
 }
 
-/** Se llama cada ~30 s: sincroniza si toca (cada 10 min) o si el panel ha pulsado «Actualizar» (peticion mas reciente que la ultima vuelta). */
+async function cicloAgencia(supabase, ag, pedidoAt) {
+  const e = estado.get(ag.etiqueta) ?? { enMarcha: false, cuentas: 0, rapido: 0, largo: 0, errorLog: 0, lista: [] };
+  estado.set(ag.etiqueta, e);
+  if (e.enMarcha) return;
+  const ahora = Date.now();
+  const porPedido = pedidoAt > e.cuentas;
+  if (!porPedido && ahora - e.cuentas < CADA_CUENTAS_MS) return;
+  e.enMarcha = true;
+  e.cuentas = ahora;
+  const t0 = Date.now();
+  try {
+    e.lista = await sincronizarCuentas(supabase, ag.apiKey, ag.etiqueta);
+    const toca = porPedido || ahora - e.rapido >= CADA_RAPIDO_MS;
+    if (!toca || !e.lista.length) return;
+    const largo = porPedido || ahora - e.largo >= CADA_LARGO_MS;
+    e.rapido = ahora;
+    const r = await sincronizarIngresos(supabase, ag.apiKey, e.lista, { dias: largo ? DIAS_LARGO : DIAS_RAPIDO });
+    if (largo) e.largo = ahora;
+    // Solo se deja constancia en el registro (la hora de «Actualizado» del panel) cuando algo se ha guardado
+    if (r.diasGuardados || !r.problemas.length) await registrar(supabase, r.problemas.length && !r.diasGuardados ? "error" : "ok", { origen: porPedido ? "manual" : "api", cuenta_venuz: ag.etiqueta, cuentas: e.lista.length, ...r }, Date.now() - t0);
+    console.log(`[venuz-api:${ag.etiqueta}] ${largo ? "ventana larga" : "rapida"}: ${e.lista.length} cuentas, ${r.diasGuardados} dias${r.problemas.length ? `, ${r.problemas.length} avisos: ${r.problemas[0]}` : ""}`);
+  } catch (err) {
+    console.error(`[venuz-api:${ag.etiqueta}] sync fallida:`, err.message);
+    if (Date.now() - e.errorLog > 3600000) {
+      e.errorLog = Date.now();
+      await registrar(supabase, "error", { origen: "api", cuenta_venuz: ag.etiqueta, error: err.message }, Date.now() - t0);
+    }
+  } finally {
+    e.enMarcha = false;
+  }
+}
+
+/** Se llama cada ~30 s: por cada cuenta de Venuz con clave, revisa sus creadoras cada minuto y sus ingresos cada 10, o al momento si el panel ha pulsado «Actualizar». */
 export async function cicloVenuzApi(supabase) {
-  const clave = (process.env.VENUZ_API_KEY ?? "").trim();
-  if (!clave) {
+  const agencias = agenciasVenuz().filter((a) => a.apiKey);
+  if (!agencias.length) {
     if (!sinClaveAvisado) {
       console.log("[venuz-api] sin VENUZ_API_KEY en el .env: se usa solo el lector por sesion");
       sinClaveAvisado = true;
     }
     return;
   }
-  if (enMarcha) return;
-  enMarcha = true;
-  try {
-    const { data: pedido } = await supabase.from("log_agentes").select("created_at").eq("agente", AGENTE).eq("accion", "solicitud").order("created_at", { ascending: false }).limit(1);
-    const pedidoAt = pedido?.[0] ? new Date(pedido[0].created_at).getTime() : 0;
-    const ahora = Date.now();
-    const porPedido = pedidoAt > ultimoRapido;
-    if (!porPedido && ahora - ultimoRapido < CADA_RAPIDO_MS) return;
-
-    const largo = porPedido || ahora - ultimoLargo >= CADA_LARGO_MS;
-    ultimoRapido = ahora;
-    const t0 = Date.now();
-    try {
-      const r = await sincronizarVenuzApi(supabase, clave, { dias: largo ? DIAS_LARGO : DIAS_RAPIDO });
-      if (largo) ultimoLargo = ahora;
-      // Solo se deja constancia en el registro (la hora de «Actualizado» del panel) cuando algo se ha guardado
-      if (r.diasGuardados || !r.problemas.length) await registrar(supabase, r.problemas.length && !r.diasGuardados ? "error" : "ok", { origen: porPedido ? "manual" : "api", ...r }, Date.now() - t0);
-      console.log(`[venuz-api] ${largo ? "ventana larga" : "rapida"}: ${r.cuentas} cuentas, ${r.diasGuardados} dias${r.problemas.length ? `, ${r.problemas.length} avisos: ${r.problemas[0]}` : ""}`);
-    } catch (e) {
-      console.error("[venuz-api] sync fallida:", e.message);
-      if (Date.now() - ultimoErrorLog > 3600000) {
-        ultimoErrorLog = Date.now();
-        await registrar(supabase, "error", { origen: "api", error: e.message }, Date.now() - t0);
-      }
-    }
-  } finally {
-    enMarcha = false;
-  }
+  const { data: pedido } = await supabase.from("log_agentes").select("created_at").eq("agente", AGENTE).eq("accion", "solicitud").order("created_at", { ascending: false }).limit(1);
+  const pedidoAt = pedido?.[0] ? new Date(pedido[0].created_at).getTime() : 0;
+  await Promise.all(agencias.map((ag) => cicloAgencia(supabase, ag, pedidoAt)));
 }

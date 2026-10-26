@@ -1,4 +1,5 @@
 import { PanelLayout } from "@/components/PanelLayout";
+import { AutoRefrescar } from "@/components/AutoRefrescar";
 import { VenuzSyncButton } from "./VenuzSyncButton";
 import { type ModeloLite, type VenuzCuenta, type VenuzDia, type VenuzMes } from "./VenuzResumen";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
@@ -83,6 +84,7 @@ export default async function FacturacionPage() {
 
   return (
     <PanelLayout>
+      <AutoRefrescar segundos={60} />
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-[color:var(--text-secondary)]">Ingresos por modelo y por canal</p>

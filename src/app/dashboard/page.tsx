@@ -5,6 +5,7 @@ import { publerActivo } from "@/lib/publer";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { GlassCard } from "@/components/GlassCard";
 import { PanelLayout } from "@/components/PanelLayout";
+import { AutoRefrescar } from "@/components/AutoRefrescar";
 import { RefreshButton } from "@/components/RefreshButton";
 import { StatTile } from "@/components/StatTile";
 import { PeriodoSelect } from "./PeriodoSelect";
@@ -299,6 +300,7 @@ export default async function DashboardPage({
 
   return (
     <PanelLayout>
+      <AutoRefrescar segundos={60} />
       <div className="mb-8">
         <p className="text-sm text-[color:var(--text-secondary)]">{saludo} 👋</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Panel de Administracion</h1>
