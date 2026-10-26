@@ -146,12 +146,20 @@ export async function vincularModelos(sb) {
       }
       const { data: modelo } = await sb.from("modelos").select("id, nombre").eq("id", id).maybeSingle();
       if (!modelo) continue;
-      const { error } = await sb.from("modelos").update({ telegram_id: msg.chat.id }).eq("id", id);
+      let { error } = await sb.from("modelos").update({ telegram_id: msg.chat.id }).eq("id", id);
+      if (error && /modelos_telegram_id_key|duplicate key/i.test(error.message)) {
+        // Ese Telegram ya estaba ligado a OTRA modelo (p. ej. una prueba hecha antes con el mismo movil): una persona solo puede ser una modelo, asi que pasa a esta
+        const { data: antes } = await sb.from("modelos").select("id, nombre").eq("telegram_id", msg.chat.id).neq("id", id);
+        await sb.from("modelos").update({ telegram_id: null }).eq("telegram_id", msg.chat.id).neq("id", id);
+        console.log(`[telegram-modelos] el Telegram de ${modelo.nombre} estaba ligado a ${(antes ?? []).map((a) => a.nombre).join(", ") || "otra modelo"}: se pasa a ${modelo.nombre}`);
+        ({ error } = await sb.from("modelos").update({ telegram_id: msg.chat.id }).eq("id", id));
+      }
       if (error) throw new Error(error.message);
       await enviar(msg.chat.id, `✅ ¡Listo, <b>${esc(modelo.nombre)}</b>! Te avisaremos por aquí de lo que te falte por hacer y de los comentarios del equipo sobre tus vídeos.`);
       console.log(`[telegram-modelos] ${modelo.nombre} ha activado sus avisos`);
     } catch (e) {
       console.error("[telegram-modelos] vincular:", e.message);
+      await enviar(msg.chat.id, "⚠️ Ahora mismo no he podido activar tus avisos. Vuelve a pulsar el botón del portal dentro de unos minutos.").catch(() => undefined);
     }
   }
   if (siguiente !== est.n) await guardar(sb, "telegram_offset", { n: siguiente });
