@@ -7,7 +7,12 @@
  * Solo escribe a modelos que se han vinculado ellas mismas.
  */
 import { createHmac, timingSafeEqual } from "crypto";
+import { mkdtemp, readFile, rm } from "fs/promises";
+import { tmpdir } from "os";
+import path from "path";
 import { config } from "./config.mjs";
+import { downloadFromR2, existeEnR2 } from "./r2.mjs";
+import { hashOriginal } from "./previews.mjs";
 
 const ZONA = "Europe/Madrid";
 const RACHA_QUIETA_MS = 60000; // se junta lo que comentes seguido y se avisa 1 minuto despues del ultimo comentario
@@ -33,6 +38,35 @@ async function api(metodo, cuerpo) {
   return j.result;
 }
 const enviar = (chat, texto) => api("sendMessage", { chat_id: chat, text: texto.slice(0, 4000), parse_mode: "HTML", disable_web_page_preview: true });
+
+/** Manda un video por el bot (limite de Telegram: 50 MB). El video se baja de R2 y se sube como archivo. */
+async function enviarVideo(chat, ruta, caption) {
+  const form = new FormData();
+  form.set("chat_id", String(chat));
+  form.set("caption", caption.slice(0, 1000));
+  form.set("parse_mode", "HTML");
+  form.set("supports_streaming", "true");
+  form.set("video", new Blob([await readFile(ruta)], { type: "video/mp4" }), "video.mp4");
+  const res = await fetch(`https://api.telegram.org/bot${config.telegramToken}/sendVideo`, { method: "POST", body: form });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j.ok === false) throw new Error(`Telegram sendVideo ${res.status}: ${String(j.description ?? "").slice(0, 140)}`);
+}
+
+/** El video de una pieza para mandarlo por Telegram: su vista previa (720p, ligera) o, si no existe, el original si cabe. null si no se puede. */
+async function videoParaTelegram(pieza, destino) {
+  const clave = pieza.r2_key_original ?? pieza.r2_key;
+  if (!clave || clave.startsWith("supabase://")) return null;
+  const prev = `previews/${hashOriginal(clave)}.mp4`;
+  if (await existeEnR2(prev)) {
+    await downloadFromR2(prev, destino);
+    return destino;
+  }
+  if ((pieza.size_bytes ?? 0) > 0 && pieza.size_bytes < 45 * 1024 * 1024 && (await existeEnR2(clave))) {
+    await downloadFromR2(clave, destino);
+    return destino;
+  }
+  return null;
+}
 
 // ------------------------------------------------------------------------------------------------ vinculacion
 /** Devuelve el id de la modelo si el codigo es valido (22 caracteres de id + 10 de firma), o null. */
@@ -119,17 +153,67 @@ export async function avisosModelos(sb) {
       continue;
     }
     try {
-      // Feedback sobre reels: se espera a que acabe la racha de comentarios
+      // Feedback sobre reels: se espera a que acabe la racha de comentarios y se manda CADA VIDEO con su feedback (el ultimo que le hayas dado)
       const fb = lista.filter((e) => e.tipo === "modelo_feedback");
       if (fb.length) {
         const nuevo = Math.max(...fb.map((e) => new Date(e.created_at).getTime()));
         const viejo = Math.min(...fb.map((e) => new Date(e.created_at).getTime()));
         if (ahora - nuevo >= RACHA_QUIETA_MS || ahora - viejo >= RACHA_MAXIMA_MS) {
-          const bien = fb.filter((e) => e.datos?.tipo === "bien").length;
-          const mejorar = fb.filter((e) => e.datos?.tipo === "mejorar").length;
-          const partes = [bien ? `✅ ${bien} van bien` : null, mejorar ? `⚠️ ${mejorar} para mejorar` : null].filter(Boolean).join(" · ");
-          await enviar(m.telegram_id, `💬 <b>${esc(m.nombre)}</b>, el equipo ha revisado tus reels${partes ? `: ${partes}` : ""}.\nEntra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
+          const piezaIds = [...new Set(fb.map((e) => e.datos?.pieza_id).filter(Boolean))];
+          const sinPieza = fb.filter((e) => !e.datos?.pieza_id);
+          if (sinPieza.length) {
+            const bien = sinPieza.filter((e) => e.datos?.tipo === "bien").length;
+            const mejorar = sinPieza.filter((e) => e.datos?.tipo === "mejorar").length;
+            const partes = [bien ? `✅ ${bien} van bien` : null, mejorar ? `⚠️ ${mejorar} para mejorar` : null].filter(Boolean).join(" · ");
+            await enviar(m.telegram_id, `💬 <b>${esc(m.nombre)}</b>, el equipo ha revisado tus reels${partes ? `: ${partes}` : ""}.
+Entra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
+          }
+          if (piezaIds.length) {
+            const { data: piezas } = await sb.from("library_content").select("id, titulo, filename_original, r2_key, r2_key_original, size_bytes, feedback_tipo, feedback_texto").in("id", piezaIds);
+            const tmp = await mkdtemp(path.join(tmpdir(), "fb-"));
+            try {
+              let sinVideo = 0;
+              for (const p of piezas ?? []) {
+                if (p.feedback_tipo !== "bien" && p.feedback_tipo !== "mejorar") continue; // se quito el feedback antes de enviarlo
+                const etiqueta = p.feedback_tipo === "bien" ? "✅ <b>Va bien</b>" : "⚠️ <b>Para mejorar</b>";
+                const caption = `${etiqueta}${p.feedback_texto ? `
+💬 ${esc(p.feedback_texto)}` : ""}
+
+<i>${esc(m.nombre)}, este es el comentario del equipo sobre este vídeo.</i>`;
+                try {
+                  const ruta = await videoParaTelegram(p, path.join(tmp, `${p.id}.mp4`));
+                  if (!ruta) throw new Error("sin video");
+                  await enviarVideo(m.telegram_id, ruta, caption);
+                } catch (err) {
+                  // Si el video no se puede mandar, al menos el comentario va como texto
+                  console.error("[telegram-modelos] video de feedback:", err.message);
+                  sinVideo++;
+                  await enviar(m.telegram_id, `${caption}
+🎬 ${esc(p.filename_original ?? p.titulo ?? "tu vídeo")}${enlacePortal(m)}`);
+                }
+                await new Promise((r) => setTimeout(r, 1200)); // limite de Telegram: ~1 mensaje por segundo en un chat
+              }
+              if (sinVideo === 0 && (piezas ?? []).length) await enviar(m.telegram_id, `Puedes volver a verlos en la pestaña «Subidos» de tu portal.${enlacePortal(m)}`);
+            } finally {
+              await rm(tmp, { recursive: true, force: true }).catch(() => undefined);
+            }
+          }
           await marcar(fb.map((e) => e.id));
+        }
+      }
+      // Videos descartados por el equipo (se juntan los de una misma tanda)
+      const borr = lista.filter((e) => e.tipo === "modelo_borrado");
+      if (borr.length) {
+        const nuevo = Math.max(...borr.map((e) => new Date(e.created_at).getTime()));
+        if (ahora - nuevo >= RACHA_QUIETA_MS / 4) {
+          const nombres = borr.flatMap((e) => (Array.isArray(e.datos?.nombres) ? e.datos.nombres : []));
+          const motivos = [...new Set(borr.map((e) => e.datos?.motivo).filter(Boolean))];
+          const n = nombres.length || borr.length;
+          const lineas = [`🗑 <b>${esc(m.nombre)}</b>, hemos descartado ${n === 1 ? "1 vídeo" : `${n} vídeos`} de los que subiste${nombres.length ? `: ${nombres.slice(0, 5).map((x) => `«${esc(x)}»`).join(", ")}${nombres.length > 5 ? "…" : ""}` : ""}.`];
+          if (motivos.length) lineas.push(...motivos.map((x) => `💬 ${esc(x)}`));
+          lineas.push("Cuando puedas, graba y sube otro para sustituirlo 🙌", enlacePortal(m).trim());
+          await enviar(m.telegram_id, lineas.filter(Boolean).join("\n"));
+          await marcar(borr.map((e) => e.id));
         }
       }
       // Asignacion de videos nuevos: se juntan los de una misma tanda (1 minuto sin mas)

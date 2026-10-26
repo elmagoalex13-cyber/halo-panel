@@ -6,7 +6,7 @@ import { encolarTelegram } from "@/lib/telegramCola";
 export const dynamic = "force-dynamic";
 
 // POST { pieza_id, tipo: "bien" | "mejorar" | null, texto? }  Feedback de la agencia sobre un reel de una modelo en captacion.
-// La modelo lo ve en su portal (pestaña Subidos). tipo null = quitar el feedback.
+// La modelo lo ve en su portal (pestaña Subidos) y, si tiene Telegram, recibe el video con el feedback. tipo null = quitar el feedback.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   const { id } = await params;
@@ -26,6 +26,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: /feedback_/.test(error.message) ? "Falta ejecutar el SQL 20261021_feedback_captacion.sql en Supabase." : error.message }, { status: /feedback_/.test(error.message) ? 409 : 500 });
   }
   if (!data?.length) return NextResponse.json({ error: "Vídeo no encontrado" }, { status: 404 });
-  if (tipo) await encolarTelegram("modelo_feedback", id, { tipo }); // la modelo recibe un aviso agrupado por Telegram (si lo tiene activado)
-  return NextResponse.json({ ok: true });
+  // La modelo recibe por Telegram (si lo tiene activado) ESE VIDEO con el feedback; el editor espera a que acabes de escribir y manda el ultimo de cada video
+  if (tipo) await encolarTelegram("modelo_feedback", id, { tipo, pieza_id: body.pieza_id });
+  const { data: m } = await createAdminClient().from("modelos").select("telegram_id").eq("id", id).maybeSingle();
+  return NextResponse.json({ ok: true, telegram: Boolean(m?.telegram_id) });
 }

@@ -15,12 +15,14 @@ function Tarjeta({
   elegida,
   onElegir,
   onAmpliar,
+  onEliminar,
 }: {
   p: PiezaEnEspera;
   modeloId: string;
   elegida: boolean;
   onElegir: () => void;
   onAmpliar: () => void;
+  onEliminar: () => void;
 }) {
   const [tipo, setTipo] = useState<"bien" | "mejorar" | null>(p.feedback_tipo);
   const [texto, setTexto] = useState(p.feedback_texto ?? "");
@@ -38,9 +40,10 @@ function Tarjeta({
         body: JSON.stringify({ pieza_id: p.id, tipo: nuevoTipo, texto: nuevoTexto }),
       });
       if (res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { telegram?: boolean };
         setTipo(nuevoTipo);
         setSucio(false);
-        setMsg(nuevoTipo ? "Guardado: ya lo ve la modelo" : "Feedback quitado");
+        setMsg(nuevoTipo ? (j.telegram ? "Guardado: lo ve en su portal y le llega el vídeo por Telegram con tu comentario (en un minuto)" : "Guardado: lo ve en su portal (no tiene Telegram activado)") : "Feedback quitado");
       } else setMsg(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar");
     } finally {
       setGuardando(false);
@@ -75,11 +78,15 @@ function Tarjeta({
             {p.size_bytes ? ` · ${mb(p.size_bytes)}` : ""} ·{" "}
             <a href={`/api/descargar?id=${p.id}&tipo=original`} className="font-semibold text-[#A78BFA] hover:underline">
               descargar original
-            </a>
+            </a>{" "}
+            ·{" "}
+            <button type="button" onClick={onEliminar} className="font-semibold text-red-300 hover:underline">
+              eliminar
+            </button>
           </p>
 
           <div className="space-y-2 rounded-xl border border-white/[0.08] bg-black/20 p-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Feedback para la modelo</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Feedback para la modelo <span className="font-normal normal-case tracking-normal text-white/30">· le llega el vídeo por Telegram con tu comentario</span></p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -173,6 +180,28 @@ export function CaptacionRevision({
     }
   }
 
+  async function eliminar(ids: string[]) {
+    if (!ids.length) return;
+    const motivo = window.prompt(
+      `Vas a eliminar ${ids.length} reel${ids.length === 1 ? "" : "s"} de ${nombre}: se borra el vídeo para siempre y deja de contar entre sus reels subidos (tendrá que grabar otro).
+
+Si quieres, escribe aquí por qué (se lo mandamos por Telegram). Déjalo vacío para eliminar sin motivo. Cancelar = no eliminar.`,
+      "",
+    );
+    if (motivo === null) return;
+    setEnviando(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/modelos/${modeloId}/descartar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, motivo }) });
+      if (res.ok) {
+        setElegidas(new Set());
+        router.refresh();
+      } else setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo eliminar");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {progreso ? (
@@ -259,6 +288,14 @@ export function CaptacionRevision({
               </button>
               <button
                 type="button"
+                disabled={enviando || elegidas.size === 0}
+                onClick={() => void eliminar([...elegidas])}
+                className="rounded-xl border border-red-900/50 bg-red-950/40 px-4 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-950/70 disabled:opacity-40"
+              >
+                {`Eliminar ${elegidas.size || ""}`.trim()}
+              </button>
+              <button
+                type="button"
                 disabled={enviando}
                 onClick={() => void mandar({ todos: true }, `¿Mandar TODOS los ${piezas.length} reels de ${nombre} a edición y terminar la captación? Desde ahora, lo que suba se editará directamente.`)}
                 className="rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:opacity-40"
@@ -270,7 +307,7 @@ export function CaptacionRevision({
           {error ? <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p> : null}
           <ul className="space-y-3">
             {piezas.map((p) => (
-              <Tarjeta key={p.id} p={p} modeloId={modeloId} elegida={elegidas.has(p.id)} onElegir={() => alternar(p.id)} onAmpliar={() => setGrande(piezas.filter((x) => x.preview).findIndex((x) => x.id === p.id))} />
+              <Tarjeta key={p.id} p={p} modeloId={modeloId} elegida={elegidas.has(p.id)} onElegir={() => alternar(p.id)} onAmpliar={() => setGrande(piezas.filter((x) => x.preview).findIndex((x) => x.id === p.id))} onEliminar={() => void eliminar([p.id])} />
             ))}
           </ul>
           {grande !== null ? <VisorReels piezas={piezas.filter((x) => x.preview)} indice={grande} onCambiar={setGrande} onCerrar={() => setGrande(null)} /> : null}
