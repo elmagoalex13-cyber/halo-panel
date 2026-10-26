@@ -18,6 +18,7 @@ import { cicloTrialReels } from "./trial_reels.mjs";
 import { cicloCopias } from "./copias.mjs";
 import { backupOnboarding } from "./backup_onboarding.mjs";
 import { cicloVenuz } from "./venuz.mjs";
+import { cicloVenuzApi } from "./venuz_api.mjs";
 import { cicloPostsVenuz } from "./venuz_posts.mjs";
 import { cicloFrasesReferencia, cicloPedidosMusica } from "./frases_referencia.mjs";
 import { cicloEspejo } from "./espejo.mjs";
@@ -106,6 +107,9 @@ setInterval(barridoCaptacion, 10 * 60000);
 // Facturacion de Venuz.ai: refresca cada VENUZ_HORAS y cuando el panel pulsa "Sync Venuz" (se mira cada 30 s)
 setTimeout(() => cicloVenuz(supabase), 15000);
 setInterval(() => cicloVenuz(supabase), 30000);
+// Facturacion y enlaces por la API oficial de Venuz (si hay VENUZ_API_KEY): casi en tiempo real
+setTimeout(() => cicloVenuzApi(supabase).catch((e) => console.error("[venuz-api]", e.message)), 20000);
+setInterval(() => cicloVenuzApi(supabase).catch((e) => console.error("[venuz-api]", e.message)), 30000);
 // Posts de OnlyFans aprobados en el panel -> cola de posts de Venuz (solo modelos con «Enviar a Venuz» y fan para el baul)
 setTimeout(() => cicloPostsVenuz(supabase), 15000);
 setInterval(() => cicloPostsVenuz(supabase), 15000);

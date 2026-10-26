@@ -51,6 +51,7 @@ export const config = {
   tipo2MaxFragmentos: intEnv("TIPO2_MAX_FRAGMENTOS", 12, { min: 1, max: 60 }),
   venuzEmail: strEnv("VENUZ_EMAIL", ""),
   venuzPassword: process.env.VENUZ_PASSWORD ?? "",
+  venuzApiKey: strEnv("VENUZ_API_KEY", ""),
   venuzHoras: parseFloat(process.env.VENUZ_HORAS ?? "3"),
   venuzDias: intEnv("VENUZ_DIAS", 45, { min: 7, max: 120 }),
   cronSecret: process.env.CRON_SECRET,

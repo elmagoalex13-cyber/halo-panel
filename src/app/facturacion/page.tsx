@@ -59,15 +59,16 @@ async function loadData() {
     const modelos = (modelosResult.data ?? []) as Modelo[];
     // Cada cuenta de Venuz hereda el ambito de su modelo (las sin vincular cuentan como solo del dueño)
     const ambitoPorModelo = new Map(modelos.map((m) => [m.id, m.ambito === "compartido" ? "compartido" : "privado"] as const));
-    const cuentasVenuz = ((cuentasResult.data ?? []) as VenuzCuenta[]).map((c) => ({ ...c, ambito: c.modelo_id ? (ambitoPorModelo.get(c.modelo_id) ?? "privado") : "privado" }));
+    const activas = new Set(((cuentasResult.data ?? []) as VenuzCuenta[]).filter((c) => c.activa).map((c) => c.id)); // las cuentas eliminadas en Venuz no salen (su historico queda guardado)
+    const cuentasVenuz = ((cuentasResult.data ?? []) as VenuzCuenta[]).filter((c) => c.activa).map((c) => ({ ...c, ambito: c.modelo_id ? (ambitoPorModelo.get(c.modelo_id) ?? "privado") : "privado" }));
 
     return {
       esDueno: alcance.dueno,
       rows,
       modelos,
       cuentas: cuentasVenuz as VenuzCuenta[],
-      diarios: ((diariosResult.data ?? []) as VenuzDia[]).map((d) => numerico(d, CAMPOS_DIA)),
-      meses: ((mesesResult.data ?? []) as VenuzMes[]).map((m) => numerico(m, ["total_neto", "total_bruto", "reembolsos"])),
+      diarios: ((diariosResult.data ?? []) as VenuzDia[]).filter((d) => activas.has(d.cuenta_id)).map((d) => numerico(d, CAMPOS_DIA)),
+      meses: ((mesesResult.data ?? []) as VenuzMes[]).filter((m) => activas.has(m.cuenta_id)).map((m) => numerico(m, ["total_neto", "total_bruto", "reembolsos"])),
       modelosLite: modelos.map((m) => ({ id: m.id, nombre: m.nombre, foto: fotos[m.id] ?? null })),
       lastSync: (syncResult.data ?? null) as UltimaSync,
     };
@@ -87,7 +88,7 @@ export default async function FacturacionPage() {
           <p className="text-sm text-[color:var(--text-secondary)]">Ingresos por modelo y por canal</p>
           <h1 className="mt-2 font-display text-4xl font-semibold text-white">Facturación</h1>
           <div className="mt-2 flex items-center gap-2">
-            <p className="text-sm text-[color:var(--text-secondary)]">Sincronizado desde Venuz.ai cada pocas horas</p>
+            <p className="text-sm text-[color:var(--text-secondary)]">Sincronizado con Venuz.ai casi en tiempo real (cada 10 minutos)</p>
             {lastSync ? (
               <span className={`rounded-full border px-2 py-0.5 text-xs ${syncOk ? "border-green-500/30 text-green-400" : "border-amber-500/30 text-amber-400"}`}>
                 {syncOk ? "✓" : "⚠"} último sync {new Date(lastSync.created_at).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}

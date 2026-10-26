@@ -76,6 +76,8 @@ type VenuzMes = {
   otros: number;
   top: Array<{ nombre: string; neto: number }>;
   actualizado: string | null;
+  enlaces: Array<{ cuenta: string; nombre: string; clics: number; suscriptores: number }>; // enlaces de seguimiento de OnlyFans (los mejores por suscriptores)
+  contracargos: Array<{ cuenta: string; pct: number }>;
 };
 
 // Facturacion del mes en curso desde Venuz (la rellena el scraper del runner). null = aun sin datos.
@@ -89,12 +91,18 @@ async function loadVenuzMes(grupo?: GrupoAmbito): Promise<VenuzMes | null> {
     const inicio = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1)).toISOString().slice(0, 10);
     const [diarios, cuentas, sync] = await Promise.all([
       soloEn(supabase.from("venuz_ingresos_diarios").select("cuenta_id, total, total_bruto, mensajes, suscripciones").gte("fecha", inicio).limit(5000), cuentasOk, "cuenta_id"),
-      soloEn(supabase.from("venuz_cuentas").select("id, nombre"), cuentasOk, "id"),
+      soloEn(supabase.from("venuz_cuentas").select("id, nombre").eq("activa", true), cuentasOk, "id"), // las cuentas eliminadas en Venuz no salen
       supabase.from("log_agentes").select("created_at").eq("agente", "venuz_sync").eq("accion", "sync").eq("resultado", "ok").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
-    const filas = (diarios.data ?? []) as Array<{ cuenta_id: string; total: number | string; total_bruto: number | string; mensajes: number | string; suscripciones: number | string }>;
+    const activas = new Set(((cuentas.data ?? []) as Array<{ id: string }>).map((c) => c.id));
+    const filas = ((diarios.data ?? []) as Array<{ cuenta_id: string; total: number | string; total_bruto: number | string; mensajes: number | string; suscripciones: number | string }>).filter((f) => activas.has(f.cuenta_id));
     if (!filas.length && !sync.data) return null;
     const nombres = new Map(((cuentas.data ?? []) as Array<{ id: string; nombre: string }>).map((c) => [c.id, c.nombre]));
+    // Enlaces de seguimiento y contracargos (los guarda el editor desde la API de Venuz)
+    const { data: cfgEnlaces } = await supabase.from("panel_config").select("value").eq("key", "venuz_enlaces").maybeSingle();
+    const porC = ((cfgEnlaces?.value as { cuentas?: Record<string, { nombre: string; contracargos_pct: number | null; enlaces: Array<{ nombre: string; clics: number; suscriptores: number }> }> } | null)?.cuentas) ?? {};
+    const enlaces = Object.entries(porC).filter(([id]) => activas.has(id)).flatMap(([, c]) => (c.enlaces ?? []).map((e) => ({ cuenta: c.nombre, nombre: e.nombre, clics: e.clics, suscriptores: e.suscriptores }))).sort((a, b) => b.suscriptores - a.suscriptores).slice(0, 5);
+    const contracargos = Object.entries(porC).filter(([id, c]) => activas.has(id) && typeof c.contracargos_pct === "number").map(([, c]) => ({ cuenta: c.nombre, pct: c.contracargos_pct as number }));
     const porCuenta = new Map<string, number>();
     let neto = 0, bruto = 0, mensajes = 0, suscripciones = 0;
     for (const f of filas) {
@@ -102,7 +110,7 @@ async function loadVenuzMes(grupo?: GrupoAmbito): Promise<VenuzMes | null> {
       porCuenta.set(f.cuenta_id, (porCuenta.get(f.cuenta_id) ?? 0) + Number(f.total));
     }
     const top = [...porCuenta.entries()].sort(([, a], [, b]) => b - a).slice(0, 3).map(([id, n]) => ({ nombre: nombres.get(id) ?? "—", neto: n }));
-    return { neto, bruto, mensajes, suscripciones, otros: Math.max(0, neto - mensajes - suscripciones), top, actualizado: sync.data?.created_at ?? null };
+    return { neto, bruto, mensajes, suscripciones, otros: Math.max(0, neto - mensajes - suscripciones), top, actualizado: sync.data?.created_at ?? null, enlaces, contracargos };
   } catch {
     return null;
   }
@@ -569,6 +577,28 @@ export default async function DashboardPage({
                     </li>
                   ))}
                 </ul>
+              ) : null}
+              {venuz.enlaces.length ? (
+                <div className="space-y-1.5 border-t border-white/[0.06] pt-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Enlaces que más suscriptores traen</p>
+                  <ul className="space-y-1.5 text-sm">
+                    {venuz.enlaces.map((e) => (
+                      <li key={`${e.cuenta}-${e.nombre}`} className="flex items-baseline justify-between gap-2 text-white/70">
+                        <span className="min-w-0 truncate">
+                          {e.nombre || "Sin nombre"} <span className="text-[11px] text-white/35">· {e.cuenta}</span>
+                        </span>
+                        <span className="shrink-0 text-white">
+                          {e.suscriptores} subs <span className="text-[11px] text-white/40">/ {e.clics} clics{e.clics ? ` · ${Math.round((e.suscriptores / e.clics) * 100)}%` : ""}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {venuz.contracargos.length ? (
+                <p className="text-[11px] text-white/40">
+                  Contracargos (30 días): {venuz.contracargos.map((c) => `${c.cuenta} ${String(c.pct).replace(".", ",")} %`).join(" · ")}
+                </p>
               ) : null}
               {venuz.actualizado ? (
                 <p className="text-[11px] text-white/35">Actualizado {new Date(venuz.actualizado).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>

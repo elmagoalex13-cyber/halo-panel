@@ -266,6 +266,11 @@ export async function sincronizarVenuz(supabase, { dias } = {}) {
     "id",
   );
 
+  // Las cuentas que ya no estan en Venuz (borradas) dejan de contar y de salir en el panel; su historico se conserva
+  const idsLista = lista.map((a) => a.id).filter(Boolean);
+  const { data: sobrantes } = await supabase.from("venuz_cuentas").select("id").eq("activa", true).not("id", "in", `(${idsLista.join(",")})`);
+  if (sobrantes?.length) await supabase.from("venuz_cuentas").update({ activa: false, estado_conexion: "disconnected", updated_at: ahora }).in("id", sobrantes.map((s) => s.id));
+
   // Primera vez (sin datos): historico largo. Despues, solo una ventana reciente que se re-lee entera
   // porque Venuz ajusta los ultimos dias (reembolsos, ventas tardias).
   const { count } = await supabase.from("venuz_ingresos_diarios").select("cuenta_id", { count: "exact", head: true });
