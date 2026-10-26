@@ -6,6 +6,8 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { GlassCard } from "@/components/GlassCard";
 import { PanelLayout } from "@/components/PanelLayout";
 import { AutoRefrescar } from "@/components/AutoRefrescar";
+import { AvisoPostsProgramadosCard } from "./AvisoPostsProgramados";
+import { avisosPostsProgramados } from "@/lib/postsAvisos";
 import { RefreshButton } from "@/components/RefreshButton";
 import { StatTile } from "@/components/StatTile";
 import { PeriodoSelect } from "./PeriodoSelect";
@@ -133,7 +135,7 @@ export default async function DashboardPage({
   const periodo = periodoParam === "mes" || periodoParam === "semana" ? periodoParam : "todo";
   const creadorasPeriodo = creadorasParam === "30d" ? "30d" : "todo";
 
-  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal, avisosContrato, sinPin, accInvalidos] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null), avisosContratos(), modelosSinPin(await alcanceActual(grupo)), modelosConAccesosInvalidos(await alcanceActual(grupo))]);
+  const [{ agg, modelos, facturacion, onboarding }, cuentasReales, venuz, ofNuevo, sesionPanel, ambitosTodas, avisosSocio, sistema, captacion, sinAccesos, semanal, avisosContrato, sinPin, accInvalidos, avisosPosts] = await Promise.all([loadDashboardData(grupo), loadCuentasInstagramReales(grupo), loadVenuzMes(grupo), contarOFNuevo(grupo), sesionPanelActual(), ambitosModelos(), avisosActividad(), leerSistema(), resumenCaptacion(await alcanceActual(grupo)), modelosSinAccesos(await alcanceActual(grupo)), estadoSemanal().catch(() => null), avisosContratos(), modelosSinPin(await alcanceActual(grupo)), modelosConAccesosInvalidos(await alcanceActual(grupo)), alcanceActual(grupo).then(async (a) => avisosPostsProgramados(a, (await sesionPanelActual())?.usuario ?? null))]);
   const ambitos: Record<string, string> = sesionPanel?.dueno ? ambitosTodas.porModelo : {};
   const nCompartidas = Object.values(ambitos).filter((a) => a === "compartido").length;
   const veFacturacion = !sesionPanel?.denegadas.includes("facturacion");
@@ -345,6 +347,8 @@ export default async function DashboardPage({
           </div>
         </section>
       ) : null}
+
+      <AvisoPostsProgramadosCard avisos={avisosPosts} />
 
       <AvisosDashboard avisos={notificaciones} />
 

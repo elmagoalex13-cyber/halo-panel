@@ -124,6 +124,40 @@ async function esperarHueco(cuentaId) {
 }
 
 let ocupado = false;
+let revisarTandas = true; // hay que comprobar si alguna modelo se ha quedado con TODOS sus posts programados (al arrancar y cada vez que se procesa algo)
+
+/**
+ * Aviso «todos los posts programados»: cuando de una modelo no queda ningun post aprobado esperando ni con error y se han programado posts desde el ultimo aviso,
+ * se deja un aviso para el dashboard (panel_config «posts_avisos») y otro para Telegram.
+ */
+async function avisarTandasCompletas(supabase, modeloIds) {
+  if (!modeloIds.length) return;
+  const ahora = new Date().toISOString();
+  const { data: cfg } = await supabase.from("panel_config").select("value").eq("key", "posts_avisos").maybeSingle();
+  if (!cfg) {
+    // Primera vez: lo que ya estaba programado antes no cuenta como aviso nuevo
+    await supabase.from("panel_config").upsert({ key: "posts_avisos", value: { lista: [], ultimo: Object.fromEntries(modeloIds.map((id) => [id, ahora])) }, updated_at: ahora });
+    return;
+  }
+  const ultimo = cfg.value?.ultimo ?? {};
+  const lista = cfg.value?.lista ?? [];
+  const { data: modelos } = await supabase.from("modelos").select("id, nombre").in("id", modeloIds);
+  let cambio = false;
+  for (const m of modelos ?? []) {
+    const { count: esperando } = await supabase.from("posts_programados").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("estado", "aprobado").gt("programar_para", ahora);
+    const { count: conError } = await supabase.from("posts_programados").select("id", { count: "exact", head: true }).eq("modelo_id", m.id).eq("estado", "error");
+    if (esperando || conError) continue;
+    const { data: nuevos } = await supabase.from("posts_programados").select("programar_para").eq("modelo_id", m.id).eq("estado", "programado").not("venuz_post_id", "is", null).gt("enviado_at", ultimo[m.id] ?? "1970-01-01T00:00:00Z");
+    if (!nuevos?.length) continue;
+    const hasta = nuevos.map((x) => x.programar_para).filter(Boolean).sort().pop() ?? null;
+    ultimo[m.id] = ahora;
+    lista.unshift({ id: `${m.id}|${ahora}`, modelo_id: m.id, nombre: m.nombre, n: nuevos.length, hasta, at: ahora });
+    await supabase.from("telegram_cola").insert({ tipo: "posts_programados", modelo_id: m.id, datos: { n: nuevos.length, hasta } });
+    console.log(`[posts-venuz] ${m.nombre}: todos sus posts estan programados (${nuevos.length})`);
+    cambio = true;
+  }
+  if (cambio) await supabase.from("panel_config").upsert({ key: "posts_avisos", value: { lista: lista.slice(0, 40), ultimo }, updated_at: new Date().toISOString() });
+}
 
 /** Procesa un post aprobado: sube la foto (si no estaba ya), la mete en el baul y programa el post. */
 async function procesarPost(supabase, sesion, p, cuentaId, fanOfId) {
@@ -167,6 +201,7 @@ export async function cicloPostsVenuz(supabase) {
   const agencias = agenciasVenuz().filter((a) => a.email && a.password);
   if (ocupado || !agencias.length) return;
   ocupado = true;
+  let activas = [];
   try {
     // Lo que se quedo a medias (el editor se reinicio): se avisa, no se reintenta solo por si ya esta en la cola de Venuz
     await supabase
@@ -178,6 +213,7 @@ export async function cicloPostsVenuz(supabase) {
 
     const { data: modelos, error } = await supabase.from("modelos").select("id, posts_fan_baul").eq("posts_venuz_activo", true).not("posts_fan_baul", "is", null);
     if (error || !modelos?.length) return; // sin el SQL de posts o sin modelos activadas
+    activas = modelos.map((m) => m.id);
     const fan = new Map(modelos.map((m) => [m.id, String(m.posts_fan_baul)]));
 
     const { data: posts } = await supabase
@@ -189,6 +225,7 @@ export async function cicloPostsVenuz(supabase) {
       .order("programar_para", { ascending: true })
       .limit(MAX_POR_CICLO);
     if (!posts?.length) return;
+    revisarTandas = true;
 
     // Una cuenta de Venuz por modelo: cada cuenta lleva sus posts en orden (con su pausa de 10 s) y varias cuentas avanzan a la vez
     const { data: cuentas } = await supabase.from("venuz_cuentas").select("id, modelo_id").eq("activa", true).in("modelo_id", [...fan.keys()]);
@@ -231,6 +268,13 @@ export async function cicloPostsVenuz(supabase) {
   } catch (e) {
     console.error("[posts-venuz] error inesperado:", tapar(e.message));
   } finally {
+    if (revisarTandas && activas.length) {
+      revisarTandas = false;
+      await avisarTandasCompletas(supabase, activas).catch((e) => {
+        revisarTandas = true; // se reintenta en la siguiente vuelta
+        console.error("[posts-venuz] aviso de posts programados:", tapar(e.message));
+      });
+    }
     ocupado = false;
   }
 }
