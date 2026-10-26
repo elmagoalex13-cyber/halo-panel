@@ -6,7 +6,7 @@ export const prefijoHistorias = (modeloId: string) => `historias/${modeloId}/`;
 export const MAX_HISTORIAS = 300; // por modelo: evita que una carpeta crezca sin control
 export const TAM_MAX_HISTORIA = 40 * 1024 * 1024;
 
-export type Historia = { key: string; nombre: string; size: number; fecha: string | null; vista: string; descarga: string };
+export type Historia = { key: string; nombre: string; size: number; fecha: string | null; vista: string; descarga: string; enPost?: boolean };
 
 export async function listarHistorias(modeloId: string): Promise<Historia[]> {
   const objetos = await listarObjetosOF(prefijoHistorias(modeloId), MAX_HISTORIAS + 50);

@@ -6,7 +6,7 @@ import { LoginForm } from "./LoginForm";
 import { accesosCompletos, accesosInvalidos, faltaPinSkrill } from "@/lib/accesosModelo";
 import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
 import { sanearDatos } from "@/lib/onboarding";
-import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
+import { NOMBRE_HISTORIAS_POSTS, type ArchivoOF, type ColeccionOF } from "@/lib/onlyfans";
 import { urlVista } from "@/lib/r2/onlyfans";
 import { miniaturasDeModelo, urlVistaFoto } from "@/lib/ofMiniaturas";
 import type { ArchivoVista } from "./OnlyFansPortal";
@@ -75,7 +75,8 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
   ]);
   let contenidoOF: { colecciones: ColeccionOF[]; archivos: ArchivoVista[] } | null = null;
   if (!ofColRes.error && !ofArcRes.error) {
-    const filas = (ofArcRes.data ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>;
+    const internas = new Set((ofColRes.data ?? []).filter((c) => c.nombre === NOMBRE_HISTORIAS_POSTS).map((c) => c.id as string)); // la carpeta interna de historias elegidas no se le enseña
+    const filas = ((ofArcRes.data ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>).filter((a) => !internas.has(a.coleccion_id));
     const minis = await miniaturasDeModelo(modelo.id as string); // las fotos se piden en miniatura (la original pesa varios MB)
     const archivos: ArchivoVista[] = await Promise.all(
       filas.map(async ({ storage_key, bucket, ...a }) => ({
@@ -83,7 +84,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
         vista: a.tipo_archivo === "foto" ? await urlVistaFoto(storage_key, bucket, minis).catch(() => null) : null,
       })),
     );
-    contenidoOF = { colecciones: (ofColRes.data ?? []) as ColeccionOF[], archivos };
+    contenidoOF = { colecciones: ((ofColRes.data ?? []) as ColeccionOF[]).filter((c) => !internas.has(c.id)), archivos };
   }
 
   const [encargosRes, entregasRes, onboardingRes] = await Promise.all([

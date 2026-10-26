@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canUseSupabase } from "@/lib/supabase/server";
+import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
+import { NOMBRE_HISTORIAS_POSTS } from "@/lib/onlyfans";
 import { exigirModelo } from "@/lib/alcance";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { borrarObjetoOF } from "@/lib/r2/onlyfans";
@@ -19,6 +20,13 @@ export async function GET(req: NextRequest) {
   if (g) return g;
   try {
     const historias = await listarHistorias(modeloId);
+    // Las que ya se han pasado a posts de OnlyFans (se guardan con el nombre del archivo de la historia)
+    const { data: col } = await createAdminClient().from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post").eq("nombre", NOMBRE_HISTORIAS_POSTS).limit(1).maybeSingle();
+    if (col) {
+      const { data: pasadas } = await createAdminClient().from("of_archivos").select("nombre_original").eq("coleccion_id", col.id as string);
+      const nombres = new Set((pasadas ?? []).map((a) => a.nombre_original as string));
+      for (const h of historias) if (nombres.has(h.nombre)) h.enPost = true;
+    }
     const sesion = await sesionPanelActual();
     const ultima = historias.reduce<string | null>((m, h) => (h.fecha && (!m || h.fecha > m) ? h.fecha : m), null);
     if (sesion && ultima) await marcarHistoriasVistas(sesion.usuario, modeloId, ultima).catch(() => undefined);

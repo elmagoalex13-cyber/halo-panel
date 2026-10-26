@@ -29,6 +29,8 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
   // Cuantas fotos eran nuevas al abrir (las primeras de la lista, que va de la mas reciente a la mas antigua): se resaltan aunque ya cuenten como vistas
   const [nuevasMarca, setNuevasMarca] = useState(0);
   const [visor, setVisor] = useState<number | null>(null);
+  const [aPost, setAPost] = useState<string | null>(null); // keys que se estan pasando a posts (o "lote")
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const lista = useMemo(
     () =>
@@ -95,6 +97,27 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
     }
   }
 
+  /** Pasa las fotos indicadas a posts de OnlyFans (se copian; la historia sigue aqui). */
+  async function pasarAPosts(keys: string[], marca: string) {
+    if (!abierta || !keys.length || aPost) return;
+    setAPost(marca);
+    setError(null);
+    setAviso(null);
+    try {
+      const r = await fetch("/api/instagram/historias/a-post", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelo_id: abierta, keys }) });
+      const j = (await r.json().catch(() => ({}))) as { error?: string; creados?: number; saltadas?: number };
+      if (!r.ok) throw new Error(j.error ?? "No se pudo pasar a posts");
+      setFotos((p) => (p ?? []).map((h) => (keys.includes(h.key) ? { ...h, enPost: true } : h)));
+      setElegidas((p) => p.filter((k) => !keys.includes(k)));
+      const n = j.creados ?? 0;
+      setAviso(`${n} ${n === 1 ? "foto pasada" : "fotos pasadas"} a posts de OnlyFans${j.saltadas ? ` (${j.saltadas} ya estaban)` : ""}. Revísalas y apruébalas en Posts OF.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setAPost(null);
+    }
+  }
+
   if (!resumen.length) {
     return (
       <p className="grid min-h-[30vh] place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 text-center text-sm text-white/40">
@@ -149,6 +172,11 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
                   {elegidas.length === fotos.length ? "Quitar selección" : "Seleccionar todas"}
                 </button>
                 {elegidas.length ? (
+                  <button onClick={() => void pasarAPosts(elegidas, "lote")} disabled={aPost !== null} className="rounded-lg border border-[#8B5CF6]/50 bg-[#8B5CF6]/20 px-3 py-1.5 font-semibold text-[#C4B5FD] hover:bg-[#8B5CF6]/30 disabled:opacity-50">
+                    {aPost === "lote" ? "Pasando…" : `Pasar ${elegidas.length} a posts de OnlyFans`}
+                  </button>
+                ) : null}
+                {elegidas.length ? (
                   <button onClick={borrar} disabled={borrando} className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-1.5 font-semibold text-red-400 hover:bg-red-950/50 disabled:opacity-50">
                     {borrando ? "Borrando…" : `Borrar ${elegidas.length} (ya publicadas)`}
                   </button>
@@ -157,6 +185,12 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
             ) : null}
           </div>
           {error ? <p className="text-sm text-red-300">{error}</p> : null}
+          {aviso ? (
+            <p className="text-sm text-emerald-300">
+              {aviso}{" "}
+              <a href="/posts-of" className="font-semibold underline">Ir a Posts OF</a>
+            </p>
+          ) : null}
           {fotos === null ? <p className="text-sm text-white/40">Cargando…</p> : null}
           {fotos && !fotos.length && !error ? <p className="text-sm text-white/40">No quedan fotos.</p> : null}
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-7">
@@ -176,6 +210,7 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
                   >
                     ✓
                   </button>
+                  {h.enPost ? <span className="absolute bottom-[3.25rem] left-1.5 rounded-full bg-[#8B5CF6] px-1.5 py-0.5 text-[9px] font-bold text-white">✓ En posts OF</span> : null}
                   {esNueva ? <span className="absolute right-1.5 top-1.5 rounded-full bg-pink-500 px-1.5 py-0.5 text-[9px] font-bold text-white">NUEVA</span> : null}
                   <div className="flex items-center justify-between gap-1 bg-black/70 px-1.5 py-1 text-[10px] text-white/60">
                     <span>{fechaCorta(h.fecha)}</span>
@@ -183,6 +218,14 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
                       Descargar
                     </a>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => void pasarAPosts([h.key], h.key)}
+                    disabled={aPost !== null || h.enPost}
+                    className="w-full border-t border-white/10 bg-black/70 px-1.5 py-1 text-[10px] font-semibold text-[#C4B5FD] transition hover:bg-[#8B5CF6]/30 disabled:text-white/30 disabled:hover:bg-black/70"
+                  >
+                    {aPost === h.key ? "Pasando…" : h.enPost ? "Ya es un post" : "Pasar a post OF"}
+                  </button>
                 </div>
               );
             })}

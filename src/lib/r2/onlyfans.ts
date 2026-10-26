@@ -4,6 +4,7 @@
 // definir R2_BUCKET_ONLYFANS (y darle el mismo CORS) para moverlo sin tocar codigo.
 import {
   AbortMultipartUploadCommand,
+  CopyObjectCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
   DeleteObjectCommand,
@@ -85,6 +86,11 @@ export async function tamanoEnR2(key: string): Promise<number | null> {
 /** Guarda un objeto pequeno (miniaturas) desde el servidor. */
 export async function subirObjetoOF(key: string, cuerpo: Buffer | Uint8Array, contentType: string, bucket = bucketOF()) {
   await cliente().send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: cuerpo, ContentType: contentType }));
+}
+
+/** Copia un objeto a otra clave del mismo almacen (el original no se toca). */
+export async function copiarObjetoOF(origen: string, destino: string, bucket = bucketOF()) {
+  await cliente().send(new CopyObjectCommand({ Bucket: bucket, Key: destino, CopySource: `${bucket}/${origen.split("/").map(encodeURIComponent).join("/")}` }));
 }
 
 export async function borrarObjetoOF(key: string, bucket = bucketOF()) {

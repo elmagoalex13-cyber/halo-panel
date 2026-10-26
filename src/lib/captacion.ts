@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { soloVisibles, type Alcance } from "@/lib/alcance";
+import { NOMBRE_HISTORIAS_POSTS } from "@/lib/onlyfans";
 import { encolarTelegram } from "@/lib/telegramCola";
 
 // Fase de CAPTACION: una modelo con objetivos debe entregar, antes de crearle la cuenta de Instagram:
@@ -27,7 +28,7 @@ const num = (v: unknown) => (typeof v === "number" && v > 0 ? v : null);
 
 /** Posts de OnlyFans de una modelo: cada archivo subido a sus carpetas de posts (la carpeta unica y, si los tiene, los posts sueltos de antes). */
 export async function contarPosts(db: ReturnType<typeof createAdminClient>, modeloId: string): Promise<number> {
-  const { data } = await db.from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post");
+  const { data } = await db.from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post").neq("nombre", NOMBRE_HISTORIAS_POSTS);
   const ids = (data ?? []).map((c) => c.id as string);
   if (!ids.length) return 0;
   const { count } = await db.from("of_archivos").select("id", { count: "exact", head: true }).in("coleccion_id", ids);

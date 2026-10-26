@@ -179,7 +179,7 @@ export async function avisosModelos(sb) {
 // ------------------------------------------------------------------------------------------------ recordatorio cada 3 dias
 async function postsSubidos(sb, modeloId) {
   try {
-    const { data } = await sb.from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post");
+    const { data } = await sb.from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post").neq("nombre", "Historias elegidas");
     const ids = (data ?? []).map((c) => c.id);
     if (!ids.length) return 0;
     const { count } = await sb.from("of_archivos").select("id", { count: "exact", head: true }).in("coleccion_id", ids);

@@ -2,7 +2,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { leerTodasNotasOF } from "@/lib/notasOF";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { alcanceActual, soloVisibles, type GrupoAmbito } from "@/lib/alcance";
-import { NOMBRE_CARPETA_POSTS, progresoScript, type ArchivoOF, type ColeccionOF, type TipoColeccion } from "@/lib/onlyfans";
+import { NOMBRE_CARPETA_POSTS, NOMBRE_HISTORIAS_POSTS, progresoScript, type ArchivoOF, type ColeccionOF, type TipoColeccion } from "@/lib/onlyfans";
 
 export type ResumenColeccion = {
   id: string;
@@ -56,6 +56,7 @@ export async function cargarResumenOF(modeloId?: string) {
     const nombrePorId = new Map((mods.data ?? []).map((m) => [m.id as string, m.nombre as string]));
 
     const resumen: ResumenColeccion[] = ((cols.data ?? []) as Array<ColeccionOF & { visto_at?: string | null }>)
+      .filter((c) => c.nombre !== NOMBRE_HISTORIAS_POSTS)
       .filter((c) => c.tipo !== "post" || c.nombre !== NOMBRE_CARPETA_POSTS || (porColeccion.get(c.id)?.length ?? 0) > 0) // la carpeta de posts sin nada subido no se enseña
       .map((c) => {
       const as = porColeccion.get(c.id) ?? [];

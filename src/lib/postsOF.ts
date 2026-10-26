@@ -34,29 +34,33 @@ export async function prepararPosts(db: Db, modeloId: string, limite = 60) {
   const { data: cols } = await db.from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post");
   const colIds = (cols ?? []).map((c) => c.id as string);
   if (!colIds.length) return { creados: 0, restantes: 0 };
-  const [{ data: fotos }, { data: ya }, { data: modelo }, { data: ult }] = await Promise.all([
+  const [{ data: fotos }, { data: ya }] = await Promise.all([
     leerTodo<{ id: string; storage_key: string; bucket: string; created_at: string }>((d, h) => db.from("of_archivos").select("id, storage_key, bucket, created_at").eq("modelo_id", modeloId).eq("tipo_archivo", "foto").in("coleccion_id", colIds).order("created_at", { ascending: true }).order("id").range(d, h)),
     leerTodo<{ archivo_id: string }>((d, h) => db.from("posts_programados").select("archivo_id").eq("modelo_id", modeloId).order("id").range(d, h)),
-    db.from("modelos").select("posts_cada_dias").eq("id", modeloId).maybeSingle(),
-    db.from("posts_programados").select("programar_para").eq("modelo_id", modeloId).neq("estado", "descartado").not("programar_para", "is", null).order("programar_para", { ascending: false }).limit(1),
   ]);
   const hechos = new Set((ya ?? []).map((r) => r.archivo_id as string));
   const nuevas = (fotos ?? []).filter((f) => !hechos.has(f.id as string));
   const lote = nuevas.slice(0, limite);
   if (!lote.length) return { creados: 0, restantes: 0 };
 
-  const ctx = await cargarBanco(db, modeloId);
-  const huecos = proximosHuecos(modeloId, ult?.[0]?.programar_para ? new Date(ult[0].programar_para as string) : null, Number(modelo?.posts_cada_dias ?? 1), lote.length);
+  const creados = await crearPosts(db, modeloId, lote.map((f) => f.id));
+  return { creados, restantes: Math.max(0, nuevas.length - lote.length) };
+}
+
+/** Crea un post (caption del banco + siguiente hueco libre) por cada foto indicada. Devuelve cuantos creo. */
+export async function crearPosts(db: Db, modeloId: string, archivoIds: string[]): Promise<number> {
+  if (!archivoIds.length) return 0;
+  const [{ data: modelo }, { data: ult }, ctx] = await Promise.all([
+    db.from("modelos").select("posts_cada_dias").eq("id", modeloId).maybeSingle(),
+    db.from("posts_programados").select("programar_para").eq("modelo_id", modeloId).neq("estado", "descartado").not("programar_para", "is", null).order("programar_para", { ascending: false }).limit(1),
+    cargarBanco(db, modeloId),
+  ]);
+  const huecos = proximosHuecos(modeloId, ult?.[0]?.programar_para ? new Date(ult[0].programar_para as string) : null, Number(modelo?.posts_cada_dias ?? 1), archivoIds.length);
   let creados = 0;
-  for (const [i, f] of lote.entries()) {
+  for (const [i, archivoId] of archivoIds.entries()) {
     const caption = ctx ? elegirCaption(ctx) : null;
-    const { error } = await db.from("posts_programados").insert({
-      modelo_id: modeloId,
-      archivo_id: f.id,
-      caption,
-      programar_para: huecos[i].toISOString(),
-    });
+    const { error } = await db.from("posts_programados").insert({ modelo_id: modeloId, archivo_id: archivoId, caption, programar_para: huecos[i].toISOString() });
     if (!error) creados++;
   }
-  return { creados, restantes: Math.max(0, nuevas.length - lote.length) };
+  return creados;
 }

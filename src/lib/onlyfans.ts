@@ -120,6 +120,8 @@ export const TOTAL_SCRIPT = FASES.reduce((s, f) => s + totalFase(f), 0);
 
 /** Nombre de la carpeta unica donde van TODOS los posts de una modelo (no se crea un post por cada publicacion). */
 export const NOMBRE_CARPETA_POSTS = "Posts";
+/** Carpeta interna (oculta a la modelo y que no cuenta como contenido suyo) con las fotos de historias que la agencia ha pasado a posts de OnlyFans. */
+export const NOMBRE_HISTORIAS_POSTS = "Historias elegidas";
 
 export type TipoColeccion = "script" | "pack" | "post";
 export const ETIQUETA_TIPO: Record<TipoColeccion, string> = { script: "Scripts", pack: "Packs", post: "Posts" };
