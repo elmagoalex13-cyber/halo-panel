@@ -11,7 +11,7 @@ import { mkdtemp, readFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { config } from "./config.mjs";
-import { downloadFromR2, existeEnR2 } from "./r2.mjs";
+import { borrarDeR2, downloadFromR2, existeEnR2 } from "./r2.mjs";
 import { hashOriginal } from "./previews.mjs";
 
 const ZONA = "Europe/Madrid";
@@ -66,6 +66,32 @@ async function videoParaTelegram(pieza, destino) {
     return destino;
   }
   return null;
+}
+
+/** Retira de la captacion un reel que ya se ha mandado a la modelo con su feedback: borra la fila, el original y su vista previa (si ninguna otra pieza usa ese original). */
+async function retirarPieza(sb, p) {
+  const { error } = await sb.from("library_content").delete().eq("id", p.id).eq("estado", "recibido");
+  if (error) {
+    console.error("[telegram-modelos] retirar:", error.message);
+    return;
+  }
+  for (const clave of new Set([p.r2_key_original, p.r2_key].filter((k) => k && /^(bruto\/|supabase:\/\/portal-uploads\/)/.test(k)))) {
+    try {
+      const [a, b] = await Promise.all([sb.from("library_content").select("id").eq("r2_key", clave).limit(1), sb.from("library_content").select("id").eq("r2_key_original", clave).limit(1)]);
+      if ((a.data ?? []).length || (b.data ?? []).length) continue; // otra pieza sigue usando ese original
+      if (clave.startsWith("supabase://")) {
+        const sin = clave.slice("supabase://".length);
+        const barra = sin.indexOf("/");
+        await sb.storage.from(sin.slice(0, barra)).remove([sin.slice(barra + 1)]);
+      } else {
+        await borrarDeR2(clave);
+        const h = hashOriginal(clave);
+        await Promise.all([`previews/${h}.jpg`, `previews/${h}.mp4`].map((k) => borrarDeR2(k).catch(() => undefined)));
+      }
+    } catch (e) {
+      console.error("[telegram-modelos] borrar archivo retirado:", e.message);
+    }
+  }
 }
 
 // ------------------------------------------------------------------------------------------------ vinculacion
@@ -169,21 +195,23 @@ export async function avisosModelos(sb) {
 Entra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
           }
           if (piezaIds.length) {
-            const { data: piezas } = await sb.from("library_content").select("id, titulo, filename_original, r2_key, r2_key_original, size_bytes, feedback_tipo, feedback_texto").in("id", piezaIds);
+            const { data: piezas } = await sb.from("library_content").select("id, titulo, filename_original, r2_key, r2_key_original, size_bytes, estado, feedback_tipo, feedback_texto").in("id", piezaIds);
             const tmp = await mkdtemp(path.join(tmpdir(), "fb-"));
             try {
               let sinVideo = 0;
               for (const p of piezas ?? []) {
                 if (p.feedback_tipo !== "bien" && p.feedback_tipo !== "mejorar") continue; // se quito el feedback antes de enviarlo
-                const etiqueta = p.feedback_tipo === "bien" ? "✅ <b>Va bien</b>" : "⚠️ <b>Para mejorar</b>";
-                const caption = `${etiqueta}${p.feedback_texto ? `
-💬 ${esc(p.feedback_texto)}` : ""}
-
-<i>${esc(m.nombre)}, este es el comentario del equipo sobre este vídeo.</i>`;
+                if (p.estado !== "recibido") continue; // ya se mando a editar: no se toca
+                if (p.feedback_tipo === "mejorar" && !p.feedback_texto) continue; // «Mejorar» sin comentario no se envia ni se retira: espera a que escribas que cambiar
+                const mejorar = p.feedback_tipo === "mejorar";
+                const etiqueta = mejorar ? "⚠️ <b>Para mejorar</b>" : "✅ <b>Va bien</b>";
+                const base = `${etiqueta}${p.feedback_texto ? `\n💬 ${esc(p.feedback_texto)}` : ""}`;
+                const caption = `${base}\n\n<i>${esc(m.nombre)}, este es el comentario del equipo sobre este vídeo.</i>`;
                 try {
                   const ruta = await videoParaTelegram(p, path.join(tmp, `${p.id}.mp4`));
                   if (!ruta) throw new Error("sin video");
-                  await enviarVideo(m.telegram_id, ruta, caption);
+                  await enviarVideo(m.telegram_id, ruta, mejorar ? `${base}\n\n<i>${esc(m.nombre)}, graba otro con este cambio y súbelo en «Subir vídeos». Este lo hemos retirado.</i>` : caption);
+                  if (mejorar) await retirarPieza(sb, p); // enviado: sale de la captacion (cuando suba el nuevo se revisa como uno mas)
                 } catch (err) {
                   // Si el video no se puede mandar, al menos el comentario va como texto
                   console.error("[telegram-modelos] video de feedback:", err.message);
@@ -193,7 +221,7 @@ Entra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
                 }
                 await new Promise((r) => setTimeout(r, 1200)); // limite de Telegram: ~1 mensaje por segundo en un chat
               }
-              if (sinVideo === 0 && (piezas ?? []).length) await enviar(m.telegram_id, `Puedes volver a verlos en la pestaña «Subidos» de tu portal.${enlacePortal(m)}`);
+              if (sinVideo === 0 && (piezas ?? []).some((p) => p.feedback_tipo === "bien")) await enviar(m.telegram_id, `Puedes volver a ver los comentarios en la pestaña «Subidos» de tu portal.${enlacePortal(m)}`);
             } finally {
               await rm(tmp, { recursive: true, force: true }).catch(() => undefined);
             }

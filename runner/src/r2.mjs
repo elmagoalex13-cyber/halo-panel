@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createWriteStream, createReadStream } from "fs";
 import { pipeline } from "stream/promises";
 import { mkdir } from "fs/promises";
@@ -50,6 +50,10 @@ export async function uploadToR2(localPath, key, contentType = "video/mp4") {
   await s3.send(
     new PutObjectCommand({ Bucket: config.r2Bucket, Key: key, Body: createReadStream(localPath), ContentType: contentType }),
   );
+}
+
+export async function borrarDeR2(key) {
+  await s3.send(new DeleteObjectCommand({ Bucket: config.r2Bucket, Key: key }));
 }
 
 /** Todas las claves que empiezan por un prefijo. */

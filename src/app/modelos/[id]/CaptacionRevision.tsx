@@ -43,7 +43,19 @@ function Tarjeta({
         const j = (await res.json().catch(() => ({}))) as { telegram?: boolean };
         setTipo(nuevoTipo);
         setSucio(false);
-        setMsg(nuevoTipo ? (j.telegram ? "Guardado: lo ve en su portal y le llega el vídeo por Telegram con tu comentario (en un minuto)" : "Guardado: lo ve en su portal (no tiene Telegram activado)") : "Feedback quitado");
+        setMsg(
+          !nuevoTipo
+            ? "Feedback quitado"
+            : nuevoTipo === "mejorar"
+              ? !nuevoTexto.trim()
+                ? "Escribe qué debe cambiar y pulsa Guardar: entonces se le envía"
+                : j.telegram
+                  ? "Guardado: en un minuto le llega su vídeo por Telegram con tu comentario y se retira de aquí. Cuando suba otro, lo revisas como uno más"
+                  : "Guardado: lo ve en su portal. No tiene Telegram activado, así que el vídeo se queda aquí (elimínalo tú si quieres)"
+              : j.telegram
+                ? "Guardado: le llega el vídeo por Telegram con tu comentario (en un minuto)"
+                : "Guardado: lo ve en su portal (no tiene Telegram activado)",
+        );
       } else setMsg(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar");
     } finally {
       setGuardando(false);
@@ -86,7 +98,7 @@ function Tarjeta({
           </p>
 
           <div className="space-y-2 rounded-xl border border-white/[0.08] bg-black/20 p-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Feedback para la modelo <span className="font-normal normal-case tracking-normal text-white/30">· le llega el vídeo por Telegram con tu comentario</span></p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Feedback para la modelo <span className="font-normal normal-case tracking-normal text-white/30">· le llega el vídeo por Telegram con tu comentario; si es «Mejorar», se retira de aquí</span></p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
