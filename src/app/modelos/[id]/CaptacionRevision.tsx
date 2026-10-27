@@ -151,6 +151,7 @@ export function CaptacionRevision({
   enEdicion,
   terminada,
   piezas,
+  tiktoks = 0,
   progreso,
 }: {
   progreso: ProgresoCaptacion | null;
@@ -161,6 +162,7 @@ export function CaptacionRevision({
   enEdicion: number;
   terminada: boolean;
   piezas: PiezaEnEspera[];
+  tiktoks?: number; // TikToks guardados (pestaña «TikToks»): no cuentan como reels
 }) {
   const router = useRouter();
   const [elegidas, setElegidas] = useState<Set<string>>(new Set());
@@ -260,7 +262,7 @@ Si quieres, escribe aquí por qué (se lo mandamos por Telegram). Déjalo vacío
             {nombre} · {subidos}/{objetivo} reels subidos
           </span>
           <span className="text-white/50">
-            {piezas.filter((p) => p.tipo !== 3).length} reels en espera de revisión{piezas.some((p) => p.tipo === 3) ? ` + ${piezas.filter((p) => p.tipo === 3).length} TikTok guardados` : ""} · {enEdicion} ya enviados a edición{terminada ? " · captación terminada" : ""}
+            {piezas.length} reels en espera de revisión · {enEdicion} ya enviados a edición{terminada ? " · captación terminada" : ""}
           </span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
@@ -270,6 +272,11 @@ Si quieres, escribe aquí por qué (se lo mandamos por Telegram). Déjalo vacío
           Estos reels <span className="text-white/70">no se editan</span> hasta que los mandéis. Revisadlos, dad feedback a la modelo (lo ve en su portal) y mandad a editar los que queráis: 5, 10 o todos.
           Si mandáis solo algunos, lo que ella suba después seguirá quedándose aquí para revisarlo. Con «Mandar todos» se termina la captación y lo siguiente se edita directamente.
         </p>
+        {tiktoks > 0 ? (
+          <p className="mt-1 text-xs text-white/40">
+            🎵 Sus {tiktoks} TikToks no cuentan como reels y están guardados aparte, en la pestaña «TikToks».
+          </p>
+        ) : null}
       </div>
 
       {piezas.length === 0 ? (

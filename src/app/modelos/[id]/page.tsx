@@ -16,7 +16,8 @@ import { estadoLabel, formatCurrency, formatDate } from "@/lib/utils";
 import { alcanceActual, veModelo } from "@/lib/alcance";
 import { CaptacionRevision } from "./CaptacionRevision";
 import { FichaEditable } from "./FichaEditable";
-import { piezasEnEspera } from "@/lib/captacionPiezas";
+import { piezasEnEspera, tiktoksDeModelo } from "@/lib/captacionPiezas";
+import { TiktoksModelo } from "./TiktoksModelo";
 import { progresoCaptacion } from "@/lib/captacion";
 import { ligarContratosAutomatico } from "@/lib/contratos";
 import { ContratoModelo, type ContratoFicha } from "./ContratoModelo";
@@ -354,10 +355,12 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
               .select("id", { count: "exact", head: true })
               .eq("modelo_id", modelo.id)
               .eq("origen", "upload_manual")
-              .or("tipo.is.null,tipo.neq.5")
+              .or("tipo.is.null,tipo.not.in.(3,5)") // los TikTok no son reels: no cuentan para los 30
           ).count ?? 0,
       }
     : null;
+  const tiktoks = await tiktoksDeModelo(modelo.id).catch(() => []);
+  const piezasReels = captacion ? captacion.piezas.filter((p) => p.tipo !== 3) : [];
   // Contrato(s) de la modelo: solo los ve el dueño (llevan firma y DNI). Si falta el SQL de modelo_id, la pestana no sale.
   let contratosFicha: { propios: ContratoFicha[]; disponibles: ContratoFicha[] } | null = null;
   if ((await alcanceActual()).dueno) {
@@ -388,7 +391,7 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
             id: "captacion",
             label: "Captación",
             icono: "🎬",
-            aviso: captacion.piezas.length ? `${captacion.piezas.length} en espera` : null,
+            aviso: piezasReels.length ? `${piezasReels.length} en espera` : null,
             contenido: (
               <CaptacionRevision
                 modeloId={modelo.id}
@@ -397,10 +400,22 @@ export default async function ModeloDetailPage({ params }: { params: Promise<{ i
                 subidos={captacion.subidos}
                 enEdicion={captacion.enEdicion}
                 terminada={Boolean(modelo.captacion_aprobada_at)}
-                piezas={captacion.piezas}
+                piezas={piezasReels}
+                tiktoks={tiktoks.length}
                 progreso={captacion.progreso}
               />
             ),
+          } satisfies Pestana,
+        ]
+      : []),
+    ...(tiktoks.length
+      ? [
+          {
+            id: "tiktoks",
+            label: "TikToks",
+            icono: "🎵",
+            aviso: String(tiktoks.length),
+            contenido: <TiktoksModelo nombre={modelo.nombre} tiktoks={tiktoks} />,
           } satisfies Pestana,
         ]
       : []),

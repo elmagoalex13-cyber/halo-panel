@@ -21,7 +21,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .from("library_content")
     .update({ estado: "editando", estado_procesamiento: "pendiente", reparto_at: ahora, updated_at: ahora })
     .eq("modelo_id", id)
-    .eq("estado", "recibido");
+    .eq("estado", "recibido")
+    .or("tipo.is.null,tipo.neq.3"); // los TikToks se guardan aparte (pestaña «TikToks»): no se mandan a editar con los reels
   if (ids.length) q = q.in("id", ids);
   const { data: pasados, error } = await q.select("id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

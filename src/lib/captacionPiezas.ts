@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { listarClavesR2 } from "@/lib/r2";
+import { urlR2 } from "@/lib/media";
 
 // Reels de una modelo en fase de captacion que estan EN ESPERA (estado "recibido", sin editar) para que la agencia los revise,
 // de feedback y decida cuantos mandar ya a edicion.
@@ -15,6 +16,17 @@ export type PiezaEnEspera = {
   preview: { poster: string; video: string } | null;
   feedback_tipo: "bien" | "mejorar" | null;
   feedback_texto: string | null;
+};
+
+export type TikTokGuardado = {
+  id: string;
+  titulo: string | null;
+  archivo: string | null;
+  recibido_at: string;
+  size_bytes: number | null;
+  estado: string;
+  preview: { poster: string; video: string } | null;
+  editado: string | null; // video ya editado (si llego a editarse)
 };
 
 const base = () => (process.env.R2_PUBLIC_URL ?? process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/$/, "");
@@ -45,7 +57,7 @@ export async function piezasEnEspera(modeloId: string): Promise<{ piezas: PiezaE
     .eq("modelo_id", modeloId)
     .eq("origen", "upload_manual")
     .neq("estado", "recibido")
-    .or("tipo.is.null,tipo.neq.5");
+    .or("tipo.is.null,tipo.not.in.(3,5)"); // los TikTok no cuentan como reels
 
   return {
     enEdicion: count ?? 0,
@@ -65,4 +77,39 @@ export async function piezasEnEspera(modeloId: string): Promise<{ piezas: PiezaE
       };
     }),
   };
+}
+
+/** TODOS los TikToks que ha subido una modelo (en espera o ya editados), para tenerlos guardados aparte de la captacion y no perder nunca material. */
+export async function tiktoksDeModelo(modeloId: string): Promise<TikTokGuardado[]> {
+  const db = createAdminClient();
+  const { data } = await db
+    .from("library_content")
+    .select("id, titulo, filename_original, recibido_at, size_bytes, estado, r2_key, r2_key_original, video_procesado_url")
+    .eq("modelo_id", modeloId)
+    .eq("tipo", 3)
+    .is("archivos_borrados_at", null)
+    .order("recibido_at", { ascending: false })
+    .limit(500);
+  const filas = (data ?? []) as unknown as Array<Record<string, unknown>>;
+  let listas = new Set<string>();
+  try {
+    listas = new Set((await listarClavesR2("previews/", 50000)).filter((k) => k.endsWith(".mp4")).map((k) => k.slice("previews/".length, -4)));
+  } catch {
+    /* sin R2: se muestra sin vista previa */
+  }
+  const b = base();
+  return filas.map((f) => {
+    const clave = String(f.r2_key_original ?? f.r2_key ?? "");
+    const h = clave ? hash(clave) : "";
+    return {
+      id: String(f.id),
+      titulo: (f.titulo as string | null) ?? null,
+      archivo: (f.filename_original as string | null) ?? null,
+      recibido_at: String(f.recibido_at),
+      size_bytes: (f.size_bytes as number | null) ?? null,
+      estado: String(f.estado),
+      preview: h && b && listas.has(h) ? { poster: `${b}/previews/${h}.jpg`, video: `${b}/previews/${h}.mp4` } : null,
+      editado: urlR2((f.video_procesado_url as string | null) ?? null),
+    };
+  });
 }
