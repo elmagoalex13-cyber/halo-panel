@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { PiezaEnEspera } from "@/lib/captacionPiezas";
@@ -354,9 +355,9 @@ function VisorReels({ piezas, indice, onCambiar, onCerrar }: { piezas: PiezaEnEs
       document.body.style.overflow = overflow;
     };
   }, [indice, piezas.length, onCambiar, onCerrar]);
-  if (!p?.preview) return null;
+  if (!p?.preview || typeof document === "undefined") return null;
   const flecha = "grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-xl text-white transition hover:bg-white/25";
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex flex-col bg-black/90 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={onCerrar}>
       <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-white/70" onClick={(e) => e.stopPropagation()}>
         <span className="min-w-0 truncate">
@@ -372,6 +373,7 @@ function VisorReels({ piezas, indice, onCambiar, onCerrar }: { piezas: PiezaEnEs
         <video key={p.id} src={p.preview.video} poster={p.preview.poster} controls autoPlay playsInline onClick={(e) => e.stopPropagation()} className="max-h-full min-h-0 max-w-full rounded-xl bg-black object-contain" style={{ height: "100%", aspectRatio: "9 / 16" }} />
         {piezas.length > 1 ? <button type="button" onClick={(e) => { e.stopPropagation(); onCambiar((indice + 1) % piezas.length); }} className={flecha} aria-label="Siguiente">›</button> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

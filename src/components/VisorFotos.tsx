@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 export type FotoVisor = { src: string; pie?: string; descarga?: string };
 
@@ -25,9 +26,10 @@ export function VisorFotos({ fotos, indice, onCambiar, onCerrar }: { fotos: Foto
     };
   }, [anterior, siguiente, onCerrar]);
 
-  if (!foto) return null;
+  if (!foto || typeof document === "undefined") return null;
   const boton = "grid h-11 w-11 place-items-center rounded-full bg-white/10 text-lg text-white backdrop-blur transition hover:bg-white/25";
-  return (
+  // En un «portal» (colgado del body): las tarjetas del panel tienen efecto de cristal (backdrop-filter) y dentro de ellas un elemento «fixed» no ocupa la pantalla, solo la tarjeta
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex flex-col bg-black/90 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Foto" onClick={onCerrar}>
       <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-white/70" onClick={(e) => e.stopPropagation()}>
         <span>
@@ -59,6 +61,7 @@ export function VisorFotos({ fotos, indice, onCambiar, onCerrar }: { fotos: Foto
           </>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
