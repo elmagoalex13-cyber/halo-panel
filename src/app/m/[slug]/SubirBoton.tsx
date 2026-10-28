@@ -40,12 +40,19 @@ export function SubirBoton({
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
 
   async function subirUno(file: File, index: number, onProgress: (loaded: number) => void) {
-    const pre = await fetch("/api/portal/presign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
-    });
-    if (!pre.ok) throw new Error(pre.status === 401 ? "Tu sesion ha caducado, vuelve a entrar" : "No se pudo preparar la subida");
+    const pre = await conReintentos(
+      async () => {
+        const r = await fetch("/api/portal/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+        });
+        if (r.status === 401) throw new ErrorFinal("Tu sesión ha caducado: vuelve a entrar en tu portal y repite la subida.");
+        if (!r.ok) throw new ErrorTemporal("No se pudo preparar la subida");
+        return r;
+      },
+      3,
+    );
     const prepared = (await pre.json()) as PresignResponse;
 
     if (prepared.provider === "r2-multipart") {
@@ -56,22 +63,28 @@ export function SubirBoton({
       await subirConTus({ file, bucket, path, token, contentType, uploadEndpoint, onProgress });
     }
 
-    const reg = await fetch("/api/portal/subir", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        key: prepared.key,
-        filename: file.name,
-        size: file.size,
-        tipo,
-        encargo_id: index === 0 ? encargoId : undefined,
-        referencia_id: referenciaId,
-      }),
-    });
-    if (!reg.ok) {
-      const j = (await reg.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(j?.error ?? "No se pudo registrar el video");
-    }
+    // El archivo YA esta en el almacen: registrarlo se reintenta varias veces (el servidor lo reconoce si ya estaba, no se duplica)
+    return conReintentos(
+      async () => {
+        const reg = await fetch("/api/portal/subir", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key: prepared.key,
+            filename: file.name,
+            size: file.size,
+            tipo,
+            encargo_id: index === 0 ? encargoId : undefined,
+            referencia_id: referenciaId,
+          }),
+        });
+        if (reg.ok) return (await reg.json().catch(() => ({}))) as { repetido?: boolean };
+        const j = (await reg.json().catch(() => null)) as { error?: string } | null;
+        if (reg.status >= 500) throw new ErrorTemporal(j?.error ?? "No se pudo registrar el video");
+        throw new ErrorFinal(reg.status === 401 ? "Tu sesión ha caducado: vuelve a entrar en tu portal." : (j?.error ?? "No se pudo registrar el video"));
+      },
+      4,
+    );
   }
 
   async function subir(files: File[]) {
@@ -83,6 +96,10 @@ export function SubirBoton({
     const concurrency = Math.min(3, files.length);
     let nextIndex = 0;
     let completed = 0;
+    const subidos: string[] = [];
+    const repetidos: string[] = [];
+    const fallos: Array<{ nombre: string; motivo: string }> = [];
+    const pantalla = await mantenerPantalla();
 
     const updateProgress = (index: number, loaded: number) => {
       loadedByFile[index] = loaded;
@@ -90,27 +107,52 @@ export function SubirBoton({
       setProgreso(Math.min(100, Math.round((totalLoaded / totalBytes) * 100)));
     };
 
-    try {
-      await Promise.all(
-        Array.from({ length: concurrency }, async () => {
-          while (nextIndex < files.length) {
-            const index = nextIndex++;
-            setActual({ index, total: files.length });
-            await subirUno(files[index], index, (loaded) => updateProgress(index, loaded));
-            completed++;
-            setActual({ index: completed - 1, total: files.length });
+    // Cada video va por su cuenta: si uno falla, los demas siguen y al final se dice EXACTAMENTE cual (antes un fallo daba «error» para todos aunque se hubieran subido)
+    await Promise.all(
+      Array.from({ length: concurrency }, async () => {
+        while (nextIndex < files.length) {
+          const index = nextIndex++;
+          setActual({ index, total: files.length });
+          try {
+            const r = await subirUno(files[index], index, (loaded) => updateProgress(index, loaded));
+            if (r?.repetido) repetidos.push(files[index].name);
+            else subidos.push(files[index].name);
+            updateProgress(index, files[index].size);
+          } catch (e) {
+            fallos.push({ nombre: files[index].name, motivo: textoError(e) });
           }
-        }),
-      );
-      setMensaje({ ok: true, texto: files.length === 1 ? "Video subido." : `${files.length} videos subidos.` });
-      router.refresh();
-    } catch (e) {
-      setMensaje({ ok: false, texto: e instanceof Error ? e.message : "Error al subir" });
-    } finally {
-      setProgreso(null);
-      setActual(null);
-      if (input.current) input.current.value = "";
+          completed++;
+          setActual({ index: completed - 1, total: files.length });
+        }
+      }),
+    );
+    pantalla?.release().catch(() => undefined);
+
+    const buenos = subidos.length + repetidos.length;
+    if (!fallos.length) {
+      setMensaje({
+        ok: true,
+        texto:
+          repetidos.length && !subidos.length
+            ? files.length === 1
+              ? "Ese vídeo ya lo habías subido: está guardado, no hace falta repetirlo."
+              : `Esos ${files.length} vídeos ya estaban subidos: no hace falta repetirlos.`
+            : files.length === 1
+              ? "¡Vídeo subido!"
+              : `¡${files.length} vídeos subidos!${repetidos.length ? ` (${repetidos.length} ya estaban)` : ""}`,
+      });
+    } else {
+      const lista = fallos.map((f) => f.nombre).join(", ");
+      setMensaje({
+        ok: false,
+        texto: `${buenos ? `Se han subido ${buenos} de ${files.length}. ` : ""}No se ha podido subir: ${lista}. ${fallos[0].motivo} Lo que ya se subió está guardado: solo tienes que volver a elegir ${fallos.length === 1 ? "ese vídeo" : "esos vídeos"}.`,
+      });
     }
+    // Siempre se vuelve a cargar la pagina: asi los contadores («Subidos», «Por grabar») reflejan lo que de verdad se ha guardado
+    router.refresh();
+    setProgreso(null);
+    setActual(null);
+    if (input.current) input.current.value = "";
   }
 
   const subiendo = progreso !== null;
@@ -145,6 +187,7 @@ export function SubirBoton({
           </span>
         )}
       </label>
+      {subiendo ? <p className="mt-2 text-center text-xs text-white/45">Mantén esta pantalla abierta hasta que termine. Si te sales de la página o se bloquea el móvil, la subida se corta.</p> : null}
       {mensaje ? (
         <p className={`mt-2 rounded-xl px-3 py-2 text-sm ${mensaje.ok ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300"}`}>
           {mensaje.texto}
@@ -152,6 +195,46 @@ export function SubirBoton({
       ) : null}
     </div>
   );
+}
+
+/** Error que no merece reintento (sesion caducada, archivo no valido...). */
+class ErrorFinal extends Error {}
+/** Error pasajero (red, servidor ocupado): se reintenta. */
+class ErrorTemporal extends Error {}
+
+const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function conReintentos<T>(fn: () => Promise<T>, intentos: number): Promise<T> {
+  let ultimo: unknown;
+  for (let i = 0; i < intentos; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e instanceof ErrorFinal) throw e;
+      ultimo = e;
+      if (i < intentos - 1) await esperar(600 * 2 ** i); // 0,6 s, 1,2 s, 2,4 s...
+    }
+  }
+  throw ultimo instanceof Error ? ultimo : new Error("Error al subir");
+}
+
+/** Mensaje claro para la modelo (sin palabras tecnicas). */
+function textoError(e: unknown): string {
+  const m = e instanceof Error ? e.message : "";
+  if (e instanceof ErrorFinal) return m;
+  if (/load failed|failed to fetch|network|conexion|conexión|se corto|timeout|abort/i.test(m) || !m) return "Se cortó la conexión mientras subía (comprueba tu internet o la cobertura).";
+  if (/subida fallo|confirmacion|confirmación|finalizar|preparar|registrar/i.test(m)) return "No se pudo completar la subida en este momento.";
+  return `${m}.`;
+}
+
+/** Mantiene la pantalla encendida mientras sube (si el movil se bloquea o cambia de app, la subida se corta). */
+async function mantenerPantalla(): Promise<{ release: () => Promise<void> } | null> {
+  try {
+    const wl = (navigator as unknown as { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } }).wakeLock;
+    return wl ? await wl.request("screen") : null;
+  } catch {
+    return null;
+  }
 }
 
 function subirConTus({
@@ -234,22 +317,24 @@ async function subirConR2Multipart({
         const part = prepared.parts[nextPart++];
         const start = (part.partNumber - 1) * prepared.partSize;
         const chunk = file.slice(start, Math.min(start + prepared.partSize, file.size), prepared.contentType);
-        const etag = await putPart(part.url, chunk, (loaded) => report(part.partNumber, loaded));
+        const etag = await conReintentos(() => putPart(part.url, chunk, (loaded) => report(part.partNumber, loaded)), 4); // si se corta la red un momento, solo se repite esa parte
         uploadedParts.push({ partNumber: part.partNumber, etag });
         report(part.partNumber, chunk.size);
       }
     }),
   );
 
-  const complete = await fetch("/api/portal/r2-complete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key: prepared.key, uploadId: prepared.uploadId, parts: uploadedParts }),
-  });
-  if (!complete.ok) {
+  await conReintentos(async () => {
+    const complete = await fetch("/api/portal/r2-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: prepared.key, uploadId: prepared.uploadId, parts: uploadedParts }),
+    });
+    if (complete.ok) return;
     const j = (await complete.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(j?.error ?? "No se pudo finalizar la subida");
-  }
+    if (complete.status === 401) throw new ErrorFinal("Tu sesión ha caducado: vuelve a entrar en tu portal.");
+    throw new ErrorTemporal(j?.error ?? "No se pudo finalizar la subida");
+  }, 3);
   onProgress(file.size);
 }
 
@@ -260,7 +345,8 @@ function putPart(url: string, chunk: Blob, onProgress: (loaded: number) => void)
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress(event.loaded);
     };
-    xhr.onerror = () => reject(new Error("La conexion se corto durante la subida"));
+    xhr.onerror = () => reject(new ErrorTemporal("La conexion se corto durante la subida"));
+    xhr.ontimeout = () => reject(new ErrorTemporal("La conexion se corto durante la subida"));
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new Error(`La subida fallo (${xhr.status})`));

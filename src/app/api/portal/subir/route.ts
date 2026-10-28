@@ -1,11 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { columnasTipo } from "@/lib/tipoVideo";
 import { elegirFrase, registrarUsoFrase } from "@/lib/frases";
 import { evaluarUmbral } from "@/lib/captacion";
+import { borrarDeR2 } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 // Registra un video que la modelo ya subio a R2 y lo manda al runner:
 // estado='editando', estado_procesamiento='pendiente', tipo correcto.
@@ -28,6 +30,22 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createAdminClient();
+
+  // Idempotente: si ese mismo archivo (esa clave) ya estaba registrado -porque el movil repitio el aviso al perder la respuesta- se devuelve lo ya registrado
+  const { data: yaRegistrado } = await supabase.from("library_content").select("id").eq("modelo_id", sesion.modeloId).eq("r2_key", body.key).limit(1).maybeSingle();
+  if (yaRegistrado) return NextResponse.json({ ok: true, id: yaRegistrado.id, repetido: true });
+
+  // El mismo video (mismo nombre y tamaño) subido hace poco: no se duplica (suele pasar cuando el movil dijo «error» pero la subida si habia llegado y la modelo lo repite)
+  if (body.filename && body.size) {
+    const desde = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data: igual } = await supabase.from("library_content").select("id").eq("modelo_id", sesion.modeloId).eq("filename_original", body.filename).eq("size_bytes", body.size).gte("recibido_at", desde).limit(1).maybeSingle();
+    if (igual) {
+      if (body.encargo_id) await supabase.from("encargos").update({ estado: "entregado", updated_at: new Date().toISOString() }).eq("id", body.encargo_id).eq("modelo_id", sesion.modeloId);
+      if (body.key.startsWith("bruto/")) await borrarDeR2(body.key).catch(() => undefined); // la copia repetida no se guarda
+      return NextResponse.json({ ok: true, id: igual.id, repetido: true });
+    }
+  }
+
   let tipo = Number(body.tipo);
   let referenciaId = body.referencia_id ?? null;
   let instrucciones: string | null = null;
@@ -97,8 +115,9 @@ export async function POST(req: NextRequest) {
   if (frase) await registrarUsoFrase(supabase, frase.id, pieza.id, cuentaId);
   if (body.encargo_id) await supabase.from("encargos").update({ estado: "entregado", updated_at: ahora }).eq("id", body.encargo_id);
 
-  // Telegram: las subidas sueltas NO avisan (van en el resumen diario); solo al llegar al objetivo: "crea su cuenta de Instagram"
-  if (modeloCap?.objetivo_videos && !modeloCap.umbral_avisado_at) await evaluarUmbral(sesion.modeloId);
+  // Telegram: las subidas sueltas NO avisan (van en el resumen diario); solo al llegar al objetivo: "crea su cuenta de Instagram".
+  // Se hace DESPUES de contestar: la modelo no tiene que esperar a esto (si tardaba, el movil daba «error» con el video ya guardado)
+  if (modeloCap?.objetivo_videos && !modeloCap.umbral_avisado_at) after(() => evaluarUmbral(sesion.modeloId).catch(() => undefined));
 
   return NextResponse.json({ ok: true, id: pieza.id });
 }

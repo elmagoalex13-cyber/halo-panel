@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CompleteMultipartUploadCommand, S3Client } from "@aws-sdk/client-s3";
+import { CompleteMultipartUploadCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { sesionActual } from "@/lib/portalAuth";
 
 export const dynamic = "force-dynamic";
@@ -15,18 +15,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Subida no valida" }, { status: 400 });
   }
 
-  await r2Client().send(
-    new CompleteMultipartUploadCommand({
-      Bucket: process.env.R2_BUCKET_NAME ?? "halo-videos",
-      Key: body.key,
-      UploadId: body.uploadId,
-      MultipartUpload: {
-        Parts: body.parts
-          .map((part) => ({ PartNumber: part.partNumber, ETag: part.etag }))
-          .sort((a, b) => (a.PartNumber ?? 0) - (b.PartNumber ?? 0)),
-      },
-    }),
-  );
+  const bucket = process.env.R2_BUCKET_NAME ?? "halo-videos";
+  try {
+    await r2Client().send(
+      new CompleteMultipartUploadCommand({
+        Bucket: bucket,
+        Key: body.key,
+        UploadId: body.uploadId,
+        MultipartUpload: {
+          Parts: body.parts
+            .map((part) => ({ PartNumber: part.partNumber, ETag: part.etag }))
+            .sort((a, b) => (a.PartNumber ?? 0) - (b.PartNumber ?? 0)),
+        },
+      }),
+    );
+  } catch (e) {
+    // Si el movil repitio este aviso porque no le llego la respuesta, la subida ya estaba terminada: se comprueba y se da por buena
+    const existe = await r2Client().send(new HeadObjectCommand({ Bucket: bucket, Key: body.key })).then(() => true, () => false);
+    if (!existe) return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo finalizar la subida" }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
