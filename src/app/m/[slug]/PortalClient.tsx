@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SubirBoton } from "./SubirBoton";
+import { BarraSubidas } from "./BarraSubidas";
 import { OnboardingForm } from "./OnboardingForm";
 import { OnlyFansPortal, type ArchivoVista } from "./OnlyFansPortal";
 import { estadoRevision, type ColeccionOF } from "@/lib/onlyfans";
@@ -672,6 +673,7 @@ export function PortalClient({
       ) : null}
 
       <ModalVideo pendiente={videoAbierto} onClose={() => setVideoAbierto(null)} />
+      <BarraSubidas />
     </main>
   );
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { CreateMultipartUploadCommand, S3Client, UploadPartCommand } from "@aws-sdk/client-s3";
+import { CreateMultipartUploadCommand, ListPartsCommand, S3Client, UploadPartCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { sesionActual } from "@/lib/portalAuth";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const sesion = await sesionActual();
   if (!sesion) return NextResponse.json({ error: "Sesion caducada" }, { status: 401 });
 
-  const { filename, contentType, size } = (await req.json().catch(() => ({}))) as { filename?: string; contentType?: string; size?: number };
+  const { filename, contentType, size, resume } = (await req.json().catch(() => ({}))) as { filename?: string; contentType?: string; size?: number; resume?: { key?: string; uploadId?: string } };
   const tipo = contentType && contentType.startsWith("video/") ? contentType : "video/mp4";
   const ext = (filename?.split(".").pop() ?? "mp4").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "mp4";
 
@@ -24,22 +24,39 @@ export async function POST(req: NextRequest) {
   const r2Listo = Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
   if (r2Listo && size && size > 0) {
     const bucket = process.env.R2_BUCKET_NAME ?? "halo-videos";
-    const key = `bruto/${sesion.modeloId}/${randomUUID()}.${ext}`;
     const client = r2Client();
+    const partCount = Math.ceil(size / R2_PART_SIZE);
+    const firmar = (key: string, uploadId: string, numeros: number[]) =>
+      Promise.all(
+        numeros.map(async (partNumber) => ({
+          partNumber,
+          url: await getSignedUrl(client, new UploadPartCommand({ Bucket: bucket, Key: key, UploadId: uploadId, PartNumber: partNumber }), { expiresIn: 3600 }),
+        })),
+      );
+
+    // REANUDAR: si la subida se corto, se vuelve a pedir el permiso de esa misma subida y solo se envian las partes que faltan
+    if (resume?.key && resume.uploadId) {
+      if (!resume.key.startsWith(`bruto/${sesion.modeloId}/`) || resume.key.includes("..")) return NextResponse.json({ error: "Subida no valida" }, { status: 400 });
+      try {
+        const hechas: Array<{ partNumber: number; etag: string }> = [];
+        let marcador: string | undefined;
+        do {
+          const r = await client.send(new ListPartsCommand({ Bucket: bucket, Key: resume.key, UploadId: resume.uploadId, PartNumberMarker: marcador }));
+          for (const parte of r.Parts ?? []) if (parte.PartNumber && parte.ETag) hechas.push({ partNumber: parte.PartNumber, etag: parte.ETag });
+          marcador = r.IsTruncated ? String(r.NextPartNumberMarker ?? "") : undefined;
+        } while (marcador);
+        const ya = new Set(hechas.map((h) => h.partNumber));
+        const faltan = Array.from({ length: partCount }, (_, i) => i + 1).filter((n) => !ya.has(n));
+        return NextResponse.json({ provider: "r2-multipart", key: resume.key, uploadId: resume.uploadId, partSize: R2_PART_SIZE, parts: await firmar(resume.key, resume.uploadId, faltan), hechas: hechas.filter((h) => h.partNumber <= partCount), contentType: tipo });
+      } catch {
+        return NextResponse.json({ error: "reanudar-no" }, { status: 409 }); // esa subida ya no existe: el movil empieza una nueva
+      }
+    }
+
+    const key = `bruto/${sesion.modeloId}/${randomUUID()}.${ext}`;
     const multipart = await client.send(new CreateMultipartUploadCommand({ Bucket: bucket, Key: key, ContentType: tipo }));
     if (!multipart.UploadId) return NextResponse.json({ error: "No se pudo preparar la subida" }, { status: 500 });
-    const partCount = Math.ceil(size / R2_PART_SIZE);
-    const parts = await Promise.all(
-      Array.from({ length: partCount }, async (_, index) => {
-        const partNumber = index + 1;
-        const url = await getSignedUrl(
-          client,
-          new UploadPartCommand({ Bucket: bucket, Key: key, UploadId: multipart.UploadId, PartNumber: partNumber }),
-          { expiresIn: 3600 },
-        );
-        return { partNumber, url };
-      }),
-    );
+    const parts = await firmar(key, multipart.UploadId, Array.from({ length: partCount }, (_, i) => i + 1));
 
     return NextResponse.json({
       provider: "r2-multipart",
@@ -47,6 +64,7 @@ export async function POST(req: NextRequest) {
       uploadId: multipart.UploadId,
       partSize: R2_PART_SIZE,
       parts,
+      hechas: [],
       contentType: tipo,
     });
   }
