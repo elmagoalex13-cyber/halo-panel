@@ -78,19 +78,35 @@ async function crearMiniatura(file: File): Promise<Blob | null> {
   }
 }
 
+/** Repite un paso si falla por la red (cortes, cobertura que va y viene). Los errores del servidor con mensaje claro no se repiten. */
+async function conReintentos<T>(paso: () => Promise<T>, veces = 4): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await paso();
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+      const definitivo = /sesión|no válido|Solo fotos|incompleto|No se encontró/i.test(m);
+      if (definitivo || i >= veces) throw e;
+      await new Promise((r) => setTimeout(r, 1200 * i));
+    }
+  }
+}
+
 export async function subirArchivoOF(file: File, destino: DestinoOF, onProgress: (loaded: number) => void) {
   const contentType = file.type || (/\.(mov)$/i.test(file.name) ? "video/quicktime" : /\.(heic|heif)$/i.test(file.name) ? "image/heic" : "application/octet-stream");
 
-  const pre = await json<Preparada>(
-    await fetch("/api/portal/of/presign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ coleccion_id: destino.coleccionId, fase: destino.fase, slot: destino.slot, filename: file.name, contentType, size: file.size }),
-    }),
+  const pre = await conReintentos(async () =>
+    json<Preparada>(
+      await fetch("/api/portal/of/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coleccion_id: destino.coleccionId, fase: destino.fase, slot: destino.slot, filename: file.name, contentType, size: file.size }),
+      }),
+    ),
   );
 
   if (pre.modo === "single") {
-    await putConProgreso(pre.url, file, pre.contentType, onProgress);
+    await conReintentos(() => putConProgreso(pre.url, file, pre.contentType, onProgress));
   } else {
     const cargado = new Map<number, number>();
     const etags: Array<{ partNumber: number; etag: string }> = [];
@@ -115,39 +131,43 @@ export async function subirArchivoOF(file: File, destino: DestinoOF, onProgress:
               informar();
               break;
             } catch (e) {
-              if (++intento >= 3) throw e;
+              if (++intento >= 5) throw e;
               await new Promise((r) => setTimeout(r, 1500 * intento));
             }
           }
         }
       }),
     );
-    await json(
-      await fetch("/api/portal/of/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: pre.key, uploadId: pre.uploadId, parts: etags }),
-      }),
+    await conReintentos(async () =>
+      json(
+        await fetch("/api/portal/of/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: pre.key, uploadId: pre.uploadId, parts: etags }),
+        }),
+      ),
     );
   }
   onProgress(file.size);
 
   const duracion = await leerDuracion(file);
-  const registro = await json<{ archivo: import("@/lib/onlyfans").ArchivoOF; vista: string | null }>(
-    await fetch("/api/portal/of/registrar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        coleccion_id: destino.coleccionId,
-        key: pre.key,
-        fase: destino.fase,
-        slot: destino.slot,
-        nombre_original: file.name,
-        size: file.size,
-        mime: file.type || contentType,
-        duracion_seg: duracion,
+  const registro = await conReintentos(async () =>
+    json<{ archivo: import("@/lib/onlyfans").ArchivoOF; vista: string | null }>(
+      await fetch("/api/portal/of/registrar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coleccion_id: destino.coleccionId,
+          key: pre.key,
+          fase: destino.fase,
+          slot: destino.slot,
+          nombre_original: file.name,
+          size: file.size,
+          mime: file.type || contentType,
+          duracion_seg: duracion,
+        }),
       }),
-    }),
+    ),
   );
 
   // Fotos: miniatura al momento (se ve al instante, sin volver a bajar la original) y se guarda para las proximas veces

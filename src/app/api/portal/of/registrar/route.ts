@@ -32,6 +32,11 @@ export async function POST(req: NextRequest) {
   if (real === null) return NextResponse.json({ error: "El archivo no llegó completo. Vuelve a subirlo." }, { status: 404 });
   if (body.size && real !== Number(body.size)) return NextResponse.json({ error: "El archivo llegó incompleto. Vuelve a subirlo." }, { status: 409 });
 
+  // Idempotente: si el aviso anterior se perdió por la red y la app reintenta, no se duplica el archivo
+  const cols = "id, coleccion_id, fase, slot, tipo_archivo, orden, nombre_original, mime, size_bytes, duracion_seg, descargado_at, subido_of_at, created_at";
+  const { data: yaRegistrado } = await supabase.from("of_archivos").select(cols).eq("coleccion_id", col.id).eq("storage_key", body.key).maybeSingle();
+  if (yaRegistrado) return NextResponse.json({ ok: true, archivo: yaRegistrado as ArchivoOF, vista: tipo === "foto" ? await urlVista(body.key) : null });
+
   let fase: number | null = null;
   let slotId: string | null = null;
   let consultaOrden = supabase.from("of_archivos").select("orden").eq("coleccion_id", col.id);

@@ -179,42 +179,86 @@ function BotonSubida({
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Cada archivo va por su cuenta: si uno falla (tras reintentar solo) los demas siguen, y al final se dice exactamente cuantos se han subido y cuales no
+  const fallidos = useRef<File[]>([]);
+  const [pendientesReintento, setPendientesReintento] = useState(0);
   async function subir(files: File[]) {
     setError(null);
+    setPendientesReintento(0);
     const lista = files;
     const total = lista.reduce((s, f) => s + f.size, 0) || 1;
     const cargado = new Array(lista.length).fill(0) as number[];
     let hechos = 0;
+    const falloDe: File[] = [];
+    let motivo = "";
     setProgreso(0);
     onOcupado(true);
     try {
       const colId = typeof coleccionId === "string" ? coleccionId : await coleccionId();
       let siguiente = 0;
       await Promise.all(
-        Array.from({ length: Math.min(2, lista.length) }, async () => {
+        Array.from({ length: Math.min(3, lista.length) }, async () => {
           while (siguiente < lista.length) {
             const i = siguiente++;
-            setInfo(lista.length > 1 ? `Subiendo ${Math.min(hechos + 1, lista.length)}/${lista.length}` : null);
-            const r = await subirArchivoOF(lista[i], { coleccionId: colId, fase, slot }, (l) => {
-              cargado[i] = l;
-              setProgreso(Math.min(100, Math.round((cargado.reduce((a, b) => a + b, 0) / total) * 100)));
-            });
-            hechos++;
-            onSubido({ archivo: r.archivo, vista: r.vistaLocal ?? r.vista });
+            setInfo(lista.length > 1 ? `Subiendo ${Math.min(hechos + falloDe.length + 1, lista.length)}/${lista.length}` : null);
+            try {
+              const r = await subirArchivoOF(lista[i], { coleccionId: colId, fase, slot }, (l) => {
+                cargado[i] = l;
+                setProgreso(Math.min(100, Math.round((cargado.reduce((a, b) => a + b, 0) / total) * 100)));
+              });
+              hechos++;
+              onSubido({ archivo: r.archivo, vista: r.vistaLocal ?? r.vista });
+            } catch (e) {
+              falloDe.push(lista[i]);
+              motivo = e instanceof Error ? e.message : "Error al subir";
+            }
           }
         }),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al subir");
+      // No se pudo ni preparar la carpeta: no se ha subido nada
+      falloDe.splice(0, falloDe.length, ...lista);
+      motivo = e instanceof Error ? e.message : "Error al subir";
     } finally {
       setProgreso(null);
       setInfo(null);
       onOcupado(false);
       if (input.current) input.current.value = "";
     }
+    fallidos.current = falloDe;
+    setPendientesReintento(falloDe.length);
+    if (falloDe.length) {
+      setError(hechos ? `Se han subido ${hechos} y ${falloDe.length} no. Lo que ya se ha subido está guardado: no hace falta repetirlo. ${motivo}` : motivo);
+    } else if (lista.length > 1) {
+      setInfo(`✅ ${hechos} archivos subidos`);
+      window.setTimeout(() => setInfo(null), 6000);
+    }
   }
 
   const subiendo = progreso !== null;
+  const [esperaLarga, setEsperaLarga] = useState(false);
+  const eligiendo = useRef(false);
+  const subirActual = useRef(subir); // el aviso del selector se registra una sola vez: siempre llama a la version mas reciente
+  subirActual.current = subir;
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    const alElegir = () => {
+      eligiendo.current = false;
+      setEsperaLarga(false);
+      const f = Array.from(el.files ?? []);
+      if (f.length) void subirActual.current(f);
+    };
+    // Algunos navegadores del movil avisan con «input» y no con «change»; ademas se mira el campo cada medio segundo mientras el selector esta abierto
+    el.addEventListener("input", alElegir);
+    const t = window.setInterval(() => {
+      if (eligiendo.current && el.files?.length) alElegir();
+    }, 500);
+    return () => {
+      el.removeEventListener("input", alElegir);
+      window.clearInterval(t);
+    };
+  }, []);
   return (
     <div>
       {/* El selector se abre con una etiqueta nativa (no con input.click()): funciona tambien en el movil y en los navegadores de WhatsApp o Instagram */}
@@ -226,9 +270,14 @@ function BotonSubida({
           multiple
           disabled={subiendo}
           className="sr-only"
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            if (files.length) void subir(files);
+          onClick={() => {
+            // Se vacia al ABRIR el selector (no al elegir) para poder volver a elegir lo mismo
+            if (input.current) input.current.value = "";
+            eligiendo.current = true;
+            setError(null);
+            window.setTimeout(() => {
+              if (eligiendo.current) setEsperaLarga(true);
+            }, 8000);
           }}
         />
         {subiendo ? (
@@ -245,7 +294,22 @@ function BotonSubida({
           </>
         )}
       </label>
-      {error ? <p className="mt-1.5 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs text-red-300">{error}</p> : null}
+      {esperaLarga && !subiendo ? (
+        <p className="mt-1.5 rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-xs leading-relaxed text-white/60">
+          Si estás eligiendo muchos archivos el móvil tarda en prepararlos: no hace falta que pulses otra vez, <b className="text-white/80">empezará solo</b>.
+        </p>
+      ) : null}
+      {info && !subiendo ? <p className="mt-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-200">{info}</p> : null}
+      {error ? (
+        <div className="mt-1.5 space-y-1.5 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs text-red-300">
+          <p>{error}</p>
+          {pendientesReintento ? (
+            <button type="button" onClick={() => void subir(fallidos.current)} className="rounded-md bg-white/10 px-2.5 py-1 font-semibold text-white">
+              Reintentar los {pendientesReintento} que faltan
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
