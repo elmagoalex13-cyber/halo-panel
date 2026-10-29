@@ -16,6 +16,7 @@ import {
   type TipoColeccion,
 } from "@/lib/onlyfans";
 import { subirArchivoOF } from "./subidaOF";
+import { estadoFase, fasesPendientes, type FeedbackFases } from "@/lib/feedbackFasesTipos";
 import { VisorFotos } from "@/components/VisorFotos";
 import { FotosPerfilSubida, type FotosPerfilEstado } from "./FotosPerfilSubida";
 
@@ -29,18 +30,28 @@ export function fasesCitadas(texto: string | null | undefined): number[] {
 }
 
 /** Lo que la modelo ve de la revision de la agencia: que hay que cambiar (con pasos claros), que esta aprobado o que ya esta reenviado. */
-function RevisionAviso({ col }: { col: ColeccionOF }) {
+function RevisionAviso({ col, pendientesFase = [] }: { col: ColeccionOF; pendientesFase?: Array<{ fase: number; texto: string }> }) {
   const estado = estadoRevision(col);
   const que = col.tipo === "script" ? "script" : col.tipo === "pack" ? "pack" : "post";
-  const fases = col.tipo === "script" ? fasesCitadas(col.revision_texto) : [];
-  if (estado === "mejorar") {
+  const fases = col.tipo === "script" ? [...new Set([...fasesCitadas(col.revision_texto), ...pendientesFase.map((x) => x.fase)])].sort((a, b) => a - b) : [];
+  if (estado === "mejorar" || pendientesFase.length) {
     return (
       <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-4">
         <p className="font-semibold text-amber-100">⚠️ Tu agencia te pide cambios en este {que}</p>
-        {col.revision_texto ? (
+        {col.revision_texto && estado === "mejorar" ? (
           <div className="mt-2 rounded-xl bg-black/25 px-3 py-2.5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-200/70">Lo que tienes que cambiar</p>
             <p className="mt-1 text-sm leading-relaxed text-white">{col.revision_texto}</p>
+          </div>
+        ) : null}
+        {pendientesFase.length ? (
+          <div className="mt-2 space-y-1.5 rounded-xl bg-black/25 px-3 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-200/70">Cambios por fase</p>
+            {pendientesFase.map((x) => (
+              <p key={x.fase} className="text-sm leading-relaxed text-white">
+                <b>Fase {x.fase}:</b> {x.texto || "revísala y vuelve a subirla"}
+              </p>
+            ))}
           </div>
         ) : null}
         <ol className="mt-3 space-y-1.5 text-sm text-amber-50/85">
@@ -49,7 +60,7 @@ function RevisionAviso({ col }: { col: ColeccionOF }) {
             2. Abre {fases.length ? `la ${fases.length === 1 ? "fase" : "fases"} ${fases.join(", ")} (marcada${fases.length === 1 ? "" : "s"} abajo)` : "la fase que toque"}, quita con la ✕ el vídeo o la foto que no sirve y sube el nuevo.
           </li>
           <li>
-            3. Cuando termines, pulsa <b>«Volver a entregar»</b> al final de la página.
+            3. {estado === "mejorar" ? <>Cuando termines, pulsa <b>«Volver a entregar»</b> al final de la página.</> : "Se guarda solo: cuando subas lo nuevo, tu agencia lo verá."}
           </li>
         </ol>
       </div>
@@ -246,6 +257,7 @@ export function OnlyFansPortal({
   onFotos,
   abrirFotos = 0,
   abrirColeccion = null,
+  fasesFeedback = {},
 }: {
   colecciones: ColeccionOF[];
   archivos: ArchivoVista[];
@@ -253,6 +265,7 @@ export function OnlyFansPortal({
   onFotos: (f: FotosPerfilEstado) => void;
   abrirFotos?: number; // cada vez que cambia, abre la pestaña «Fotos» (desde la lista de cosas por hacer)
   abrirColeccion?: { id: string; n: number } | null; // abre ese script/pack/post (desde el aviso de cambios pedidos)
+  fasesFeedback?: Record<string, FeedbackFases>; // feedback de la agencia por fase de cada script
 }) {
   const [verFotos, setVerFotos] = useState(false);
   useEffect(() => {
@@ -270,7 +283,7 @@ export function OnlyFansPortal({
     setVerFotos(false);
     setTipo(c.tipo);
     setAbierta(c.id);
-    setFaseAbierta(fasesCitadas(c.revision_texto)[0] ?? 1);
+    setFaseAbierta(fasesPendientes(fasesFeedback[c.id], archivos)[0]?.fase ?? fasesCitadas(c.revision_texto)[0] ?? 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abrirColeccion?.n]);
   const [nuevo, setNuevo] = useState<{ nombre: string; descripcion: string } | null>(null);
@@ -346,7 +359,7 @@ export function OnlyFansPortal({
     const pr = c.tipo === "script" ? progresoScript(delCol(c.id)) : null;
     const falta = pr && pr.subidos < pr.total ? `Faltan ${pr.total - pr.subidos} archivos de este script. ` : "";
     const repite = estadoRevision(c) === "mejorar";
-    if (!window.confirm(`${falta}${repite ? "¿Volver a entregar con los cambios hechos?" : "¿Marcar como entregado?"} Después no podrás cambiar los archivos.`)) return;
+    if (!window.confirm(`${falta}${repite ? "¿Volver a entregar con los cambios hechos?" : "¿Avisar a tu agencia de que ya está completo?"} Podrás seguir cambiándolo cuando quieras.`)) return;
     const res = await fetch("/api/portal/of/entregar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coleccion_id: c.id }) });
     const j = (await res.json().catch(() => ({}))) as { error?: string; entregado_at?: string };
     if (!res.ok) return setAviso({ ok: false, texto: j.error ?? "No se pudo entregar" });
@@ -360,7 +373,10 @@ export function OnlyFansPortal({
   /* ------------------------------------------------ detalle ------------------------------------------------ */
   if (col) {
     const mios = delCol(col.id);
-    const bloqueado = col.estado === "entregado";
+    const bloqueado = false; // la modelo puede cambiar sus archivos SIEMPRE (la agencia conserva una copia de lo que quita)
+    const entregada = col.estado === "entregado";
+    const feedbackDe = fasesFeedback[col.id];
+    const pendientesFase = col.tipo === "script" ? fasesPendientes(feedbackDe, mios) : [];
     const pr = col.tipo === "script" ? progresoScript(mios) : null;
     return (
       <section className="space-y-3">
@@ -386,7 +402,7 @@ export function OnlyFansPortal({
             </div>
           ) : null}
         </div>
-        <RevisionAviso col={col} />
+        <RevisionAviso col={col} pendientesFase={pendientesFase} />
         {aviso ? <p className={`rounded-xl px-3 py-2 text-sm ${aviso.ok ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300"}`}>{aviso.texto}</p> : null}
 
         {col.tipo === "script" ? (
@@ -405,7 +421,9 @@ export function OnlyFansPortal({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-white">
                         Fase {f.fase} · {f.nombre}
-                        {estadoRevision(col) === "mejorar" && fasesCitadas(col.revision_texto).includes(f.fase) ? <span className="ml-2 rounded-full bg-amber-400/25 px-2 py-0.5 text-[11px] font-bold text-amber-100">✏️ Cámbiala</span> : null}
+                        {(estadoRevision(col) === "mejorar" && fasesCitadas(col.revision_texto).includes(f.fase)) || pendientesFase.some((x) => x.fase === f.fase) ? <span className="ml-2 rounded-full bg-amber-400/25 px-2 py-0.5 text-[11px] font-bold text-amber-100">✏️ Cámbiala</span> : null}
+                        {estadoFase(feedbackDe?.[String(f.fase)], mios.filter((a) => a.fase === f.fase)) === "repetido" ? <span className="ml-2 rounded-full bg-sky-400/20 px-2 py-0.5 text-[11px] font-bold text-sky-100">🔄 Reenviada</span> : null}
+                        {estadoFase(feedbackDe?.[String(f.fase)], mios.filter((a) => a.fase === f.fase)) === "bien" ? <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-200">✅ Bien</span> : null}
                       </p>
                       <p className="text-xs text-white/40">{resumenPortal(f)}</p>
                     </div>
@@ -414,6 +432,21 @@ export function OnlyFansPortal({
                   </button>
                   {abiertaF ? (
                     <div className="space-y-4 border-t border-white/[0.08] p-3">
+                      {(() => {
+                        const fb = feedbackDe?.[String(f.fase)];
+                        const est = estadoFase(fb, mios.filter((a) => a.fase === f.fase));
+                        if (!fb || !est) return null;
+                        const clase = est === "mejorar" ? "border-amber-400/50 bg-amber-400/10 text-amber-50" : est === "repetido" ? "border-sky-400/30 bg-sky-400/10 text-sky-50" : "border-emerald-400/40 bg-emerald-400/10 text-emerald-50";
+                        return (
+                          <div className={`rounded-xl border p-3 text-sm ${clase}`}>
+                            <p className="font-semibold">
+                              {est === "mejorar" ? `⚠️ Tu agencia te pide cambios en la fase ${f.fase}` : est === "repetido" ? "🔄 Ya has cambiado esta fase: tu agencia la revisará otra vez" : `✅ La fase ${f.fase} está bien`}
+                            </p>
+                            {fb.texto ? <p className="mt-1 leading-relaxed">«{fb.texto}»</p> : null}
+                            {est === "mejorar" ? <p className="mt-1 text-xs opacity-75">Quita con la ✕ lo que no sirve y sube lo nuevo en esta misma fase. Se guarda solo.</p> : null}
+                          </div>
+                        );
+                      })()}
                       {f.slots.map((s) => {
                         const subidosSlot = archivosDeSlot(mios, f.fase, s.slot);
                         return (
@@ -477,13 +510,13 @@ export function OnlyFansPortal({
           </div>
         )}
 
-        {!bloqueado ? (
+        {!entregada || estadoRevision(col) === "mejorar" ? (
           <button type="button" disabled={ocupadas > 0 || !mios.length} onClick={() => entregar(col)} className="btn-primary h-12 w-full text-base disabled:opacity-40">
-            {estadoRevision(col) === "mejorar" ? "Volver a entregar con los cambios" : "Marcar como entregado"}
+            {estadoRevision(col) === "mejorar" ? "Volver a entregar con los cambios" : "Ya está completo: avisar a la agencia"}
           </button>
         ) : (
           <p className="text-center text-xs text-white/35">
-            Entregado el {col.entregado_at ? new Date(col.entregado_at).toLocaleDateString("es-ES") : ""}. Si tienes que cambiar algo, avisa a tu agencia.
+            Entregado el {col.entregado_at ? new Date(col.entregado_at).toLocaleDateString("es-ES") : ""}. Puedes cambiar lo que quieras cuando quieras: se guarda solo y tu agencia conserva una copia de todo lo que has subido.
           </p>
         )}
         <p className="text-center text-xs text-white/30">Los archivos se suben tal cual, sin perder calidad. No cierres la página mientras suben.</p>

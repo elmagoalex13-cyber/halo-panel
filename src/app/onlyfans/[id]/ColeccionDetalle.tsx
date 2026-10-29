@@ -10,6 +10,7 @@ import { GlassCard } from "@/components/GlassCard";
 import {
   FASES,
   archivosDeSlot,
+  datosQuitado,
   duracionVsPedido,
   formatoDuracion,
   estadoRevision,
@@ -20,6 +21,8 @@ import {
   type SlotFase,
 } from "@/lib/onlyfans";
 import { RevisionOF } from "./RevisionOF";
+import { FeedbackFaseAgencia } from "./FeedbackFaseAgencia";
+import type { FeedbackFases } from "@/lib/feedbackFasesTipos";
 
 export type ArchivoConVista = ArchivoOF & { vista: string | null };
 
@@ -104,10 +107,14 @@ export function ColeccionDetalle({
   coleccion,
   modelo,
   archivos: iniciales,
+  anteriores = [],
+  feedbackFases = {},
 }: {
   coleccion: ColeccionOF;
   modelo: { id: string; nombre: string; foto: number | null };
   archivos: ArchivoConVista[];
+  anteriores?: ArchivoConVista[]; // lo que la modelo quito o cambio (siempre se conserva)
+  feedbackFases?: FeedbackFases;
 }) {
   const router = useRouter();
   const [archivos, setArchivos] = useState(iniciales);
@@ -271,6 +278,7 @@ export function ColeccionDetalle({
                   </button>
                 </div>
                 {delaFase.length === 0 ? <p className="text-xs text-white/30">La modelo todavía no ha subido nada de esta fase.</p> : null}
+                <FeedbackFaseAgencia coleccionId={coleccion.id} fase={f.fase} inicial={feedbackFases[String(f.fase)] ?? null} archivosFase={delaFase} />
                 {f.slots.map((s) => {
                   const xs = archivosDeSlot(delaFase, f.fase, s.slot) as ArchivoConVista[];
                   if (!xs.length) return null;
@@ -310,6 +318,41 @@ export function ColeccionDetalle({
           {!archivos.length ? <p className="text-sm text-white/35">La modelo todavía no ha subido nada.</p> : null}
         </div>
       )}
+      {anteriores.length ? (
+        <GlassCard className="space-y-3 p-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Versiones anteriores · {anteriores.length}</p>
+            <p className="mt-0.5 text-xs text-white/35">Lo que la modelo ha quitado o cambiado después de subirlo. Tú conservas siempre la copia: puedes descargarla cuando quieras.</p>
+          </div>
+          <ul className="space-y-2">
+            {anteriores.map((a) => {
+              const q = datosQuitado(a);
+              return (
+                <li key={a.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
+                  {a.vista ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={a.vista} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+                  ) : (
+                    <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-white/10 text-white/60">{a.tipo_archivo === "video" ? <Film className="h-5 w-5" /> : <ImageIcon className="h-5 w-5" />}</span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-white/85">{a.nombre_original ?? (a.tipo_archivo === "video" ? "Vídeo" : "Foto")}</p>
+                    <p className="text-xs text-white/40">
+                      {a.fase ? `Fase ${a.fase}` : "Pack"}
+                      {" · "}
+                      {[formatoDuracion(a.duracion_seg), formatoTamano(a.size_bytes)].filter(Boolean).join(" · ")}
+                      {q.at ? ` · quitado el ${new Date(q.at).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}` : ""}
+                    </p>
+                  </div>
+                  <a href={`/api/onlyfans/descargar?id=${a.id}`} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-700/40 bg-amber-950/30 px-2.5 py-1.5 text-xs font-semibold text-amber-400 hover:bg-amber-950/50">
+                    <Download className="h-3.5 w-3.5" /> Descargar
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </GlassCard>
+      ) : null}
       {visor !== null ? <Visor items={itemsVisor} indice={visor} onCambio={setVisor} onCerrar={() => setVisor(null)} /> : null}
     </div>
   );

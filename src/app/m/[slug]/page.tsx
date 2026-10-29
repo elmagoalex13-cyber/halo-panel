@@ -6,7 +6,8 @@ import { LoginForm } from "./LoginForm";
 import { accesosCompletos, accesosInvalidos, faltaPinSkrill } from "@/lib/accesosModelo";
 import { PortalClient, type Pendiente, type Entrega } from "./PortalClient";
 import { sanearDatos } from "@/lib/onboarding";
-import { NOMBRE_HISTORIAS_POSTS, type ArchivoOF, type ColeccionOF } from "@/lib/onlyfans";
+import { NOMBRE_HISTORIAS_POSTS, esQuitado, type ArchivoOF, type ColeccionOF } from "@/lib/onlyfans";
+import { leerFeedbackFasesDe, type FeedbackFases } from "@/lib/feedbackFases";
 import { urlVista } from "@/lib/r2/onlyfans";
 import { miniaturasDeModelo, urlVistaFoto } from "@/lib/ofMiniaturas";
 import type { ArchivoVista } from "./OnlyFansPortal";
@@ -73,10 +74,10 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
       .order("created_at", { ascending: true })
       .limit(3000),
   ]);
-  let contenidoOF: { colecciones: ColeccionOF[]; archivos: ArchivoVista[] } | null = null;
+  let contenidoOF: { colecciones: ColeccionOF[]; archivos: ArchivoVista[]; fasesFeedback: Record<string, FeedbackFases> } | null = null;
   if (!ofColRes.error && !ofArcRes.error) {
     const internas = new Set((ofColRes.data ?? []).filter((c) => c.nombre === NOMBRE_HISTORIAS_POSTS).map((c) => c.id as string)); // la carpeta interna de historias elegidas no se le enseña
-    const filas = ((ofArcRes.data ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>).filter((a) => !internas.has(a.coleccion_id));
+    const filas = ((ofArcRes.data ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>).filter((a) => !internas.has(a.coleccion_id) && !esQuitado(a)); // lo que ella quito (la agencia conserva la copia) no se le ensena
     const minis = await miniaturasDeModelo(modelo.id as string); // las fotos se piden en miniatura (la original pesa varios MB)
     const archivos: ArchivoVista[] = await Promise.all(
       filas.map(async ({ storage_key, bucket, ...a }) => ({
@@ -84,7 +85,8 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
         vista: a.tipo_archivo === "foto" ? await urlVistaFoto(storage_key, bucket, minis).catch(() => null) : null,
       })),
     );
-    contenidoOF = { colecciones: ((ofColRes.data ?? []) as ColeccionOF[]).filter((c) => !internas.has(c.id)), archivos };
+    const coleccionesVisibles = ((ofColRes.data ?? []) as ColeccionOF[]).filter((c) => !internas.has(c.id));
+    contenidoOF = { colecciones: coleccionesVisibles, archivos, fasesFeedback: await leerFeedbackFasesDe(coleccionesVisibles.filter((c) => c.tipo === "script").map((c) => c.id)) };
   }
 
   const [encargosRes, entregasRes, onboardingRes] = await Promise.all([

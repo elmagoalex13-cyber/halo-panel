@@ -274,6 +274,33 @@ Entra en «Subidos» para ver los comentarios.${enlacePortal(m)}`);
           await marcar(borr.map((e) => e.id));
         }
       }
+      // Feedback por FASE de un script: se juntan los de una misma tanda (1 minuto sin mas) y sale UN mensaje por script
+      const porFase = lista.filter((e) => e.tipo === "modelo_fase");
+      if (porFase.length) {
+        const nuevoF = Math.max(...porFase.map((e) => new Date(e.created_at).getTime()));
+        const viejoF = Math.min(...porFase.map((e) => new Date(e.created_at).getTime()));
+        if (ahora - nuevoF >= RACHA_QUIETA_MS || ahora - viejoF >= RACHA_MAXIMA_MS) {
+          const scripts = new Map();
+          for (const e of porFase) {
+            const d = e.datos ?? {};
+            const k = d.coleccion_id ?? d.nombre ?? "script";
+            const s = scripts.get(k) ?? { nombre: d.nombre, fases: new Map() };
+            s.fases.set(Number(d.fase), d); // de cada fase vale el ultimo comentario
+            scripts.set(k, s);
+          }
+          for (const s of scripts.values()) {
+            const lineas = [...s.fases.entries()]
+              .sort((a, b) => a[0] - b[0])
+              .map(([n, d]) => `• Fase ${n}: ${d.tipo === "mejorar" ? "⚠️ hay que cambiarla" : "✅ está bien"}${d.texto ? ` — ${esc(d.texto)}` : ""}`);
+            const hayCambios = [...s.fases.values()].some((d) => d.tipo === "mejorar");
+            await enviar(
+              m.telegram_id,
+              `📝 <b>${esc(m.nombre)}</b>, el equipo ha revisado tu script${s.nombre ? ` «${esc(s.nombre)}»` : ""}:\n${lineas.join("\n")}${hayCambios ? "\n\n👉 Entra en tu portal → «Contenido OnlyFans», abre el script y cambia lo que te piden en cada fase (quita con la ✕ lo que no sirve y sube lo nuevo). Se guarda solo." : ""}${enlacePortal(m)}`,
+            );
+          }
+          await marcar(porFase.map((e) => e.id));
+        }
+      }
       // Asignacion de videos nuevos: se juntan los de una misma tanda (1 minuto sin mas)
       const asig = lista.filter((e) => e.tipo === "modelo_asignacion");
       if (asig.length) {

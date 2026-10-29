@@ -2,7 +2,7 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { leerTodasNotasOF } from "@/lib/notasOF";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { alcanceActual, soloVisibles, type GrupoAmbito } from "@/lib/alcance";
-import { NOMBRE_CARPETA_POSTS, NOMBRE_HISTORIAS_POSTS, progresoScript, type ArchivoOF, type ColeccionOF, type TipoColeccion } from "@/lib/onlyfans";
+import { NOMBRE_CARPETA_POSTS, NOMBRE_HISTORIAS_POSTS, esQuitado, progresoScript, type ArchivoOF, type ColeccionOF, type TipoColeccion } from "@/lib/onlyfans";
 
 export type ResumenColeccion = {
   id: string;
@@ -52,7 +52,7 @@ export async function cargarResumenOF(modeloId?: string) {
     if (cols.error || arcs.error) return vacio;
 
     const porColeccion = new Map<string, ArchivoMeta[]>();
-    for (const a of (arcs.data ?? []) as ArchivoMeta[]) porColeccion.set(a.coleccion_id, [...(porColeccion.get(a.coleccion_id) ?? []), a]);
+    for (const a of ((arcs.data ?? []) as ArchivoMeta[]).filter((x) => !esQuitado(x))) porColeccion.set(a.coleccion_id, [...(porColeccion.get(a.coleccion_id) ?? []), a]);
     const nombrePorId = new Map((mods.data ?? []).map((m) => [m.id as string, m.nombre as string]));
 
     const resumen: ResumenColeccion[] = ((cols.data ?? []) as Array<ColeccionOF & { visto_at?: string | null }>)

@@ -7,6 +7,7 @@ import { BarraSubidas } from "./BarraSubidas";
 import { OnboardingForm } from "./OnboardingForm";
 import { OnlyFansPortal, type ArchivoVista } from "./OnlyFansPortal";
 import { estadoRevision, type ColeccionOF } from "@/lib/onlyfans";
+import { fasesPendientes, type FeedbackFases } from "@/lib/feedbackFasesTipos";
 import { progresoOnboarding, type DatosOnboarding } from "@/lib/onboarding";
 import { GuiaOF, type ReferenciaVista } from "./GuiaOF";
 import { FotosPerfilSubida, type FotosPerfilEstado } from "./FotosPerfilSubida";
@@ -277,7 +278,7 @@ export function PortalClient({
   entregas: Entrega[];
   onboarding: { datos: DatosOnboarding; estado: "borrador" | "enviado" };
   // Contenido de OnlyFans (scripts por fases, packs, posts). null = todavia no activado (faltan las tablas).
-  contenidoOF: { colecciones: ColeccionOF[]; archivos: ArchivoVista[] } | null;
+  contenidoOF: { colecciones: ColeccionOF[]; archivos: ArchivoVista[]; fasesFeedback?: Record<string, FeedbackFases> } | null;
 }) {
   const router = useRouter();
   const [onboardingAbierto, setOnboardingAbierto] = useState(false);
@@ -304,7 +305,8 @@ export function PortalClient({
     setAbrirFotos((n) => n + 1);
     setTimeout(() => document.getElementById("fotos-perfil")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
   };
-  const cambiosOF = (contenidoOF?.colecciones ?? []).filter((c) => estadoRevision(c) === "mejorar");
+  const pendientesDe = (c: ColeccionOF) => fasesPendientes(contenidoOF?.fasesFeedback?.[c.id], (contenidoOF?.archivos ?? []).filter((a) => a.coleccion_id === c.id));
+  const cambiosOF = (contenidoOF?.colecciones ?? []).filter((c) => estadoRevision(c) === "mejorar" || pendientesDe(c).length > 0);
   const reelsConCambios = entregas.filter((e) => e.feedback_tipo === "mejorar");
   const [filtroTipo, setFiltroTipo] = useState<number | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState(false);
@@ -436,7 +438,12 @@ export function PortalClient({
                 <p className="text-sm font-semibold text-white">
                   {c.tipo === "script" ? "📝 Script" : c.tipo === "pack" ? "📦 Pack" : "🖼 Posts"} «{c.nombre}»
                 </p>
-                {c.revision_texto ? <p className="mt-1 text-sm leading-relaxed text-white/80">«{c.revision_texto}»</p> : null}
+                {c.revision_texto && estadoRevision(c) === "mejorar" ? <p className="mt-1 text-sm leading-relaxed text-white/80">«{c.revision_texto}»</p> : null}
+                {pendientesDe(c).map((x) => (
+                  <p key={x.fase} className="mt-1 text-sm leading-relaxed text-white/80">
+                    <b>Fase {x.fase}:</b> {x.texto || "revísala y vuelve a subirla"}
+                  </p>
+                ))}
                 <button type="button" onClick={() => irAColeccion(c.id)} className="mt-2 flex min-h-10 w-full items-center justify-center rounded-xl bg-amber-400 px-4 text-sm font-bold text-black transition hover:bg-amber-300">
                   Ver y corregir
                 </button>
@@ -652,7 +659,7 @@ export function PortalClient({
         </p>
       ) : null}
       {pestana === "subir" && !contenidoOF ? <FotosPerfilSubida fotos={fotos} onCambio={setFotos} /> : null}
-      {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} fotos={fotos} onFotos={setFotos} abrirFotos={abrirFotos} abrirColeccion={abrirColeccion} /> : null}
+      {pestana === "contenido" && contenidoOF ? <OnlyFansPortal colecciones={contenidoOF.colecciones} archivos={contenidoOF.archivos} fotos={fotos} onFotos={setFotos} abrirFotos={abrirFotos} abrirColeccion={abrirColeccion} fasesFeedback={contenidoOF.fasesFeedback} /> : null}
 
       {reelAbierto?.preview ? (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/95 p-3" role="dialog" aria-modal="true" onClick={() => setReelAbierto(null)}>

@@ -142,6 +142,18 @@ export type ArchivoOF = {
   created_at: string;
 };
 
+/**
+ * Lo que la modelo QUITA de un script o un pack NO se borra: pasa a «versiones anteriores» y la agencia conserva siempre la copia.
+ * Se marca el hueco como «__quitado|<hueco original>|<cuando>» (sin tabla nueva); las pantallas de la modelo y los contadores lo ignoran.
+ */
+export const PREFIJO_QUITADO = "__quitado";
+export const esQuitado = (a: { slot?: string | null }) => String(a.slot ?? "").startsWith(PREFIJO_QUITADO);
+export const marcaQuitado = (slot: string | null | undefined) => `${PREFIJO_QUITADO}|${slot ?? ""}|${new Date().toISOString()}`;
+export function datosQuitado(a: { slot?: string | null }): { hueco: string | null; at: string | null } {
+  const [, hueco, at] = String(a.slot ?? "").split("|");
+  return { hueco: hueco || null, at: at || null };
+}
+
 export type ColeccionOF = {
   id: string;
   modelo_id: string;

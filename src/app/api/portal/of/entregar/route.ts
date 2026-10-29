@@ -7,7 +7,7 @@ import { evaluarUmbral } from "@/lib/captacion";
 
 export const dynamic = "force-dynamic";
 
-// La modelo da por terminado un script/pack/post: se bloquea y a la agencia le sale como "entregado".
+// La modelo avisa de que un script/pack/post ya esta completo: a la agencia le sale como "entregado". NO se bloquea: ella puede seguir cambiandolo cuando quiera.
 export async function POST(req: NextRequest) {
   const sesion = await sesionActual();
   if (!sesion) return NextResponse.json({ error: "Sesión caducada" }, { status: 401 });
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
   const col = await coleccionDeModelo(supabase, body.coleccion_id, sesion.modeloId);
   if (!col) return NextResponse.json({ error: "No se encontró" }, { status: 404 });
-  const { count } = await supabase.from("of_archivos").select("id", { count: "exact", head: true }).eq("coleccion_id", col.id);
+  const { count } = await supabase.from("of_archivos").select("id", { count: "exact", head: true }).eq("coleccion_id", col.id).not("slot", "like", "__quitado%"); // lo que quito no cuenta
   if (!count) return NextResponse.json({ error: "Todavía no has subido nada" }, { status: 400 });
 
   const ahora = new Date().toISOString();

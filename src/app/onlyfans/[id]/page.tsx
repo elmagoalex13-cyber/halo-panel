@@ -4,7 +4,8 @@ import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { UUID } from "@/lib/ofServer";
 import { miniaturasDeModelo, urlVistaFoto } from "@/lib/ofMiniaturas";
-import type { ArchivoOF, ColeccionOF } from "@/lib/onlyfans";
+import { esQuitado, type ArchivoOF, type ColeccionOF } from "@/lib/onlyfans";
+import { leerFeedbackFases } from "@/lib/feedbackFases";
 import { ColeccionDetalle, type ArchivoConVista } from "./ColeccionDetalle";
 import { alcanceActual, veModelo } from "@/lib/alcance";
 
@@ -32,12 +33,18 @@ export default async function ColeccionPage({ params }: { params: Promise<{ id: 
   const [{ data: modelo }, fotos] = await Promise.all([supabase.from("modelos").select("id, nombre").eq("id", coleccion.modelo_id).maybeSingle(), versionesFotos()]);
 
   const minis = await miniaturasDeModelo(coleccion.modelo_id);
-  const archivos: ArchivoConVista[] = await Promise.all(
-    ((filas ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>).map(async ({ storage_key, bucket, ...a }) => ({
-      ...a,
-      vista: a.tipo_archivo === "foto" ? await urlVistaFoto(storage_key, bucket, minis).catch(() => null) : null,
-    })),
-  );
+  const conVista = (lista: Array<ArchivoOF & { storage_key: string; bucket: string }>) =>
+    Promise.all(
+      lista.map(async ({ storage_key, bucket, ...a }) => ({
+        ...a,
+        vista: a.tipo_archivo === "foto" ? await urlVistaFoto(storage_key, bucket, minis).catch(() => null) : null,
+      })),
+    );
+  const todas = (filas ?? []) as Array<ArchivoOF & { storage_key: string; bucket: string }>;
+  const archivos: ArchivoConVista[] = await conVista(todas.filter((a) => !esQuitado(a)));
+  // Lo que la modelo quito o cambio: se conserva siempre
+  const anteriores: ArchivoConVista[] = await conVista(todas.filter((a) => esQuitado(a)));
+  const feedbackFases = coleccion.tipo === "script" ? await leerFeedbackFases(id) : {};
 
   return (
     <PanelLayout>
@@ -45,6 +52,8 @@ export default async function ColeccionPage({ params }: { params: Promise<{ id: 
         coleccion={coleccion}
         modelo={{ id: coleccion.modelo_id, nombre: modelo?.nombre ?? "—", foto: fotos[coleccion.modelo_id] ?? null }}
         archivos={archivos}
+        anteriores={anteriores}
+        feedbackFases={feedbackFases}
       />
     </PanelLayout>
   );

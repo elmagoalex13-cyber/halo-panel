@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
   const col = await coleccionDeModelo(supabase, body.coleccion_id, sesion.modeloId);
   if (!col) return NextResponse.json({ error: "No se encontró" }, { status: 404 });
-  if (col.estado === "entregado") return NextResponse.json({ error: "Ya está entregada" }, { status: 409 });
 
   const real = await tamanoEnR2(body.key);
   if (real === null) return NextResponse.json({ error: "El archivo no llegó completo. Vuelve a subirlo." }, { status: 404 });
@@ -69,6 +68,8 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const archivo = data as ArchivoOF;
+  // Si ya estaba entregado y la modelo anade algo, vuelve a salir como «por revisar» en el panel (entregado_at = ahora)
+  if (col.estado === "entregado") await supabase.from("of_colecciones").update({ entregado_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", col.id);
   if (col.tipo === "post") await evaluarUmbral(sesion.modeloId); // los posts se cuentan al subirlos (no hay «entregar»)
   return NextResponse.json({ ok: true, archivo, vista: tipo === "foto" ? await urlVista(body.key) : null });
 }
