@@ -141,10 +141,25 @@ if (typeof window !== "undefined") {
 
 /* ------------------------------------------------------------ cola ------------------------------------------------------------ */
 
+/** Anota un suceso del portal para poder ver por que falla una subida en el movil de una modelo (se guarda en el servidor; nunca rompe nada). */
+export function diag(evento: string, datos?: Record<string, unknown>) {
+  try {
+    const cuerpo = JSON.stringify({ evento, datos });
+    if (typeof navigator !== "undefined" && navigator.sendBeacon?.("/api/portal/diag", new Blob([cuerpo], { type: "application/json" }))) return;
+    void fetch("/api/portal/diag", { method: "POST", headers: { "Content-Type": "application/json" }, body: cuerpo, keepalive: true }).catch(() => undefined);
+  } catch {
+    /* sin diagnostico */
+  }
+}
+
 /** Anade videos a la cola y empieza a subirlos. */
 export function agregar(files: File[], opc: OpcionesSubida) {
   const ctx = `${opc.tipo}|${opc.encargoId ?? ""}`;
-  files.forEach((file, i) => {
+  // El mismo video (mismo nombre, tamaño y fecha) que ya esta en la cola o subiendose no se anade otra vez (pasa cuando la modelo vuelve a elegirlo porque «no ve que pase nada»)
+  const yaEsta = (f: File) => internos.some((x) => x.estado !== "error" && x.file.name === f.name && x.file.size === f.size && x.file.lastModified === f.lastModified);
+  const nuevos = files.filter((f) => !yaEsta(f));
+  diag("agregar", { n: files.length, nuevos: nuevos.length, tam: nuevos.map((f) => Math.round(f.size / 1e6)), tipos: nuevos.map((f) => f.type || "?") });
+  nuevos.forEach((file, i) => {
     internos.push({ id: `s${++contador}`, ctx, nombre: file.name, size: file.size, estado: "cola", subido: 0, file, opc: i === 0 ? opc : { ...opc, encargoId: undefined } });
   });
   emitir();
@@ -190,9 +205,11 @@ async function ejecutar(it: Interno) {
     const r = await subirUno(it);
     it.estado = r?.repetido ? "repetido" : "ok";
     it.subido = it.size;
+    diag("subido", { mb: Math.round(it.size / 1e6), repetido: Boolean(r?.repetido) });
   } catch (e) {
     it.estado = "error";
     it.motivo = textoError(e);
+    diag("error", { mb: Math.round(it.size / 1e6), msg: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200), tipo: it.file.type || "?" });
   }
   emitir();
   bombear();
