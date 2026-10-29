@@ -32,6 +32,7 @@ export function SubirBoton({
   const [lento, setLento] = useState(false); // lleva un rato sin que llegue nada
   const [aviso, setAviso] = useState<string | null>(null);
   const abiertoEn = useRef(0);
+  const [ronda, setRonda] = useState(0); // cada video elegido estrena un campo nuevo: el iPhone a veces deja de avisar si se reutiliza el mismo campo
   const estado = useSyncExternalStore(suscribir, obtener, obtenerServidor);
   const ctx = `${tipo}|${encargoId ?? ""}`;
   const mios = estado.items.filter((i) => i.ctx === ctx && (i.estado === "cola" || i.estado === "subiendo"));
@@ -50,6 +51,7 @@ export function SubirBoton({
     diag("elegido", { origen, n: files.length, validos: validos.length, vacios: vacios.length, espera_s: Math.round((Date.now() - abiertoEn.current) / 1000), tam: files.map((f) => Math.round(f.size / 1e6)), tipos: files.map((f) => f.type || "?") });
     setEsperando(false);
     setLento(false);
+    setRonda((r) => r + 1);
     if (!validos.length) return setAviso("Eso no parece un vídeo. Elige un archivo de vídeo.");
     const buenos = validos.filter((f) => f.size > 0);
     if (!buenos.length) return setAviso("El teléfono no ha podido leer ese vídeo (puede estar solo en iCloud o en otra nube, o estar dañado). Descárgalo al móvil y vuelve a elegirlo.");
@@ -83,13 +85,14 @@ export function SubirBoton({
     el.addEventListener("input", f);
     return () => el.removeEventListener("input", f);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ronda]);
 
   return (
     <div>
       {/* Etiqueta nativa en vez de input.click(): asi el selector se abre tambien en el movil y en los navegadores de WhatsApp o Instagram */}
       <label className={`btn-primary relative flex h-12 w-full cursor-pointer items-center justify-center overflow-hidden text-base ${bloqueado ? "pointer-events-none opacity-80" : ""}`}>
         <input
+          key={ronda}
           ref={input}
           type="file"
           accept={ACEPTA}
