@@ -140,6 +140,22 @@ a {
   backdrop-filter: none !important;
 }
 
+/* Las ventanas emergentes (y todo lo que va sin desenfoque) llevan fondo SOLIDO: el cristal translucido deja ver lo de detras y se lee mal */
+.sin-blur .glass-card,
+.sin-blur .card,
+[role="dialog"] .glass-card,
+[role="dialog"] .card {
+  background-color: #14111f;
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+}
+.sin-blur .glass-card:hover,
+.sin-blur .card:hover,
+[role="dialog"] .glass-card:hover,
+[role="dialog"] .card:hover {
+  background-color: #14111f;
+}
+
 /* ---------- Botones ---------- */
 /* Morado apagado y mate: sin degradados brillantes ni halos, solo un tinte plano translucido */
 .btn-primary {
