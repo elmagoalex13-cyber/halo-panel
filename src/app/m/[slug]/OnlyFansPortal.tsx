@@ -212,6 +212,7 @@ function BotonSubida({
             } catch (e) {
               falloDe.push(lista[i]);
               motivo = e instanceof Error ? e.message : "Error al subir";
+              diag("of_subida_error", { mb: Math.round(lista[i].size / 1e6), msg: motivo.slice(0, 160), tipo: lista[i].type || "?", fase: fase ?? null });
             }
           }
         }),
@@ -220,6 +221,7 @@ function BotonSubida({
       // No se pudo ni preparar la carpeta: no se ha subido nada
       falloDe.splice(0, falloDe.length, ...lista);
       motivo = e instanceof Error ? e.message : "Error al subir";
+      diag("of_carpeta_error", { n: lista.length, msg: motivo.slice(0, 160) });
     } finally {
       setProgreso(null);
       setInfo(null);
