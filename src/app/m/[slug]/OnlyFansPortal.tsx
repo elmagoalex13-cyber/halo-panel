@@ -16,6 +16,7 @@ import {
   type TipoColeccion,
 } from "@/lib/onlyfans";
 import { subirArchivoOF } from "./subidaOF";
+import { diag } from "./subidaVideos";
 import { estadoFase, fasesPendientes, type FeedbackFases } from "@/lib/feedbackFasesTipos";
 import { VisorFotos } from "@/components/VisorFotos";
 import { FotosPerfilSubida, type FotosPerfilEstado } from "./FotosPerfilSubida";
@@ -415,8 +416,10 @@ export function OnlyFansPortal({
   async function quitar(a: ArchivoVista) {
     if (!window.confirm("¿Quitar este archivo? Tendrás que volver a subirlo.")) return;
     const res = await fetch(`/api/portal/of/archivo?id=${a.id}`, { method: "DELETE" });
-    if (res.ok) setArchivos((p) => p.filter((x) => x.id !== a.id));
-    else setAviso({ ok: false, texto: ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo quitar" });
+    // 404 = ya no existe (se quito en otra pestaña o en otro movil): se da por quitado, no es un error de la modelo
+    if (res.ok || res.status === 404) setArchivos((p) => p.filter((x) => x.id !== a.id));
+    if (!res.ok) diag("of_quitar_error", { status: res.status });
+    if (!res.ok && res.status !== 404) setAviso({ ok: false, texto: ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo quitar" });
   }
 
   async function entregar(c: ColeccionOF) {
@@ -426,7 +429,10 @@ export function OnlyFansPortal({
     if (!window.confirm(`${falta}${repite ? "¿Volver a entregar con los cambios hechos?" : "¿Avisar a tu agencia de que ya está completo?"} Podrás seguir cambiándolo cuando quieras.`)) return;
     const res = await fetch("/api/portal/of/entregar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coleccion_id: c.id }) });
     const j = (await res.json().catch(() => ({}))) as { error?: string; entregado_at?: string };
-    if (!res.ok) return setAviso({ ok: false, texto: j.error ?? "No se pudo entregar" });
+    if (!res.ok) {
+      diag("of_entregar_error", { status: res.status, error: j.error, tipo: c.tipo, archivos: delCol(c.id).length });
+      return setAviso({ ok: false, texto: j.error ?? "No se pudo entregar" });
+    }
     setColecciones((p) => p.map((x) => (x.id === c.id ? { ...x, estado: "entregado", entregado_at: j.entregado_at ?? new Date().toISOString() } : x)));
     setAviso({ ok: true, texto: repite ? "¡Entregado otra vez! Tu agencia lo revisará de nuevo." : "¡Entregado! Tu agencia ya lo tiene." });
   }

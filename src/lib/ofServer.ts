@@ -21,8 +21,13 @@ export function extensionSegura(nombre: string | null | undefined, tipo: "video"
 
 /** Coleccion de la modelo con sesion (null si no existe o es de otra modelo). */
 export async function coleccionDeModelo(supabase: SupabaseClient, coleccionId: string, modeloId: string): Promise<ColeccionOF | null> {
-  const { data } = await supabase.from("of_colecciones").select("*").eq("id", coleccionId).eq("modelo_id", modeloId).maybeSingle();
-  return (data as ColeccionOF | null) ?? null;
+  // Si la base de datos falla un momento (no es que no exista), se repite una vez antes de decir «no se encontró»
+  for (let i = 0; i < 2; i++) {
+    const { data, error } = await supabase.from("of_colecciones").select("*").eq("id", coleccionId).eq("modelo_id", modeloId).maybeSingle();
+    if (!error) return (data as ColeccionOF | null) ?? null;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return null;
 }
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
