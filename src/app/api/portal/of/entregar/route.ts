@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { UUID, coleccionDeModelo } from "@/lib/ofServer";
+import { esQuitado } from "@/lib/onlyfans";
 import { encolarTelegram } from "@/lib/telegramCola";
 import { evaluarUmbral } from "@/lib/captacion";
 
@@ -18,7 +19,9 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
   const col = await coleccionDeModelo(supabase, body.coleccion_id, sesion.modeloId);
   if (!col) return NextResponse.json({ error: "No se encontró" }, { status: 404 });
-  const { count } = await supabase.from("of_archivos").select("id", { count: "exact", head: true }).eq("coleccion_id", col.id).not("slot", "like", "__quitado%"); // lo que quito no cuenta
+  // lo que quito no cuenta (se filtra aqui y no en la consulta: en SQL «slot NOT LIKE …» descarta los archivos sin hueco, que son todos los de packs y posts)
+  const { data: filas } = await supabase.from("of_archivos").select("slot").eq("coleccion_id", col.id);
+  const count = (filas ?? []).filter((a) => !esQuitado(a as { slot: string | null })).length;
   if (!count) return NextResponse.json({ error: "Todavía no has subido nada" }, { status: 400 });
 
   const ahora = new Date().toISOString();
