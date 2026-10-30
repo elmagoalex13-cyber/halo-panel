@@ -64,7 +64,21 @@ function emitir(forzar = true) {
 
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function conReintentos<T>(fn: () => Promise<T>, intentos: number): Promise<T> {
+/** Si el movil se ha quedado sin red, espera (hasta 2 minutos) a que vuelva antes de seguir intentandolo. */
+function esperarRed(): Promise<void> {
+  if (typeof navigator === "undefined" || navigator.onLine !== false) return Promise.resolve();
+  return new Promise((ok) => {
+    const fin = () => {
+      window.removeEventListener("online", fin);
+      window.clearTimeout(t);
+      ok();
+    };
+    const t = window.setTimeout(fin, 120000);
+    window.addEventListener("online", fin);
+  });
+}
+
+async function conReintentos<T>(fn: () => Promise<T>, intentos: number, tope = 6000): Promise<T> {
   let ultimo: unknown;
   for (let i = 0; i < intentos; i++) {
     try {
@@ -72,7 +86,10 @@ async function conReintentos<T>(fn: () => Promise<T>, intentos: number): Promise
     } catch (e) {
       if (e instanceof ErrorFinal) throw e;
       ultimo = e;
-      if (i < intentos - 1) await esperar(600 * 2 ** i);
+      if (i < intentos - 1) {
+        await esperar(Math.min(tope, 600 * 2 ** i));
+        await esperarRed();
+      }
     }
   }
   throw ultimo instanceof Error ? ultimo : new Error("Error al subir");
@@ -202,7 +219,19 @@ function bombear() {
 
 async function ejecutar(it: Interno) {
   try {
-    const r = await subirUno(it);
+    let r: { repetido?: boolean } | undefined;
+    for (let vez = 0; ; vez++) {
+      try {
+        r = await subirUno(it);
+        break;
+      } catch (e) {
+        // Un corte de red no llega a la modelo: se espera y se retoma solo (la subida guarda por donde iba). Solo un error definitivo o 6 fallos seguidos se le ensenan.
+        if (e instanceof ErrorFinal || vez >= 6) throw e;
+        diag("reintento", { mb: Math.round(it.size / 1e6), vez: vez + 1, msg: e instanceof Error ? e.message.slice(0, 120) : "?" });
+        await esperar(Math.min(60000, 4000 * 2 ** vez));
+        await esperarRed();
+      }
+    }
     it.estado = r?.repetido ? "repetido" : "ok";
     it.subido = it.size;
     diag("subido", { mb: Math.round(it.size / 1e6), repetido: Boolean(r?.repetido) });
@@ -288,7 +317,8 @@ async function subirPorPartes(it: Interno, p: Extract<Preparada, { provider: "r2
               cargado.set(parte.partNumber, n);
               avance(it, total());
             }),
-          4,
+          10,
+          12000,
         );
         subidas.push({ partNumber: parte.partNumber, etag });
         cargado.set(parte.partNumber, trozo.size);
@@ -310,12 +340,31 @@ function putParte(url: string, trozo: Blob, onProgress: (n: number) => void) {
   return new Promise<string>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
+    // Si la parte lleva 60 s sin avanzar (conexion colgada, no solo lenta) se cancela y se repite
+    let vigilante = 0;
+    const armar = () => {
+      window.clearTimeout(vigilante);
+      vigilante = window.setTimeout(() => xhr.abort(), 60000);
+    };
+    armar();
     xhr.upload.onprogress = (ev) => {
+      armar();
       if (ev.lengthComputable) onProgress(ev.loaded);
     };
-    xhr.onerror = () => reject(new ErrorTemporal("La conexion se corto durante la subida"));
-    xhr.ontimeout = () => reject(new ErrorTemporal("La conexion se corto durante la subida"));
+    xhr.onabort = () => {
+      window.clearTimeout(vigilante);
+      reject(new ErrorTemporal("La conexion se corto durante la subida"));
+    };
+    xhr.onerror = () => {
+      window.clearTimeout(vigilante);
+      reject(new ErrorTemporal("La conexion se corto durante la subida"));
+    };
+    xhr.ontimeout = () => {
+      window.clearTimeout(vigilante);
+      reject(new ErrorTemporal("La conexion se corto durante la subida"));
+    };
     xhr.onload = () => {
+      window.clearTimeout(vigilante);
       if (xhr.status < 200 || xhr.status >= 300) return reject(new ErrorTemporal(`La subida fallo (${xhr.status})`));
       const etag = xhr.getResponseHeader("ETag");
       if (!etag) return reject(new ErrorTemporal("El almacen no devolvio confirmacion de la parte subida"));

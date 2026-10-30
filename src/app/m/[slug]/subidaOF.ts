@@ -37,11 +37,25 @@ function putConProgreso(url: string, cuerpo: Blob, contentType: string | null, o
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     if (contentType) xhr.setRequestHeader("Content-Type", contentType);
+    // Si lleva 60 s sin avanzar (conexion colgada, no solo lenta) se cancela y se repite
+    let vigilante = 0;
+    const armar = () => {
+      window.clearTimeout(vigilante);
+      vigilante = window.setTimeout(() => xhr.abort(), 60000);
+    };
+    armar();
     xhr.upload.onprogress = (e) => {
+      armar();
       if (e.lengthComputable) onProgress(e.loaded);
     };
-    xhr.onerror = () => reject(new Error("Se cortó la conexión durante la subida. Prueba otra vez."));
+    const corte = () => {
+      window.clearTimeout(vigilante);
+      reject(new Error("Se cortó la conexión durante la subida. Prueba otra vez."));
+    };
+    xhr.onerror = corte;
+    xhr.onabort = corte;
     xhr.onload = () => {
+      window.clearTimeout(vigilante);
       if (xhr.status < 200 || xhr.status >= 300) return reject(new Error(`La subida falló (${xhr.status})`));
       resolve(xhr.getResponseHeader("ETag"));
     };
@@ -79,7 +93,7 @@ async function crearMiniatura(file: File): Promise<Blob | null> {
 }
 
 /** Repite un paso si falla por la red (cortes, cobertura que va y viene). Los errores del servidor con mensaje claro no se repiten. */
-async function conReintentos<T>(paso: () => Promise<T>, veces = 4): Promise<T> {
+async function conReintentos<T>(paso: () => Promise<T>, veces = 7): Promise<T> {
   for (let i = 1; ; i++) {
     try {
       return await paso();
@@ -87,7 +101,8 @@ async function conReintentos<T>(paso: () => Promise<T>, veces = 4): Promise<T> {
       const m = e instanceof Error ? e.message : "";
       const definitivo = /sesión|no válido|Solo fotos|incompleto|No se encontró/i.test(m);
       if (definitivo || i >= veces) throw e;
-      await new Promise((r) => setTimeout(r, 1200 * i));
+      await new Promise((r) => setTimeout(r, Math.min(10000, 1200 * 2 ** (i - 1))));
+      if (typeof navigator !== "undefined" && navigator.onLine === false) await new Promise<void>((ok) => { window.addEventListener("online", () => ok(), { once: true }); window.setTimeout(ok, 120000); });
     }
   }
 }
@@ -131,8 +146,9 @@ export async function subirArchivoOF(file: File, destino: DestinoOF, onProgress:
               informar();
               break;
             } catch (e) {
-              if (++intento >= 5) throw e;
-              await new Promise((r) => setTimeout(r, 1500 * intento));
+              if (++intento >= 10) throw e;
+              await new Promise((r) => setTimeout(r, Math.min(12000, 1500 * intento)));
+              if (typeof navigator !== "undefined" && navigator.onLine === false) await new Promise<void>((ok) => { window.addEventListener("online", () => ok(), { once: true }); window.setTimeout(ok, 120000); });
             }
           }
         }
