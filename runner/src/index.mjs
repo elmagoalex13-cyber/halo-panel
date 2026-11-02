@@ -61,7 +61,7 @@ setInterval(() => backupDb(supabase).catch((e) => console.error("[backup]", e.me
 
 // Referencias asignadas por URL: se descargan a R2 para que la modelo (y el editor) las vean
 setTimeout(() => descargarReferenciasPendientes(supabase), 5000);
-setInterval(() => descargarReferenciasPendientes(supabase), 10000);
+setInterval(() => descargarReferenciasPendientes(supabase), 30000);
 
 // Scraper propio de cuentas de referencia (cada SCRAPER_HORAS; sin sesion de Instagram suele fallar)
 console.log(`Scraper de referencias activo (cuentas cada ${config.scraperHoras}h, umbral viral x${config.scraperFactor} la mediana, sesion IG: ${config.igSessionId ? "si" : "NO"})`);
@@ -74,10 +74,10 @@ setInterval(() => cicloTrials(supabase), 5 * 60000);
 
 // Seccion «Trial reels» del panel: 3 versiones spoofeadas de cada video viral que se pida (se descargan y se programan a mano)
 setTimeout(() => cicloTrialReels(supabase), 25000);
-setInterval(() => cicloTrialReels(supabase), 15000);
+setInterval(() => cicloTrialReels(supabase), 30000);
 // Reconoce solo cuales de los reels guardados son copias nuestras (trials ya publicados): compara huellas visuales, sin pegar enlaces
 setTimeout(() => cicloCopias(supabase), 40000);
-setInterval(() => cicloCopias(supabase), 60000);
+setInterval(() => cicloCopias(supabase), 10 * 60000); // lee ~1500 filas cada vez: cada minuto agotaba la transferencia de Supabase
 
 // Pide al panel que programe en Publer lo pendiente (trial reels nuevos, aprobados sin fecha...)
 async function avisarPanel() {
@@ -106,16 +106,16 @@ setInterval(barridoCaptacion, 10 * 60000);
 
 // Facturacion de Venuz.ai: refresca cada VENUZ_HORAS y cuando el panel pulsa "Sync Venuz" (se mira cada 30 s)
 setTimeout(() => cicloVenuz(supabase), 15000);
-setInterval(() => cicloVenuz(supabase), 30000);
+setInterval(() => cicloVenuz(supabase), 60000);
 // Facturacion y enlaces por la API oficial de Venuz (si hay VENUZ_API_KEY): casi en tiempo real
 setTimeout(() => cicloVenuzApi(supabase).catch((e) => console.error("[venuz-api]", e.message)), 20000);
-setInterval(() => cicloVenuzApi(supabase).catch((e) => console.error("[venuz-api]", e.message)), 30000);
+setInterval(() => cicloVenuzApi(supabase).catch((e) => console.error("[venuz-api]", e.message)), 60000);
 // Posts de OnlyFans aprobados en el panel -> cola de posts de Venuz (solo modelos con «Enviar a Venuz» y fan para el baul)
 setTimeout(() => cicloPostsVenuz(supabase), 15000);
-setInterval(() => cicloPostsVenuz(supabase), 15000);
+setInterval(() => cicloPostsVenuz(supabase), 30000);
 // Videos de frase con musica asignados a una modelo: se saca la frase y su colocacion y se guardan en el banco de frases
 setTimeout(() => cicloFrasesReferencia(supabase), 20000);
-setInterval(() => cicloFrasesReferencia(supabase), 30000);
+setInterval(() => cicloFrasesReferencia(supabase), 2 * 60000);
 setTimeout(() => cicloPedidosMusica(supabase), 25000);
 setInterval(() => cicloPedidosMusica(supabase), 20000);
 // Videos de bienvenida: una hora despues de firmar, a la modelo nueva se le asignan (una sola vez) los ultimos 40 videos asignados a las demas
@@ -124,9 +124,9 @@ setInterval(() => cicloEspejo(supabase), 300000);
 
 // Vistas previas (miniatura + copia ligera) de los originales de las modelos, para la pagina Originales del panel
 setTimeout(() => cicloPreviews(supabase), 25000);
-setInterval(() => cicloPreviews(supabase), 30000);
+setInterval(() => cicloPreviews(supabase), 5 * 60000); // lee 600 filas cada vez: cada 30 s agotaba la transferencia de Supabase
 
 // Copia de seguridad del onboarding de creadoras (disco del VPS + bucket privado de Supabase).
 // Solo escribe si hubo cambios y nunca borra copias antiguas.
 setTimeout(() => backupOnboarding(supabase), 30000);
-setInterval(() => backupOnboarding(supabase), 15 * 60000);
+setInterval(() => backupOnboarding(supabase), 60 * 60000);

@@ -302,7 +302,7 @@ export default async function DashboardPage({
 
   return (
     <PanelLayout>
-      <AutoRefrescar segundos={60} />
+      <AutoRefrescar segundos={300} />
       <div className="mb-8">
         <p className="text-sm text-[color:var(--text-secondary)]">{saludo} 👋</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Panel de Administracion</h1>

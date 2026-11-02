@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const db = createAdminClient();
   for (let i = 0; i < 4; i++) {
     const { data } = await db.from("panel_config").select("value, updated_at").eq("key", CLAVE).maybeSingle();
-    const lista = (((data?.value as { lista?: unknown[] } | null)?.lista ?? []) as unknown[]).slice(0, 299);
+    const lista = (((data?.value as { lista?: unknown[] } | null)?.lista ?? []) as unknown[]).slice(0, 119);
     const nuevo = { lista: [{ at: new Date().toISOString(), modelo: sesion.modeloId, evento, datos, ua }, ...lista] };
     const ahora = new Date().toISOString();
     if (!data) {

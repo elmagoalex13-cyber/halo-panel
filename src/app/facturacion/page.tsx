@@ -84,7 +84,7 @@ export default async function FacturacionPage() {
 
   return (
     <PanelLayout>
-      <AutoRefrescar segundos={60} />
+      <AutoRefrescar segundos={300} />
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-[color:var(--text-secondary)]">Ingresos por modelo y por canal</p>
