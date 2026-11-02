@@ -26,7 +26,8 @@ let ultimoEstado = 0;
 const esc = (t) => String(t ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 const plural = (n, uno, varios) => (n === 1 ? uno : varios);
 
-async function enviar(chat, texto) {
+/** Mensaje directo (sin pasar por la base de datos: vale aunque Supabase este caido). */
+export async function enviar(chat, texto) {
   const res = await fetch(`https://api.telegram.org/bot${config.telegramToken}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

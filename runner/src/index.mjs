@@ -10,6 +10,7 @@ import { config, faltanVariables } from "./config.mjs";
 import { iniciarTrabajadores, liberarActivas } from "./queue.mjs";
 import { latido } from "./salud.mjs";
 import { backupDb } from "./backup_db.mjs";
+import { vigilarR2, vigilarSupabase } from "./vigilancia.mjs";
 import { cicloTelegram } from "./telegram.mjs";
 import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
@@ -128,5 +129,11 @@ setInterval(() => cicloPreviews(supabase), 5 * 60000); // lee 600 filas cada vez
 
 // Copia de seguridad del onboarding de creadoras (disco del VPS + bucket privado de Supabase).
 // Solo escribe si hubo cambios y nunca borra copias antiguas.
+// Vigilancia: avisa por Telegram si Supabase se cae o lo restringen, y mide el espacio de Cloudflare R2 (aviso antes de pasar el tramo gratuito)
+setTimeout(() => vigilarSupabase().catch((e) => console.error("[vigilancia]", e.message)), 30000);
+setInterval(() => vigilarSupabase().catch((e) => console.error("[vigilancia]", e.message)), 5 * 60000);
+setTimeout(() => vigilarR2(supabase).catch((e) => console.error("[vigilancia]", e.message)), 3 * 60000);
+setInterval(() => vigilarR2(supabase).catch((e) => console.error("[vigilancia]", e.message)), 12 * 3600000);
+
 setTimeout(() => backupOnboarding(supabase), 30000);
 setInterval(() => backupOnboarding(supabase), 60 * 60000);

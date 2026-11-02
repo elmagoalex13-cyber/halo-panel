@@ -5,7 +5,7 @@ import { mkdir } from "fs/promises";
 import path from "path";
 import { config } from "./config.mjs";
 
-const s3 = new S3Client({
+export const s3 = new S3Client({
   region: "auto",
   endpoint: config.r2Endpoint,
   credentials: { accessKeyId: config.r2Key ?? "", secretAccessKey: config.r2Secret ?? "" },
@@ -50,6 +50,11 @@ export async function uploadToR2(localPath, key, contentType = "video/mp4") {
   await s3.send(
     new PutObjectCommand({ Bucket: config.r2Bucket, Key: key, Body: createReadStream(localPath), ContentType: contentType }),
   );
+}
+
+/** Guarda un contenido pequeno (copias de seguridad) desde memoria. */
+export async function subirBufferAR2(key, cuerpo, contentType = "application/octet-stream") {
+  await s3.send(new PutObjectCommand({ Bucket: config.r2Bucket, Key: key, Body: cuerpo, ContentType: contentType }));
 }
 
 export async function borrarDeR2(key) {
