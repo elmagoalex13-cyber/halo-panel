@@ -4,7 +4,8 @@ import { canUseSupabase } from "@/lib/supabase/server";
 import { sesionActual } from "@/lib/portalAuth";
 import { extensionSegura, tipoDeArchivo } from "@/lib/ofServer";
 import { borrarObjetoOF, listarObjetosOF, prepararSubida, tamanoEnR2 } from "@/lib/r2/onlyfans";
-import { MAX_HISTORIAS, TAM_MAX_HISTORIA, invalidarHistorias, listarHistorias, prefijoHistorias } from "@/lib/historiasIG";
+import { MAX_HISTORIAS, TAM_MAX_HISTORIA, esMiniatura, invalidarHistorias, listarHistorias, prefijoHistorias } from "@/lib/historiasIG";
+import { claveMiniatura } from "@/lib/ofMiniaturas";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
       const size = Number(body.size);
       if (!Number.isFinite(size) || size <= 0 || size > TAM_MAX_HISTORIA) return NextResponse.json({ error: "La foto pesa demasiado (máximo 40 MB)" }, { status: 400 });
       if (tipoDeArchivo(body.contentType, body.filename) !== "foto") return NextResponse.json({ error: "Aquí solo se suben fotos" }, { status: 415 });
-      if ((await listarObjetosOF(prefijoHistorias(modeloId), MAX_HISTORIAS + 1)).length >= MAX_HISTORIAS) {
+      if ((await listarObjetosOF(prefijoHistorias(modeloId), 2 * MAX_HISTORIAS + 100)).filter((o) => !esMiniatura(o.key)).length >= MAX_HISTORIAS) {
         return NextResponse.json({ error: "Has llegado al máximo de fotos. Borra alguna antigua para subir más." }, { status: 409 });
       }
       const contentType = body.contentType || "image/jpeg";
@@ -73,6 +74,7 @@ export async function DELETE(req: NextRequest) {
   if (!key.startsWith(prefijoHistorias(modeloId)) || key.includes("..")) return NextResponse.json({ error: "Archivo no válido" }, { status: 400 });
   try {
     await borrarObjetoOF(key);
+    await borrarObjetoOF(claveMiniatura(key)).catch(() => undefined);
     invalidarHistorias();
     return NextResponse.json({ ok: true });
   } catch (e) {

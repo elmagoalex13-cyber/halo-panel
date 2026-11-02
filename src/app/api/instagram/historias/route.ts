@@ -4,6 +4,7 @@ import { NOMBRE_HISTORIAS_POSTS } from "@/lib/onlyfans";
 import { exigirModelo } from "@/lib/alcance";
 import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { borrarObjetoOF } from "@/lib/r2/onlyfans";
+import { claveMiniatura } from "@/lib/ofMiniaturas";
 import { invalidarHistorias, listarHistorias, marcarHistoriasVistas, prefijoHistorias } from "@/lib/historiasIG";
 import { UUID } from "@/lib/ofServer";
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   const g = await exigirModelo(modeloId);
   if (g) return g;
   try {
-    const historias = await listarHistorias(modeloId);
+    const historias = await listarHistorias(modeloId, true);
     // Las que ya se han pasado a posts de OnlyFans (se guardan con el nombre del archivo de la historia)
     const { data: col } = await createAdminClient().from("of_colecciones").select("id").eq("modelo_id", modeloId).eq("tipo", "post").eq("nombre", NOMBRE_HISTORIAS_POSTS).limit(1).maybeSingle();
     if (col) {
@@ -44,7 +45,10 @@ export async function DELETE(req: NextRequest) {
   const keys = req.nextUrl.searchParams.getAll("key");
   if (!keys.length || keys.some((k) => !k.startsWith(prefijoHistorias(modeloId)) || k.includes(".."))) return NextResponse.json({ error: "Archivo no válido" }, { status: 400 });
   try {
-    for (const k of keys.slice(0, 300)) await borrarObjetoOF(k);
+    for (const k of keys.slice(0, 300)) {
+      await borrarObjetoOF(k);
+      await borrarObjetoOF(claveMiniatura(k)).catch(() => undefined);
+    }
     invalidarHistorias();
     return NextResponse.json({ ok: true, borradas: keys.length });
   } catch (e) {

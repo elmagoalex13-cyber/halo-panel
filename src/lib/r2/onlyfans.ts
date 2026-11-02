@@ -88,6 +88,11 @@ export async function subirObjetoOF(key: string, cuerpo: Buffer | Uint8Array, co
   await cliente().send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: cuerpo, ContentType: contentType }));
 }
 
+/** Abre un objeto para leerlo desde el servidor (Body se puede servir como flujo o leer entero). Falla si no existe. */
+export async function abrirObjetoOF(key: string, bucket = bucketOF()) {
+  return cliente().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+}
+
 /** Copia un objeto a otra clave del mismo almacen (el original no se toca). */
 export async function copiarObjetoOF(origen: string, destino: string, bucket = bucketOF()) {
   await cliente().send(new CopyObjectCommand({ Bucket: bucket, Key: destino, CopySource: `${bucket}/${origen.split("/").map(encodeURIComponent).join("/")}` }));

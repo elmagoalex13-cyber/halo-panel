@@ -200,7 +200,7 @@ export function HistoriasTab({ resumen: inicial, esDueno }: { resumen: ResumenMo
                 <div key={h.key} className={`relative overflow-hidden rounded-xl bg-black ring-2 ${elegidas.includes(h.key) ? "ring-emerald-500" : esNueva ? "ring-pink-500/70" : "ring-white/10"}`}>
                   <button type="button" onClick={() => setVisor(i)} aria-label="Ver la foto grande" className="block aspect-[9/16] w-full cursor-zoom-in">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={h.vista} alt={`Historia ${i + 1} de ${modelo.nombre}`} loading="lazy" className="h-full w-full object-cover" />
+                    <img src={h.mini} alt={`Historia ${i + 1} de ${modelo.nombre}`} loading="lazy" decoding="async" onError={(e) => { const el = e.currentTarget; if (!el.dataset.f) { el.dataset.f = "1"; el.src = h.vista; } }} className="h-full w-full object-cover" />
                   </button>
                   <button
                     type="button"

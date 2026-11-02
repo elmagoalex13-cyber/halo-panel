@@ -6,15 +6,26 @@ export const prefijoHistorias = (modeloId: string) => `historias/${modeloId}/`;
 export const MAX_HISTORIAS = 300; // por modelo: evita que una carpeta crezca sin control
 export const TAM_MAX_HISTORIA = 40 * 1024 * 1024;
 
-export type Historia = { key: string; nombre: string; size: number; fecha: string | null; vista: string; descarga: string; enPost?: boolean };
+export type Historia = { key: string; nombre: string; size: number; fecha: string | null; mini: string; vista: string; descarga: string; enPost?: boolean };
 
-export async function listarHistorias(modeloId: string): Promise<Historia[]> {
-  const objetos = await listarObjetosOF(prefijoHistorias(modeloId), MAX_HISTORIAS + 50);
+// Las miniaturas (<clave>.thumb.jpg) viven junto a las originales pero no son historias: nunca se cuentan ni se listan
+export const esMiniatura = (key: string) => key.endsWith(".thumb.jpg");
+
+/** conPanel: el panel de la agencia las ve a traves del propio servidor (miniatura pequena); el portal de la modelo usa enlaces directos como siempre. */
+export async function listarHistorias(modeloId: string, conPanel = false): Promise<Historia[]> {
+  const objetos = (await listarObjetosOF(prefijoHistorias(modeloId), 2 * MAX_HISTORIAS + 100)).filter((o) => !esMiniatura(o.key));
   objetos.sort((a, b) => (b.fecha ?? "").localeCompare(a.fecha ?? ""));
+  const lista = objetos.slice(0, MAX_HISTORIAS);
+  if (conPanel) {
+    // Panel: no van directas a R2 (desde algunas redes no responde y 300 originales colgaban la pantalla) sino por el servidor
+    const url = (key: string, modo: string) => `/api/instagram/historias/imagen?modelo=${modeloId}&key=${encodeURIComponent(key)}&modo=${modo}`;
+    return lista.map((o) => ({ key: o.key, nombre: o.key.split("/").pop() ?? "historia.jpg", size: o.size, fecha: o.fecha, mini: url(o.key, "mini"), vista: url(o.key, "full"), descarga: url(o.key, "descarga") }));
+  }
   return Promise.all(
-    objetos.slice(0, MAX_HISTORIAS).map(async (o) => {
+    lista.map(async (o) => {
       const nombre = o.key.split("/").pop() ?? "historia.jpg";
-      return { key: o.key, nombre, size: o.size, fecha: o.fecha, vista: await urlVista(o.key), descarga: await urlDescarga(o.key, nombre) };
+      const vista = await urlVista(o.key);
+      return { key: o.key, nombre, size: o.size, fecha: o.fecha, mini: vista, vista, descarga: await urlDescarga(o.key, nombre) };
     }),
   );
 }
@@ -35,7 +46,7 @@ export const invalidarHistorias = () => {
 
 async function objetosHistorias() {
   if (cacheObjetos && Date.now() - cacheObjetos.at < 20000) return cacheObjetos.objetos;
-  const objetos = await listarObjetosOF("historias/", 50000);
+  const objetos = (await listarObjetosOF("historias/", 50000)).filter((o) => !esMiniatura(o.key));
   cacheObjetos = { at: Date.now(), objetos };
   return objetos;
 }
