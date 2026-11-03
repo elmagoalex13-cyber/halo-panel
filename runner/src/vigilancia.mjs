@@ -64,7 +64,7 @@ export async function vigilarSupabase() {
 }
 
 /* ------------------------------------------------------------------ Cloudflare R2 */
-let ultimoAvisoR2 = { at: 0, gb: 0 };
+let ultimoAvisoR2 = { at: 0, gb: 0, coste: 0, cargado: false };
 
 async function listarTodo(bucket) {
   const porCarpeta = new Map();
@@ -159,14 +159,22 @@ export async function vigilarR2(supabase) {
     .then(() => undefined, () => undefined);
   console.log(`[vigilancia] R2: ${gb.toFixed(2)} GB en ${objetos} objetos (coste estimado ${coste.toFixed(2)} $/mes); subidas a medias: ${multipart.abiertas} (${multipart.canceladas} canceladas)`);
 
-  // Aviso: al llegar al umbral, y despues cada vez que crece 2 GB mas o pasa una semana
-  const toca = gb >= AVISO_GB && (gb >= ultimoAvisoR2.gb + 2 || Date.now() - ultimoAvisoR2.at > 7 * 86400000);
+  // Aviso: la primera vez que se pasa el umbral y despues como mucho una vez por semana (o antes si el coste estimado sube 1 $/mes mas).
+  // Lo ultimo avisado se guarda en la base de datos para que reiniciar el servidor no repita el aviso.
+  if (!ultimoAvisoR2.cargado) {
+    const { data } = await supabase.from("panel_config").select("value").eq("key", "r2_aviso").maybeSingle();
+    ultimoAvisoR2 = { at: Number(data?.value?.at) || 0, gb: Number(data?.value?.gb) || 0, coste: Number(data?.value?.coste) || 0, cargado: true };
+  }
+  const toca = gb >= AVISO_GB && (Date.now() - ultimoAvisoR2.at > 7 * 86400000 || coste >= (ultimoAvisoR2.coste ?? 0) + 1);
   if (toca) {
     const lista = top.slice(0, 4).map(([c, v]) => `• ${esc(c)}: ${(v.bytes / GB).toFixed(1)} GB`).join("\n");
     const texto =
       gb >= GRATIS_GB
         ? `💸 <b>Cloudflare R2 ya supera el tramo gratuito:</b> ${gb.toFixed(1)} GB (gratis hasta ${GRATIS_GB} GB). Coste estimado: <b>${coste.toFixed(2)} $/mes</b> (${PRECIO_GB_MES} $ por GB extra; las descargas no se cobran).\n${lista}\n👉 Si quieres frenar el gasto, borra originales viejos que ya no hagan falta.`
         : `📦 <b>Cloudflare R2 se acerca al tramo gratuito:</b> ${gb.toFixed(1)} GB de ${GRATIS_GB} GB gratis. Pasados los ${GRATIS_GB} GB se cobran ${PRECIO_GB_MES} $ por GB al mes.\n${lista}`;
-    if (await avisar(texto)) ultimoAvisoR2 = { at: Date.now(), gb };
+    if (await avisar(texto)) {
+      ultimoAvisoR2 = { at: Date.now(), gb, coste, cargado: true };
+      await supabase.from("panel_config").upsert({ key: "r2_aviso", value: { at: Date.now(), gb, coste }, updated_at: new Date().toISOString() }).then(() => undefined, () => undefined);
+    }
   }
 }
