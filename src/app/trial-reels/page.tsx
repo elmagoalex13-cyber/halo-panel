@@ -5,12 +5,13 @@ import { versionesFotos } from "@/lib/fotosModelos";
 import { codigosDeCopias, leerPedidos, pedidosConVistas } from "@/lib/trialReelsManual";
 import type { ViralPropio } from "@/app/instagram/ViralesPropiosTab";
 import { TrialReelsClient } from "./TrialReelsClient";
+import type { CuentaSubida } from "./SubirOriginal";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Trial reels" };
 
 async function cargar() {
-  if (!canUseSupabase()) return { virales: [] as ViralPropio[], pedidos: [], copias: [] as string[], guardados: 0 };
+  if (!canUseSupabase()) return { virales: [] as ViralPropio[], pedidos: [], copias: [] as string[], guardados: 0, cuentas: [] as CuentaSubida[] };
   const db = createAdminClient();
   const alcance = await alcanceActual();
   const [virales, cuentas, modelos, fotos] = await Promise.all([
@@ -49,21 +50,24 @@ async function cargar() {
   // (los que ya tienen versiones generadas se siguen viendo, para no esconder trabajo hecho)
   const conPedido = new Set(pedidos.map((p) => p.viral_id));
   const aprobados = lista.filter((v) => v.estado === "aprobado" || v.estado === "subido" || conPedido.has(v.id));
-  return { virales: aprobados, guardados: lista.length - aprobados.length, pedidos, copias: [...(await codigosDeCopias().catch(() => new Set<string>()))] };
+  const cuentasSubida: CuentaSubida[] = (cuentas.data ?? [])
+    .map((c) => ({ id: c.id as string, username: String(c.username ?? "").replace(/^@/, ""), modelo: c.modelo_id ? (nombrePorId.get(c.modelo_id as string) ?? "") : "" }))
+    .sort((a, b) => a.modelo.localeCompare(b.modelo, "es") || a.username.localeCompare(b.username, "es"));
+  return { virales: aprobados, guardados: lista.length - aprobados.length, cuentas: cuentasSubida, pedidos, copias: [...(await codigosDeCopias().catch(() => new Set<string>()))] };
 }
 
 export default async function TrialReelsPage() {
-  const [{ virales, pedidos, copias, guardados }, { esDueno, porModelo }] = await Promise.all([cargar(), ambitosModelos()]);
+  const [{ virales, pedidos, copias, guardados, cuentas }, { esDueno, porModelo }] = await Promise.all([cargar(), ambitosModelos()]);
   return (
     <PanelLayout>
       <div className="mb-6">
         <p className="text-sm text-[color:var(--text-secondary)]">Instagram</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Trial reels</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/45">
-          De cada vídeo viral que apruebes en Instagram → Virales propios sacamos hasta 3 versiones con pequeños retoques (un poco de zoom por la izquierda, la derecha o el centro, brillo, saturación, tono, un filtro suave y sin metadatos) para que no sean exactamente el mismo vídeo. Las descargas y las programas tú. Siempre se generan a partir del vídeo original que guardó el buscador, nunca de una copia.
+          De cada vídeo viral que apruebes en Instagram → Virales propios sacamos hasta 3 versiones con pequeños retoques (un poco de zoom por la izquierda, la derecha o el centro, brillo, saturación, tono, un filtro suave y sin metadatos) para que no sean exactamente el mismo vídeo. Las descargas y las programas tú. Siempre se generan a partir del vídeo original (el que guardó el buscador o el que subas tú), nunca de una copia.
         </p>
       </div>
-      <TrialReelsClient virales={virales} pedidos={pedidos} copias={copias} guardados={guardados} esDueno={esDueno} ambitos={porModelo} />
+      <TrialReelsClient virales={virales} pedidos={pedidos} copias={copias} guardados={guardados} esDueno={esDueno} ambitos={porModelo} cuentas={cuentas} />
     </PanelLayout>
   );
 }

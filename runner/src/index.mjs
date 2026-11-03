@@ -16,6 +16,7 @@ import { cicloScraper } from "./scraper.mjs";
 import { descargarReferenciasPendientes } from "./referencias.mjs";
 import { cicloTrials } from "./trials.mjs";
 import { cicloTrialReels } from "./trial_reels.mjs";
+import { cicloSubidasTrial } from "./subidas_trial.mjs";
 import { cicloCopias } from "./copias.mjs";
 import { backupOnboarding } from "./backup_onboarding.mjs";
 import { cicloVenuz } from "./venuz.mjs";
@@ -74,6 +75,9 @@ setTimeout(() => cicloTrials(supabase), 20000);
 setInterval(() => cicloTrials(supabase), 5 * 60000);
 
 // Seccion «Trial reels» del panel: 3 versiones spoofeadas de cada video viral que se pida (se descargan y se programan a mano)
+// Originales que sube la persona desde Trial reels: se unen los trozos y se lanza el pedido
+setTimeout(() => cicloSubidasTrial(supabase), 22000);
+setInterval(() => cicloSubidasTrial(supabase), 20000);
 setTimeout(() => cicloTrialReels(supabase), 25000);
 setInterval(() => cicloTrialReels(supabase), 30000);
 // Reconoce solo cuales de los reels guardados son copias nuestras (trials ya publicados): compara huellas visuales, sin pegar enlaces

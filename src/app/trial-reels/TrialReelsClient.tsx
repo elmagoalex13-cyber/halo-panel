@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AvatarModelo } from "@/components/AvatarModelo";
 import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 import { compacto } from "@/lib/viral";
 import type { ViralPropio } from "@/app/instagram/ViralesPropiosTab";
 import type { PedidoVista } from "@/lib/trialReelsManual";
+import type { SubidaTrial } from "@/lib/trialSubidas";
+import { SubirOriginal, type CuentaSubida } from "./SubirOriginal";
 
 type Mostrar = "todos" | "sin_generar" | "generando" | "listos";
 
@@ -17,8 +20,10 @@ function urlVideo(key: string | null) {
 }
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
 
-export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, guardados, esDueno, ambitos }: { virales: ViralPropio[]; pedidos: PedidoVista[]; copias: string[]; guardados: number; esDueno: boolean; ambitos: Record<string, string> }) {
+export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, guardados, esDueno, ambitos, cuentas }: { virales: ViralPropio[]; pedidos: PedidoVista[]; copias: string[]; guardados: number; esDueno: boolean; ambitos: Record<string, string>; cuentas: CuentaSubida[] }) {
+  const router = useRouter();
   const [pedidos, setPedidos] = useState(iniciales);
+  const [subidas, setSubidas] = useState<SubidaTrial[]>([]); // originales que has subido y el servidor aun esta preparando (o que fallaron)
   const [filtroAmbito, setFiltroAmbito] = useState<FiltroAmbito>("todas");
   const [modelo, setModelo] = useState("todas");
   const [mostrar, setMostrar] = useState<Mostrar>("todos");
@@ -73,7 +78,11 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
           if (mostrar === "listos") return tieneListos(v.id);
           return true;
         })
-        .sort((a, b) => (orden === "vistas" ? b.vistas - a.vistas : new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime())),
+        // Los que acabas de subir tu salen arriba durante 3 dias (sin visitas quedarian al final)
+        .sort((a, b) => {
+          const nuevo = (v: ViralPropio) => (v.codigo?.startsWith("sub-") && Date.now() - new Date(v.fecha_publicacion ?? 0).getTime() < 3 * 86400000 ? 1 : 0);
+          return nuevo(b) - nuevo(a) || (orden === "vistas" ? b.vistas - a.vistas : new Date(b.fecha_publicacion ?? 0).getTime() - new Date(a.fecha_publicacion ?? 0).getTime());
+        }),
     [virales, modelo, mostrar, orden, porViral, enMarcha, tieneListos],
   );
   const sinGenerar = visibles.filter((v) => !(porViral.get(v.id) ?? []).length);
@@ -93,6 +102,39 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
     const t = setInterval(() => void refrescar(), 6000);
     return () => clearInterval(t);
   }, [hayEnMarcha, refrescar]);
+
+  const refrescarSubidas = useCallback(async () => {
+    try {
+      const res = await fetch("/api/trial-reels/subir", { cache: "no-store" });
+      if (res.ok) setSubidas(((await res.json()) as { subidas: SubidaTrial[] }).subidas);
+    } catch {
+      /* se reintenta */
+    }
+  }, []);
+  useEffect(() => {
+    void refrescarSubidas();
+  }, [refrescarSubidas]);
+  useEffect(() => {
+    if (!subidas.some((s) => s.estado !== "error")) return;
+    const t = setInterval(() => void refrescarSubidas(), 5000);
+    return () => clearInterval(t);
+  }, [subidas, refrescarSubidas]);
+  // Al terminar de subir un original, el servidor tarda un poco en prepararlo: durante ~1,5 min se mira cada 8 s si ya esta (aparece el vídeo y sus trial reels)
+  const alSubir = useCallback(() => {
+    void refrescarSubidas();
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      void refrescarSubidas();
+      void refrescar();
+      router.refresh();
+      if (Date.now() - t0 > 90000) clearInterval(iv);
+    }, 8000);
+  }, [refrescarSubidas, refrescar, router]);
+
+  async function borrarSubida(codigo: string) {
+    await fetch(`/api/trial-reels/subir?codigo=${codigo}`, { method: "DELETE" }).catch(() => undefined);
+    void refrescarSubidas();
+  }
 
   async function llamar(clave: string, init: RequestInit, url = "/api/trial-reels/manual") {
     setOcupado(clave);
@@ -140,6 +182,27 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
           Aquí solo salen los virales que apruebas. Hay <span className="font-semibold text-white/80">{guardados}</span> más guardados (por revisar o descartados) en{" "}
           <a href="/instagram?tab=propios" className="font-semibold text-[#A78BFA] hover:underline">Instagram → Virales propios</a>.
         </p>
+      ) : null}
+      <SubirOriginal cuentas={cuentas} cantidadInicial={cantidad} onListo={alSubir} />
+      {subidas.length ? (
+        <div className="space-y-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs">
+          {subidas.map((s) => (
+            <div key={s.codigo} className="flex flex-wrap items-center gap-2">
+              <span className="truncate text-white/70">{s.nombre}</span>
+              {s.estado === "error" ? (
+                <>
+                  <span className="rounded-full bg-red-500/15 px-2 py-0.5 font-semibold text-red-300">Error</span>
+                  <span className="text-red-300">{s.error ?? "No se pudo preparar."}</span>
+                  <button onClick={() => void borrarSubida(s.codigo)} className="ml-auto text-white/40 transition hover:text-red-300">
+                    Quitar y volver a subirlo
+                  </button>
+                </>
+              ) : (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-300">{s.estado === "procesando" ? "Preparando el original…" : "En cola"}</span>
+              )}
+            </div>
+          ))}
+        </div>
       ) : null}
       <SelectorAmbito esDueno={esDueno} valor={filtroAmbito} onChange={setFiltroAmbito} cuenta={(f) => todos.filter((v) => ambitoCoincide(f, v.modelo_id ? ambitos[v.modelo_id] : null)).length} />
 
@@ -244,7 +307,8 @@ export function TrialReelsClient({ virales: todos, pedidos: iniciales, copias, g
                       {v.fecha_publicacion ? ` · ${new Date(v.fecha_publicacion).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}` : ""}
                     </p>
                     {v.descripcion ? <p className="mt-0.5 line-clamp-2 text-xs text-white/55">{v.descripcion}</p> : null}
-                    {v.codigo ? (
+                    {v.codigo?.startsWith("sub-") ? <span className="mt-0.5 inline-block rounded-full bg-[#8B5CF6]/20 px-2 py-0.5 text-[10px] font-bold text-[#C4B5FD]">Subido por ti</span> : null}
+                    {v.codigo && !v.codigo.startsWith("sub-") ? (
                       <a href={`https://www.instagram.com/reel/${v.codigo}/`} target="_blank" rel="noreferrer" className="mt-0.5 inline-block text-[11px] font-semibold text-[#A78BFA] hover:underline">
                         Abrir en Instagram ↗
                       </a>
