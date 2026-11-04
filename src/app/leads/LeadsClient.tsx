@@ -94,6 +94,9 @@ function iconTone(tone: "violet" | "cyan" | "emerald" | "amber" | "red") {
 
 /** Nombre de la web de un lead (su «origen»): sin www y en minusculas. */
 const webDeLead = (l: { origen?: string | null }) => (l.origen ?? "").toLowerCase().replace(/^www\./, "").trim() || "sin origen";
+/** Leads del mercado de España: los que llegan desde la web .es (halomodelsagency.es). Llevan su propia etiqueta y filtro. */
+const esEspana = (l: { origen?: string | null }) => /\.es$/.test(webDeLead(l));
+type Mercado = "todos" | "espana" | "resto";
 const COLORES_WEB = ["border-[#8B5CF6]/50 bg-[#8B5CF6]/15 text-[#DDD6FE]", "border-cyan-400/50 bg-cyan-400/15 text-cyan-100", "border-amber-300/50 bg-amber-300/15 text-amber-100", "border-emerald-400/50 bg-emerald-400/15 text-emerald-100"];
 
 export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLeads: Lead[]; plantillasIniciales: PlantillasLeads }) {
@@ -101,6 +104,7 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
   const [plantillas, setPlantillas] = useState(plantillasIniciales);
   const [active, setActive] = useState<LeadEstado>("nuevo");
   const [web, setWeb] = useState("todas"); // filtro por la web de la que vino el lead
+  const [mercado, setMercado] = useState<Mercado>("todos"); // España (web .es) o el resto
   const [savingId, setSavingId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ title: string; items: LeadAdjunto[]; index: number } | null>(null);
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>(() =>
@@ -114,7 +118,12 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [leads]);
   const colorWeb = (w: string) => COLORES_WEB[Math.max(0, webs.findIndex(([n]) => n === w)) % COLORES_WEB.length];
-  const leadsWeb = useMemo(() => (web === "todas" ? leads : leads.filter((l) => webDeLead(l) === web)), [leads, web]);
+  const nEspana = useMemo(() => leads.filter((l) => l.estado !== "eliminado" && esEspana(l)).length, [leads]);
+  const nResto = useMemo(() => leads.filter((l) => l.estado !== "eliminado" && !esEspana(l)).length, [leads]);
+  const leadsWeb = useMemo(
+    () => leads.filter((l) => (web === "todas" || webDeLead(l) === web) && (mercado === "todos" || (mercado === "espana") === esEspana(l))),
+    [leads, web, mercado],
+  );
 
   const counts = useMemo(() => {
     return leadsWeb.reduce<Record<LeadEstado, number>>(
@@ -193,6 +202,20 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-white/35">Mercado</span>
+        {([["todos", `Todos (${nEspana + nResto})`], ["espana", `España (${nEspana})`], ["resto", `Resto (${nResto})`]] as Array<[Mercado, string]>).map(([id, texto]) => (
+          <button
+            key={id}
+            onClick={() => setMercado(id)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${mercado === id ? (id === "espana" ? "border-yellow-300/60 bg-gradient-to-r from-red-500/30 to-yellow-400/30 text-yellow-100" : "border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white") : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white/80"}`}
+          >
+            {texto}
+          </button>
+        ))}
+        {nEspana === 0 ? <span className="text-xs text-white/35">Aún no ha llegado ningún lead de la web de España (halomodelsagency.es).</span> : null}
+      </div>
+
       {webs.length > 1 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-white/35">Web</span>
@@ -240,7 +263,7 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
           const ig = instagramHref(lead.instagram);
           const notes = draftNotes[lead.id] ?? "";
           return (
-            <article key={lead.id} className="glass-card overflow-hidden">
+            <article key={lead.id} className={`glass-card overflow-hidden ${esEspana(lead) ? "border-l-4 border-l-yellow-400/70" : ""}`}>
               <div className="grid gap-0 xl:grid-cols-[1fr_360px]">
                 <div className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -248,6 +271,7 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="font-display text-xl font-semibold text-white">{lead.nombre ?? "Lead sin datos"}</h2>
                         <span className={`badge ${statusClass(lead.estado)}`}>{ESTADO_LABEL[lead.estado]}</span>
+                        {esEspana(lead) ? <span className="rounded-full border border-yellow-300/60 bg-gradient-to-r from-red-500/30 to-yellow-400/30 px-2.5 py-0.5 text-[11px] font-extrabold tracking-wide text-yellow-100" title="Lead de la web de España">ESPAÑA</span> : null}
                         <span className="badge">{lead.pais ?? "-"}</span>
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${colorWeb(webDeLead(lead))}`} title="Web de la que llegó este lead">🌐 {webDeLead(lead)}</span>
                       </div>
