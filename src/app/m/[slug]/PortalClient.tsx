@@ -413,7 +413,18 @@ export function PortalClient({
       ) : null}
 
       {telegram.vinculado ? (
-        <p className="rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.07] px-4 py-3 text-sm text-emerald-200">🔔 Avisos de Telegram activados: te escribiremos con lo que te falte y los comentarios del equipo.</p>
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.07] px-4 py-3 text-sm text-emerald-200">
+          <p>🔔 Avisos de Telegram activados: te escribiremos con lo que te falte y los comentarios del equipo.</p>
+          {telegram.url ? (
+            <p className="mt-1 text-xs text-emerald-200/70">
+              ¿Has cambiado de teléfono o de cuenta de Telegram?{" "}
+              <a href={telegram.url} target="_blank" rel="noreferrer" className="font-semibold underline">
+                Vincula el nuevo aquí
+              </a>{" "}
+              (los avisos pasarán a ese Telegram).
+            </p>
+          ) : null}
+        </div>
       ) : telegram.url ? (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
           <div className="min-w-0">

@@ -16,7 +16,7 @@ export function codigoVinculo(modeloId: string): string | null {
   return `${id}${mac}`;
 }
 
-/** Estado del enlace de una modelo: si ya esta vinculada y, si no, la URL para vincular. */
+/** Estado del enlace de una modelo: si ya esta vinculada y la URL para vincular (tambien cuando ya lo esta: sirve para cambiar a otro Telegram, p. ej. si cambia de numero; el editor mueve el enlace al chat nuevo). */
 export async function estadoTelegramModelo(modeloId: string): Promise<{ vinculado: boolean; url: string | null }> {
   try {
     const db = createAdminClient();
@@ -24,10 +24,10 @@ export async function estadoTelegramModelo(modeloId: string): Promise<{ vinculad
       db.from("modelos").select("telegram_id").eq("id", modeloId).maybeSingle(),
       db.from("panel_config").select("value").eq("key", "telegram_bot").maybeSingle(),
     ]);
-    if (m?.telegram_id) return { vinculado: true, url: null };
     const username = (bot?.value as { username?: string } | null)?.username;
     const codigo = codigoVinculo(modeloId);
-    return { vinculado: false, url: username && codigo ? `https://t.me/${username}?start=${codigo}` : null };
+    const url = username && codigo ? `https://t.me/${username}?start=${codigo}` : null;
+    return { vinculado: Boolean(m?.telegram_id), url };
   } catch {
     return { vinculado: false, url: null };
   }
