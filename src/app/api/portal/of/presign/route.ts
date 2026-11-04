@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
   const col = await coleccionDeModelo(supabase, body.coleccion_id, sesion.modeloId);
   if (!col) return NextResponse.json({ error: "No se encontró" }, { status: 404 });
-  if (col.estado === "entregado") return NextResponse.json({ error: "Ya la marcaste como entregada. Pídele a tu agencia que la reabra." }, { status: 409 });
+  // Una colección entregada NO se bloquea: la modelo puede seguir añadiendo y cambiando archivos siempre (al registrarlos vuelve a salir como «por revisar» en el panel)
 
   if (col.tipo === "script") {
     const slot = slotDe(Number(body.fase), String(body.slot));

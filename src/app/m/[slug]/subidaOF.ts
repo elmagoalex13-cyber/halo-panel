@@ -65,7 +65,7 @@ function putConProgreso(url: string, cuerpo: Blob, contentType: string | null, o
 
 async function json<T>(res: Response): Promise<T> {
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error((j as { error?: string }).error ?? (res.status === 401 ? "Tu sesión ha caducado, vuelve a entrar" : `Error ${res.status}`));
+  if (!res.ok) throw Object.assign(new Error((j as { error?: string }).error ?? (res.status === 401 ? "Tu sesión ha caducado, vuelve a entrar" : `Error ${res.status}`)), { status: res.status });
   return j;
 }
 
@@ -99,7 +99,9 @@ async function conReintentos<T>(paso: () => Promise<T>, veces = 7): Promise<T> {
       return await paso();
     } catch (e) {
       const m = e instanceof Error ? e.message : "";
-      const definitivo = /sesión|no válido|Solo fotos|incompleto|No se encontró/i.test(m);
+      // Un error del servidor con respuesta clara (400-499, salvo «demasiadas peticiones» o «tiempo agotado») no mejora repitiendolo: se ensena al momento
+      const estado = (e as { status?: number }).status ?? 0;
+      const definitivo = (estado >= 400 && estado < 500 && estado !== 408 && estado !== 429) || /sesión|no válido|Solo fotos|incompleto|No se encontró/i.test(m);
       if (definitivo || i >= veces) throw e;
       await new Promise((r) => setTimeout(r, Math.min(10000, 1200 * 2 ** (i - 1))));
       if (typeof navigator !== "undefined" && navigator.onLine === false) await new Promise<void>((ok) => { window.addEventListener("online", () => ok(), { once: true }); window.setTimeout(ok, 120000); });
