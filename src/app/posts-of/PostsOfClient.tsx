@@ -170,7 +170,7 @@ export function PostsOfClient() {
                     defaultValue={m.fan_baul}
                     key={m.fan_baul}
                     inputMode="numeric"
-                    placeholder="ID numérico, no el usuario"
+                    placeholder="ID (ej. u463976154)"
                     onBlur={(e) => e.target.value.trim() !== m.fan_baul && void ajustes(m, { fan_baul: e.target.value.trim() })}
                     className="w-28 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-white/80"
                   />
