@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
     if (Number.isFinite(d) && d >= 1 && d <= 7) cambios.posts_cada_dias = d;
     if (typeof body.venuz_activo === "boolean") cambios.posts_venuz_activo = body.venuz_activo;
     if (typeof body.fan_baul === "string") {
+      if (/[a-z_@]/i.test(body.fan_baul)) return NextResponse.json({ error: "Aquí va el ID NUMÉRICO de OnlyFans del fan (solo números, unos 9 dígitos), no su usuario. Lo ves en la dirección al abrir su chat en OnlyFans: onlyfans.com/my/chats/chat/<ese número>." }, { status: 400 });
       const f = body.fan_baul.replace(/\D/g, "");
       if (f && (f.length < 5 || f.length > 15)) return NextResponse.json({ error: "El ID del fan son solo números (unos 9 dígitos)" }, { status: 400 });
       cambios.posts_fan_baul = f || null;

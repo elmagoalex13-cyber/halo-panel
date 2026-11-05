@@ -88,7 +88,12 @@ export function PostsOfClient() {
 
   async function ajustes(m: ModeloPosts, cambios: { cada_dias?: number; venuz_activo?: boolean; fan_baul?: string }) {
     setModelos((p) => (p ?? []).map((x) => (x.id === m.id ? { ...x, ...cambios } : x)));
-    await fetch("/api/posts-of", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "ajustes", modelo_id: m.id, ...cambios }) });
+    const r = await fetch("/api/posts-of", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "ajustes", modelo_id: m.id, ...cambios }) });
+    if (!r.ok) {
+      // Antes un valor no válido se perdía en silencio: ahora se avisa y se vuelve a lo guardado
+      window.alert(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "No se pudo guardar");
+      await cargar();
+    }
   }
 
   // Aprueba de golpe todos los posts por revisar que ya tienen caption y una fecha futura
@@ -165,7 +170,7 @@ export function PostsOfClient() {
                     defaultValue={m.fan_baul}
                     key={m.fan_baul}
                     inputMode="numeric"
-                    placeholder="ID de OnlyFans"
+                    placeholder="ID numérico, no el usuario"
                     onBlur={(e) => e.target.value.trim() !== m.fan_baul && void ajustes(m, { fan_baul: e.target.value.trim() })}
                     className="w-28 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-white/80"
                   />
