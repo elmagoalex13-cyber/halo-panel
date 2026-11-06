@@ -343,7 +343,9 @@ export function LeadsClient({ initialLeads, plantillasIniciales }: { initialLead
                     <ActionButton icon={CheckCircle2} label="Captar / guardar" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "captado", notas: notes })} tone="success" />
                     <ActionButton icon={Clock3} label="Para futuro" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "futuro", notas: notes })} />
                     <ActionButton icon={Archive} label="Descartar" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { estado: "descartado", notas: notes })} tone="warning" />
-                    <ActionButton icon={Trash2} label="Eliminar datos" disabled={savingId === lead.id} onClick={() => updateLead(lead.id, { eliminar_datos: true })} tone="danger" />
+                    <ActionButton icon={Trash2} label="Eliminar datos" disabled={savingId === lead.id} onClick={() => { if (window.confirm(`¿Borrar para siempre los datos de ${lead.nombre ?? "este lead"} (nombre, contacto, mensaje y adjuntos)? NO se puede deshacer.
+
+Si solo quieres sacarlo de la lista, usa «Descartar».`)) void updateLead(lead.id, { eliminar_datos: true }); }} tone="danger" />
                   </div>
 
                   <div className="mt-5 space-y-2 rounded-xl border border-white/[0.08] bg-black/20 p-4 text-xs text-white/40">
