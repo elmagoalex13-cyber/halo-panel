@@ -96,6 +96,13 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
   const nModelosElegidos = useMemo(() => modelos.filter((m) => m.piezas.some((p) => elegidas.has(p.id))).length, [modelos, elegidas]);
   const sinCaptacion = delFiltro.filter((m) => m.activa && !m.enCaptacion);
 
+  // Desplegar / plegar cada modelo: con pocas modelos salen abiertas; con muchas, plegadas (lo que cambies tu se respeta)
+  const [aperturas, setAperturas] = useState<Record<string, boolean>>({});
+  const abiertaPorDefecto = conVideos.length <= 3;
+  const estaAbierta = (id: string) => aperturas[id] ?? abiertaPorDefecto;
+  const alternarApertura = (id: string) => setAperturas((p) => ({ ...p, [id]: !(p[id] ?? abiertaPorDefecto) }));
+  const abrirTodas = (abrir: boolean) => setAperturas(Object.fromEntries(conVideos.map((m) => [m.id, abrir])));
+
   const alternar = (id: string) =>
     setElegidas((p) => {
       const n = new Set(p);
@@ -169,6 +176,16 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
             </Link>
           ) : null}
         </div>
+        {conVideos.length > 1 ? (
+          <div className="ml-auto flex items-center gap-2 text-xs">
+            <button type="button" onClick={() => abrirTodas(true)} className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2 font-semibold text-white/70 transition hover:text-white">
+              Desplegar todas
+            </button>
+            <button type="button" onClick={() => abrirTodas(false)} className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2 font-semibold text-white/70 transition hover:text-white">
+              Plegar todas
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {aviso ? <p className={`rounded-xl border px-3 py-2 text-sm ${aviso.ok ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200" : "border-red-500/25 bg-red-500/10 text-red-300"}`}>{aviso.texto}</p> : null}
@@ -186,19 +203,25 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
         <div className="space-y-4">
           {conVideos.map((m) => {
             const suyas = m.piezas.filter((p) => elegidas.has(p.id));
+            const abierta = estaAbierta(m.id);
             return (
               <section key={m.id} className="glass-card p-4">
                 <div className="flex flex-wrap items-center gap-3">
-                  <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-9 w-9 text-sm" />
-                  <div className="min-w-0 flex-1 basis-40">
-                    <p className="truncate font-display text-lg font-semibold text-white">{m.nombre}</p>
-                    <p className="text-xs text-white/45">
-                      {m.piezas.length} {m.piezas.length === 1 ? "vídeo esperando" : "vídeos esperando"} ·{" "}
-                      {m.enCaptacion ? "en captación" : m.manual ? "edición manual" : "edición automática"}
-                      {m.enEdicion.pendiente + m.enEdicion.procesando ? ` · ${m.enEdicion.pendiente + m.enEdicion.procesando} en edición` : ""}
-                      {m.enEdicion.error ? ` · ${m.enEdicion.error} con error` : ""}
-                    </p>
-                  </div>
+                  <button type="button" onClick={() => alternarApertura(m.id)} aria-expanded={abierta} className="flex min-w-0 flex-1 basis-48 items-center gap-3 text-left">
+                    <span className={`shrink-0 text-xs text-white/40 transition-transform ${abierta ? "rotate-90" : ""}`} aria-hidden="true">
+                      ▶
+                    </span>
+                    <AvatarModelo id={m.id} nombre={m.nombre} foto={m.foto} className="h-9 w-9 text-sm" />
+                    <span className="min-w-0">
+                      <span className="block truncate font-display text-lg font-semibold text-white">{m.nombre}</span>
+                      <span className="block text-xs text-white/45">
+                        {m.piezas.length} {m.piezas.length === 1 ? "vídeo esperando" : "vídeos esperando"}
+                        {suyas.length ? ` · ${suyas.length} elegidos` : ""} · {m.enCaptacion ? "en captación" : m.manual ? "edición manual" : "edición automática"}
+                        {m.enEdicion.pendiente + m.enEdicion.procesando ? ` · ${m.enEdicion.pendiente + m.enEdicion.procesando} en edición` : ""}
+                        {m.enEdicion.error ? ` · ${m.enEdicion.error} con error` : ""}
+                      </span>
+                    </span>
+                  </button>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <button type="button" onClick={() => elegirModelo(m, suyas.length !== m.piezas.length)} className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 font-semibold text-white/70 transition hover:text-white">
                       {suyas.length === m.piezas.length ? "Quitar todos" : "Elegir todos"}
@@ -213,11 +236,13 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
                     </button>
                   </div>
                 </div>
-                <ul className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(7.4rem,1fr))] gap-2.5">
-                  {m.piezas.map((p) => (
-                    <Tarjeta key={p.id} p={p} elegida={elegidas.has(p.id)} onElegir={() => alternar(p.id)} onVer={() => setVisor(p)} />
-                  ))}
-                </ul>
+                {abierta ? (
+                  <ul className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(7.4rem,1fr))] gap-2.5">
+                    {m.piezas.map((p) => (
+                      <Tarjeta key={p.id} p={p} elegida={elegidas.has(p.id)} onElegir={() => alternar(p.id)} onVer={() => setVisor(p)} />
+                    ))}
+                  </ul>
+                ) : null}
               </section>
             );
           })}
