@@ -4,6 +4,7 @@ import { sesionActual } from "@/lib/portalAuth";
 import { columnasTipo } from "@/lib/tipoVideo";
 import { elegirFrase, registrarUsoFrase } from "@/lib/frases";
 import { evaluarUmbral } from "@/lib/captacion";
+import { leerEdicionManual } from "@/lib/edicionManual";
 import { borrarDeR2 } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
@@ -80,9 +81,12 @@ export async function POST(req: NextRequest) {
   const { data: modeloCap } = await supabase.from("modelos").select("nombre, objetivo_videos, captacion_aprobada_at, umbral_avisado_at").eq("id", sesion.modeloId).maybeSingle();
   // Los TikTok tambien se quedan en espera (se van acumulando, sin editar), pero NO cuentan como reels: ver progresoCaptacion
   const enCaptacion = Boolean(modeloCap?.objetivo_videos) && !modeloCap?.captacion_aprobada_at;
+  // Edicion MANUAL (la activas en «Editar videos»): lo que suba esta modelo tambien se queda en espera hasta que tu elijas que editar
+  const manual = (await leerEdicionManual().catch(() => ({} as Record<string, boolean>)))[sesion.modeloId] === true;
+  const enEspera = enCaptacion || manual;
 
   // Video de gesto (tipo 2): la frase la pone el editor, del banco (con su musica). En espera no se gasta ninguna frase (se asigna al editarlo)
-  const frase = tipo === 2 && !enCaptacion ? await elegirFrase(supabase) : null;
+  const frase = tipo === 2 && !enEspera ? await elegirFrase(supabase) : null;
   const ahora = new Date().toISOString();
   const { data: pieza, error } = await supabase
     .from("library_content")
@@ -98,8 +102,8 @@ export async function POST(req: NextRequest) {
       size_bytes: body.size ?? null,
       titulo: body.filename ?? "Video de la modelo",
       ...columnasTipo(`tipo${tipo}`),
-      estado: enCaptacion ? "recibido" : "editando",
-      estado_procesamiento: enCaptacion ? null : "pendiente",
+      estado: enEspera ? "recibido" : "editando",
+      estado_procesamiento: enEspera ? null : "pendiente",
       recibido_at: ahora,
       reparto_at: ahora,
       frase_quemada: frase?.frase ?? "",

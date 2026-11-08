@@ -9,6 +9,7 @@ import { areaDePath, type AreaId } from "@/lib/areas";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
   { href: "/facturacion", label: "Facturación", icon: "$" },
+  { href: "/editar", label: "Editar vídeos", icon: "✂" },
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
   { href: "/originales", label: "Originales", icon: "▤" },
   {
