@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AvatarModelo } from "@/components/AvatarModelo";
+import { SelectorAmbito, ambitoCoincide, type FiltroAmbito } from "@/components/SelectorAmbito";
 
 export type PiezaEditar = {
   id: string;
@@ -24,7 +25,6 @@ export type ModeloEditar = {
   piezas: PiezaEditar[];
   enEdicion: { pendiente: number; procesando: number; error: number };
 };
-export type ResumenEdicion = { espera: number; pendiente: number; procesando: number; error: number };
 
 const NOMBRE_TIPO: Record<string, string> = { tipo1: "Hablado", tipo2: "Frases + música", tipo4: "Con referencia" };
 const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
@@ -34,7 +34,7 @@ const mb = (n: number | null) => (n ? `${Math.round(n / 1e6)} MB` : "");
 function Tarjeta({ p, elegida, onElegir, onVer }: { p: PiezaEditar; elegida: boolean; onElegir: () => void; onVer: () => void }) {
   const [sinImagen, setSinImagen] = useState(false);
   return (
-    <li className={`w-[8.2rem] shrink-0 rounded-xl border p-1.5 transition ${elegida ? "border-[#8B5CF6]/70 bg-[#8B5CF6]/[0.1]" : "border-white/10 bg-white/[0.03]"}`}>
+    <li className={`min-w-0 rounded-xl border p-1.5 transition ${elegida ? "border-[#8B5CF6]/70 bg-[#8B5CF6]/[0.1]" : "border-white/10 bg-white/[0.03]"}`}>
       <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-black/50">
         <button type="button" onClick={onVer} className="group absolute inset-0 block w-full" aria-label={`Ver ${p.archivo}`}>
           {p.preview && !sinImagen ? (
@@ -67,7 +67,7 @@ function Tarjeta({ p, elegida, onElegir, onVer }: { p: PiezaEditar; elegida: boo
   );
 }
 
-export function EditarClient({ modelos: iniciales, resumen }: { modelos: ModeloEditar[]; resumen: ResumenEdicion }) {
+export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos: ModeloEditar[]; esDueno: boolean; ambitos: Record<string, string> }) {
   const router = useRouter();
   const [modelos, setModelos] = useState(iniciales);
   const [elegidas, setElegidas] = useState<Set<string>>(new Set());
@@ -75,10 +75,26 @@ export function EditarClient({ modelos: iniciales, resumen }: { modelos: ModeloE
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
   const [visor, setVisor] = useState<PiezaEditar | null>(null);
   const [verAjustes, setVerAjustes] = useState(false);
+  const [filtro, setFiltro] = useState<FiltroAmbito>("todas"); // mis modelos / las que comparto con mi socio
 
-  const conVideos = useMemo(() => modelos.filter((m) => m.piezas.length).sort((a, b) => b.piezas.length - a.piezas.length || a.nombre.localeCompare(b.nombre, "es")), [modelos]);
+  // Todo lo de la pantalla (contadores, tarjetas y ajustes) se calcula solo con las modelos del filtro elegido
+  const delFiltro = useMemo(() => modelos.filter((m) => ambitoCoincide(filtro, ambitos[m.id])), [modelos, filtro, ambitos]);
+  const resumen = useMemo(
+    () => ({
+      espera: delFiltro.reduce((t, m) => t + m.piezas.length, 0),
+      enEdicion: delFiltro.reduce((t, m) => t + m.enEdicion.pendiente + m.enEdicion.procesando, 0),
+      error: delFiltro.reduce((t, m) => t + m.enEdicion.error, 0),
+    }),
+    [delFiltro],
+  );
+  const cambiarFiltro = (f: FiltroAmbito) => {
+    setFiltro(f);
+    setElegidas(new Set()); // no se queda elegido nada que ya no se ve
+  };
+
+  const conVideos = useMemo(() => delFiltro.filter((m) => m.piezas.length).sort((a, b) => b.piezas.length - a.piezas.length || a.nombre.localeCompare(b.nombre, "es")), [delFiltro]);
   const nModelosElegidos = useMemo(() => modelos.filter((m) => m.piezas.some((p) => elegidas.has(p.id))).length, [modelos, elegidas]);
-  const sinCaptacion = modelos.filter((m) => m.activa && !m.enCaptacion);
+  const sinCaptacion = delFiltro.filter((m) => m.activa && !m.enCaptacion);
 
   const alternar = (id: string) =>
     setElegidas((p) => {
@@ -137,12 +153,13 @@ export function EditarClient({ modelos: iniciales, resumen }: { modelos: ModeloE
   const chip = "rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs";
   return (
     <div className="space-y-5 pb-24">
+      <SelectorAmbito esDueno={esDueno} valor={filtro} onChange={cambiarFiltro} cuenta={(f) => modelos.filter((m) => ambitoCoincide(f, ambitos[m.id])).reduce((t, m) => t + m.piezas.length, 0)} />
       <div className="flex flex-wrap gap-2">
         <div className={chip}>
           <span className="font-display text-lg font-semibold text-white">{resumen.espera}</span> <span className="text-white/50">esperando</span>
         </div>
         <div className={chip}>
-          <span className="font-display text-lg font-semibold text-white">{resumen.pendiente + resumen.procesando}</span> <span className="text-white/50">en edición</span>
+          <span className="font-display text-lg font-semibold text-white">{resumen.enEdicion}</span> <span className="text-white/50">en edición</span>
         </div>
         <div className={`${chip} ${resumen.error ? "border-red-400/40 bg-red-400/[0.08]" : ""}`}>
           <span className={`font-display text-lg font-semibold ${resumen.error ? "text-red-200" : "text-white"}`}>{resumen.error}</span> <span className="text-white/50">con error</span>
@@ -196,7 +213,7 @@ export function EditarClient({ modelos: iniciales, resumen }: { modelos: ModeloE
                     </button>
                   </div>
                 </div>
-                <ul className="mt-3 flex gap-2.5 overflow-x-auto pb-1">
+                <ul className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(7.4rem,1fr))] gap-2.5">
                   {m.piezas.map((p) => (
                     <Tarjeta key={p.id} p={p} elegida={elegidas.has(p.id)} onElegir={() => alternar(p.id)} onVer={() => setVisor(p)} />
                   ))}
@@ -229,7 +246,7 @@ export function EditarClient({ modelos: iniciales, resumen }: { modelos: ModeloE
               </button>
             </div>
             <ul className="divide-y divide-white/[0.06]">
-              {modelos
+              {delFiltro
                 .filter((m) => m.activa)
                 .map((m) => (
                   <li key={m.id} className="flex flex-wrap items-center gap-3 py-2">

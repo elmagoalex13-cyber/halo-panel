@@ -2,11 +2,11 @@ import { createHash } from "crypto";
 import { PanelLayout } from "@/components/PanelLayout";
 import { listarClavesR2 } from "@/lib/r2";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
-import { alcanceActual, soloVisibles } from "@/lib/alcance";
+import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { leerEdicionManual } from "@/lib/edicionManual";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
-import { EditarClient, type ModeloEditar, type ResumenEdicion } from "./EditarClient";
+import { EditarClient, type ModeloEditar } from "./EditarClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Editar vídeos" };
@@ -14,8 +14,8 @@ export const metadata = { title: "Editar vídeos" };
 const baseR2 = () => (process.env.R2_PUBLIC_URL ?? process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/$/, "");
 const hashOriginal = (clave: string) => createHash("sha1").update(clave).digest("hex").slice(0, 20);
 
-async function cargar(): Promise<{ modelos: ModeloEditar[]; resumen: ResumenEdicion }> {
-  const vacio = { modelos: [] as ModeloEditar[], resumen: { espera: 0, pendiente: 0, procesando: 0, error: 0 } };
+async function cargar(): Promise<{ modelos: ModeloEditar[] }> {
+  const vacio = { modelos: [] as ModeloEditar[] };
   if (!canUseSupabase()) return vacio;
   try {
     const db = createAdminClient();
@@ -75,22 +75,19 @@ async function cargar(): Promise<{ modelos: ModeloEditar[]; resumen: ResumenEdic
         preview: h && b && previews.has(h) ? { poster: `${b}/previews/${h}.jpg`, video: `${b}/previews/${h}.mp4` } : null,
       });
     }
-    const resumen = { espera: 0, pendiente: 0, procesando: 0, error: 0 };
-    for (const m of porModelo.values()) resumen.espera += m.piezas.length;
     for (const f of (edicionRes.data ?? []) as Array<{ modelo_id: string | null; estado_procesamiento: string | null }>) {
       const m = f.modelo_id ? porModelo.get(f.modelo_id) : null;
       const clave = f.estado_procesamiento === "error" ? "error" : f.estado_procesamiento === "procesando" ? "procesando" : "pendiente";
       if (m) m.enEdicion[clave]++;
-      resumen[clave]++;
     }
-    return { modelos: [...porModelo.values()], resumen };
+    return { modelos: [...porModelo.values()] };
   } catch {
     return vacio;
   }
 }
 
 export default async function EditarPage() {
-  const { modelos, resumen } = await cargar();
+  const [{ modelos }, { esDueno, porModelo }] = await Promise.all([cargar(), ambitosModelos()]);
   return (
     <PanelLayout>
       <div className="mb-6">
@@ -100,7 +97,7 @@ export default async function EditarPage() {
           Aquí esperan los vídeos que suben las modelos. Elige los que quieras de cada una y mándalos a editar. Cuando estén editados, pasan a Aprobación.
         </p>
       </div>
-      <EditarClient modelos={modelos} resumen={resumen} />
+      <EditarClient modelos={modelos} esDueno={esDueno} ambitos={porModelo} />
     </PanelLayout>
   );
 }
