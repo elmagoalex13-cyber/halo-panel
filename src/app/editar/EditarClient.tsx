@@ -195,7 +195,7 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
           <div>
             <p className="font-semibold text-white/70">No hay vídeos esperando</p>
             <p className="mt-1 max-w-md">
-              Aquí aparecen los vídeos de las modelos que están en captación y los de las que tengan la edición en manual. Puedes cambiarlo abajo, en «Cómo se editan los vídeos de cada modelo».
+              Aquí aparecen todos los vídeos que suben las modelos y esperan a que tú elijas cuáles editar. Cuando suban uno nuevo, también te avisa un número en el menú.
             </p>
           </div>
         </div>
@@ -254,7 +254,7 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
           <span>
             <span className="block text-sm font-semibold text-white">Cómo se editan los vídeos de cada modelo</span>
             <span className="block text-xs text-white/45">
-              Automática: los vídeos nuevos se editan solos (como hasta ahora). Manual: esperan aquí y tú eliges. Las modelos en captación siempre esperan aquí.
+              Manual (lo normal): los vídeos esperan aquí y tú eliges cuáles editar. Automática: los vídeos nuevos de esa modelo se editan solos, sin pasar por aquí. Las modelos en captación siempre esperan aquí.
             </span>
           </span>
           <span className="shrink-0 text-white/40">{verAjustes ? "▲" : "▼"}</span>

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, exigirModelo, soloVisibles } from "@/lib/alcance";
-import { cambiarEdicionManual } from "@/lib/edicionManual";
+import { cambiarEdicionAuto } from "@/lib/edicionManual";
 
 export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // POST { accion: "enviar", ids: [...] }              -> manda a EDICION esos videos en espera (de una o de varias modelos a la vez)
-// POST { accion: "modo", modelo_id, manual }         -> esa modelo: sus videos nuevos esperan aqui (manual) o se editan solos (automatico)
+// POST { accion: "modo", modelo_id, manual }         -> esa modelo: sus videos nuevos esperan aqui (manual, lo normal) o se editan solos (automatico)
 // POST { accion: "modo_todas", manual }              -> lo mismo para todas las modelos que ves
 export async function POST(req: NextRequest) {
   if (!canUseSupabase()) return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     if (!UUID.test(modeloId) || typeof b.manual !== "boolean") return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
     const g = await exigirModelo(modeloId);
     if (g) return g;
-    if (!(await cambiarEdicionManual([modeloId], b.manual))) return NextResponse.json({ error: "No se pudo guardar, inténtalo otra vez" }, { status: 500 });
+    if (!(await cambiarEdicionAuto([modeloId], !b.manual))) return NextResponse.json({ error: "No se pudo guardar, inténtalo otra vez" }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const alcance = await alcanceActual();
     const { data: modelos } = await soloVisibles(db.from("modelos").select("id").is("eliminada_at", null), alcance, "id");
     const ids = (modelos ?? []).map((m) => m.id as string);
-    if (!(await cambiarEdicionManual(ids, b.manual))) return NextResponse.json({ error: "No se pudo guardar, inténtalo otra vez" }, { status: 500 });
+    if (!(await cambiarEdicionAuto(ids, !b.manual))) return NextResponse.json({ error: "No se pudo guardar, inténtalo otra vez" }, { status: 500 });
     return NextResponse.json({ ok: true, modelos: ids.length });
   }
 

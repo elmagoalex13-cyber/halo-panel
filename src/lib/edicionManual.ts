@@ -1,9 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/server";
 
-// Modelos cuyos videos NO se mandan a editar solos: lo que suben se queda en espera en «Editar videos» hasta que tu eliges cuales editar.
-// (Las modelos en captacion siempre esperan; esto es para las que ya terminaron la captacion y por defecto se editan solos.)
-// Se guarda en panel_config (clave edicion_manual: { <modelo_id>: true }) con «comparar y cambiar»: no hace falta ninguna tabla nueva.
-const CLAVE = "edicion_manual";
+// Por defecto, TODO lo que suben las modelos (en captacion o no) se queda en espera en «Editar videos» hasta que tu eliges que editar.
+// Solo las modelos que marques como AUTOMATICAS ven sus videos nuevos editarse solos. Se guarda en panel_config
+// (clave edicion_auto: { <modelo_id>: true }) con «comparar y cambiar»: no hace falta ninguna tabla nueva.
+const CLAVE = "edicion_auto";
 
 async function leer(): Promise<{ mapa: Record<string, boolean>; updated_at: string | null }> {
   const { data } = await createAdminClient().from("panel_config").select("value, updated_at").eq("key", CLAVE).maybeSingle();
@@ -11,16 +11,17 @@ async function leer(): Promise<{ mapa: Record<string, boolean>; updated_at: stri
   return { mapa: v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, boolean>) : {}, updated_at: (data?.updated_at as string | undefined) ?? null };
 }
 
-export const leerEdicionManual = async () => (await leer()).mapa;
+/** { modelo_id: true } de las modelos cuya edicion es AUTOMATICA (el resto espera en «Editar videos»). */
+export const leerEdicionAuto = async () => (await leer()).mapa;
 
-/** Pone (o quita) la edicion manual de varias modelos de una vez. */
-export async function cambiarEdicionManual(ids: string[], manual: boolean): Promise<boolean> {
+/** Pone (o quita) la edicion automatica de varias modelos de una vez. */
+export async function cambiarEdicionAuto(ids: string[], automatica: boolean): Promise<boolean> {
   const db = createAdminClient();
   for (let i = 0; i < 6; i++) {
     const { mapa, updated_at } = await leer();
     const nuevo = { ...mapa };
     for (const id of ids) {
-      if (manual) nuevo[id] = true;
+      if (automatica) nuevo[id] = true;
       else delete nuevo[id];
     }
     const ahora = new Date().toISOString();

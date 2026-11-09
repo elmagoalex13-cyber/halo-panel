@@ -4,7 +4,7 @@ import { sesionActual } from "@/lib/portalAuth";
 import { columnasTipo } from "@/lib/tipoVideo";
 import { elegirFrase, registrarUsoFrase } from "@/lib/frases";
 import { evaluarUmbral } from "@/lib/captacion";
-import { leerEdicionManual } from "@/lib/edicionManual";
+import { leerEdicionAuto } from "@/lib/edicionManual";
 import { borrarDeR2 } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
@@ -81,9 +81,10 @@ export async function POST(req: NextRequest) {
   const { data: modeloCap } = await supabase.from("modelos").select("nombre, objetivo_videos, captacion_aprobada_at, umbral_avisado_at").eq("id", sesion.modeloId).maybeSingle();
   // Los TikTok tambien se quedan en espera (se van acumulando, sin editar), pero NO cuentan como reels: ver progresoCaptacion
   const enCaptacion = Boolean(modeloCap?.objetivo_videos) && !modeloCap?.captacion_aprobada_at;
-  // Edicion MANUAL (la activas en «Editar videos»): lo que suba esta modelo tambien se queda en espera hasta que tu elijas que editar
-  const manual = (await leerEdicionManual().catch(() => ({} as Record<string, boolean>)))[sesion.modeloId] === true;
-  const enEspera = enCaptacion || manual;
+  // Por defecto TODO lo que sube una modelo se queda en espera en «Editar videos» hasta que tu elijas que editar. Solo las que marques como
+  // AUTOMATICAS ahi (y no esten en captacion) lo editan solas. Si no se puede leer el ajuste, se queda en espera (no se pierde ni se edita sin querer).
+  const auto = (await leerEdicionAuto().catch(() => null))?.[sesion.modeloId] === true;
+  const enEspera = enCaptacion || !auto;
 
   // Video de gesto (tipo 2): la frase la pone el editor, del banco (con su musica). En espera no se gasta ninguna frase (se asigna al editarlo)
   const frase = tipo === 2 && !enEspera ? await elegirFrase(supabase) : null;

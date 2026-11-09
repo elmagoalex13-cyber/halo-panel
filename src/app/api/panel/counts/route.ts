@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!canUseSupabase()) {
-    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] });
+    return NextResponse.json({ approval: 0, editar: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] });
   }
 
   try {
@@ -27,8 +27,10 @@ export async function GET() {
     // Fotos de historias nuevas (de las modelos que esta persona puede ver); si R2 falla, 0
     const alcance = await alcanceActual();
     const historias = sesion ? resumenHistorias(alcance, sesion.usuario).then((r) => r.reduce((n, x) => n + x.nuevas, 0)).catch(() => 0) : Promise.resolve(0);
-    const [approvalResult, leadsResult, of, actividad, historiasNuevas] = await Promise.all([
+    const [approvalResult, editarResult, leadsResult, of, actividad, historiasNuevas] = await Promise.all([
       soloVisibles(supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "en_aprobacion"), alcance),
+      // Videos de las modelos esperando en «Editar videos» (los TikTok se guardan aparte y no cuentan)
+      soloVisibles(supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "recibido").eq("origen", "upload_manual").or("tipo.is.null,tipo.not.in.(3,5)"), alcance),
       puedeLeads
         ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("estado", "nuevo")
         : Promise.resolve({ count: 0 }),
@@ -48,6 +50,7 @@ export async function GET() {
 
     return NextResponse.json({
       approval: approvalResult.count ?? 0,
+      editar: editarResult.count ?? 0,
       leads: leadsResult.count ?? 0,
       onlyfans: of.count,
       actividad: actividad.count ?? 0,
@@ -57,6 +60,6 @@ export async function GET() {
       detalle, // quien es y por que (para el desplegable del contador y los puntitos de la lista de modelos)
     });
   } catch {
-    return NextResponse.json({ approval: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] });
+    return NextResponse.json({ approval: 0, editar: 0, leads: 0, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] });
   }
 }

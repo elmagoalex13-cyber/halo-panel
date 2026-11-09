@@ -9,7 +9,7 @@ import { areaDePath, type AreaId } from "@/lib/areas";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "◈" },
   { href: "/facturacion", label: "Facturación", icon: "$" },
-  { href: "/editar", label: "Editar vídeos", icon: "✂" },
+  { href: "/editar", label: "Editar vídeos", icon: "✂", editarBadge: true },
   { href: "/aprobacion", label: "Aprobación", icon: "⏳", badge: true },
   { href: "/originales", label: "Originales", icon: "▤" },
   {
@@ -110,7 +110,7 @@ const TEXTO_MOTIVO = { cuenta: "🎯 lista para crearle la cuenta de Instagram",
 const scrollMenu = { aside: 0, nav: 0 };
 const useLayoutEfectoSeguro = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; leads: number; onlyfans: number; actividad: number; historias: number; cuentas: number; detalle: PendienteModelo[] } | null; denegadas: AreaId[] | null } = {
+const cache: { modelos: ModeloMenu[]; modelosAbierto: boolean | null; counts: { approval: number; editar: number; leads: number; onlyfans: number; actividad: number; historias: number; cuentas: number; detalle: PendienteModelo[] } | null; denegadas: AreaId[] | null } = {
   modelos: [],
   modelosAbierto: null,
   counts: null,
@@ -128,7 +128,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, leads: pendingLeads, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] as PendienteModelo[] });
+  const [counts, setCounts] = useState(cache.counts ?? { approval: pendingAprobacion, editar: 0, leads: pendingLeads, onlyfans: 0, actividad: 0, historias: 0, cuentas: 0, detalle: [] as PendienteModelo[] });
   // Secciones que este usuario no puede ver (un socio sin acceso a Leads, etc.): se quitan del menu
   const [denegadas, setDenegadas] = useState<AreaId[]>(cache.denegadas ?? []);
   useEffect(() => {
@@ -216,9 +216,10 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
       try {
         const res = await fetch("/api/panel/counts", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { approval?: number; leads?: number; onlyfans?: number; actividad?: number; historias?: number; cuentas?: number; detalle?: PendienteModelo[] };
+        const data = (await res.json()) as { approval?: number; editar?: number; leads?: number; onlyfans?: number; actividad?: number; historias?: number; cuentas?: number; detalle?: PendienteModelo[] };
         cache.counts = {
           approval: Number(data.approval ?? 0),
+          editar: Number(data.editar ?? 0),
           leads: Number(data.leads ?? 0),
           onlyfans: Number(data.onlyfans ?? 0),
           actividad: Number(data.actividad ?? 0),
@@ -261,6 +262,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
 
   function badgeFor(item: (typeof NAV)[number]) {
     if (item.badge && counts.approval > 0) return counts.approval > 99 ? "99+" : String(counts.approval);
+    if ("editarBadge" in item && item.editarBadge && counts.editar > 0) return counts.editar > 99 ? "99+" : String(counts.editar);
     if (item.leadsBadge && counts.leads > 0) return counts.leads > 99 ? "99+" : String(counts.leads);
     if ("ofBadge" in item && item.ofBadge && counts.onlyfans > 0) return counts.onlyfans > 99 ? "99+" : String(counts.onlyfans);
     if ("histBadge" in item && item.histBadge && counts.historias > 0) return counts.historias > 99 ? "99+" : String(counts.historias);
@@ -270,7 +272,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
   }
 
   // Rojo para lo sensible de tu socio, turquesa para leads, violeta para el resto
-  const colorBadge = (item: (typeof NAV)[number]) => ("actBadge" in item && item.actBadge ? "bg-red-500" : "histBadge" in item && item.histBadge ? "bg-pink-500" : "modelosBadge" in item && item.modelosBadge ? "bg-[#06B6D4]" : item.leadsBadge ? "bg-[#06B6D4]" : "bg-[#8B5CF6]");
+  const colorBadge = (item: (typeof NAV)[number]) => ("editarBadge" in item && item.editarBadge ? "bg-amber-500" : "actBadge" in item && item.actBadge ? "bg-red-500" : "histBadge" in item && item.histBadge ? "bg-pink-500" : "modelosBadge" in item && item.modelosBadge ? "bg-[#06B6D4]" : item.leadsBadge ? "bg-[#06B6D4]" : "bg-[#8B5CF6]");
 
   const primaryItems = NAV_VISIBLE.filter((item) => MOBILE_PRIMARY.includes(item.href));
   const moreItems = NAV_VISIBLE.filter((item) => !MOBILE_PRIMARY.includes(item.href));

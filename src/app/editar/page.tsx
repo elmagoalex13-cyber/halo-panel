@@ -4,7 +4,7 @@ import { listarClavesR2 } from "@/lib/r2";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 import { versionesFotos } from "@/lib/fotosModelos";
-import { leerEdicionManual } from "@/lib/edicionManual";
+import { leerEdicionAuto } from "@/lib/edicionManual";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
 import { EditarClient, type ModeloEditar } from "./EditarClient";
 
@@ -20,7 +20,7 @@ async function cargar(): Promise<{ modelos: ModeloEditar[] }> {
   try {
     const db = createAdminClient();
     const alcance = await alcanceActual();
-    const [modelosRes, esperaRes, edicionRes, manual, fotos] = await Promise.all([
+    const [modelosRes, esperaRes, edicionRes, auto, fotos] = await Promise.all([
       soloVisibles(db.from("modelos").select("id, nombre, activa, objetivo_videos, captacion_aprobada_at").is("eliminada_at", null).order("nombre"), alcance, "id"),
       soloVisibles(
         db
@@ -34,7 +34,7 @@ async function cargar(): Promise<{ modelos: ModeloEditar[] }> {
         alcance,
       ),
       soloVisibles(db.from("library_content").select("modelo_id, estado_procesamiento").eq("origen", "upload_manual").eq("estado", "editando").limit(3000), alcance),
-      leerEdicionManual().catch(() => ({} as Record<string, boolean>)),
+      leerEdicionAuto().catch(() => ({} as Record<string, boolean>)),
       versionesFotos(),
     ]);
 
@@ -56,7 +56,7 @@ async function cargar(): Promise<{ modelos: ModeloEditar[] }> {
         foto: fotos[id] ?? null,
         activa: m.activa !== false,
         enCaptacion: Boolean(m.objetivo_videos) && !m.captacion_aprobada_at,
-        manual: manual[id] === true,
+        manual: auto[id] !== true, // por defecto todas esperan aqui; solo las que marques como automaticas se editan solas
         piezas: [],
         enEdicion: { pendiente: 0, procesando: 0, error: 0 },
       });
