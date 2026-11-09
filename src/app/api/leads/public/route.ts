@@ -18,7 +18,10 @@ type LeadPayload = {
   referrer?: unknown;
   user_agent?: unknown;
   adjuntos?: unknown;
+  lead_id?: unknown;
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -126,27 +129,43 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const campos = {
+      nombre,
+      email,
+      whatsapp,
+      instagram,
+      pais,
+      experiencia: asString(body.experiencia, 240),
+      ingresos: asString(body.ingresos, 240),
+      necesidades: asStringArray(body.necesidades),
+      otro_mensaje: asString(body.otro_mensaje, 2000),
+      acepta_privacidad: body.acepta_privacidad === true,
+      origen: webDe(req, body),
+      landing_slug: asString(body.landing_slug, 160),
+      page_url: getPageUrl(req, body),
+      referrer: asString(body.referrer, 1000) ?? req.headers.get("referer"),
+      user_agent: asString(body.user_agent, 1000) ?? req.headers.get("user-agent"),
+      adjuntos: asAdjuntos(body.adjuntos),
+    };
+
+    // La web guarda el lead en cuanto la creadora deja su contacto y, al terminar el formulario,
+    // vuelve a enviarlo con el id recibido: se completa ese mismo lead (sin tocar su estado) en vez de duplicarlo.
+    const leadId = asString(body.lead_id, 64);
+    if (leadId && UUID.test(leadId)) {
+      const { data: actualizado, error: errorUpdate } = await supabase
+        .from("leads")
+        .update({ ...campos, updated_at: new Date().toISOString() })
+        .eq("id", leadId)
+        .eq("email", email)
+        .select("id")
+        .maybeSingle();
+      if (errorUpdate) throw errorUpdate;
+      if (actualizado) return json({ ok: true, id: actualizado.id, updated: true });
+    }
+
     const { data, error } = await supabase
       .from("leads")
-      .insert({
-        estado: "nuevo",
-        nombre,
-        email,
-        whatsapp,
-        instagram,
-        pais,
-        experiencia: asString(body.experiencia, 240),
-        ingresos: asString(body.ingresos, 240),
-        necesidades: asStringArray(body.necesidades),
-        otro_mensaje: asString(body.otro_mensaje, 2000),
-        acepta_privacidad: body.acepta_privacidad === true,
-        origen: webDe(req, body),
-        landing_slug: asString(body.landing_slug, 160),
-        page_url: getPageUrl(req, body),
-        referrer: asString(body.referrer, 1000) ?? req.headers.get("referer"),
-        user_agent: asString(body.user_agent, 1000) ?? req.headers.get("user-agent"),
-        adjuntos: asAdjuntos(body.adjuntos),
-      })
+      .insert({ estado: "nuevo", ...campos })
       .select("id")
       .single();
 
