@@ -6,6 +6,8 @@ import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { leerEdicionAuto } from "@/lib/edicionManual";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
+import { leerVistoEditar } from "@/lib/editarVistos";
+import { sesionPanelActual } from "@/lib/panelUsuarios";
 import { EditarClient, type ModeloEditar } from "./EditarClient";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,8 @@ async function cargar(): Promise<{ modelos: ModeloEditar[] }> {
   try {
     const db = createAdminClient();
     const alcance = await alcanceActual();
+    const sesion = await sesionPanelActual();
+    const visto = sesion ? await leerVistoEditar(sesion.usuario) : null;
     const [modelosRes, esperaRes, edicionRes, auto, fotos] = await Promise.all([
       soloVisibles(db.from("modelos").select("id, nombre, activa, objetivo_videos, captacion_aprobada_at").is("eliminada_at", null).order("nombre"), alcance, "id"),
       soloVisibles(
@@ -70,6 +74,7 @@ async function cargar(): Promise<{ modelos: ModeloEditar[] }> {
         id: String(f.id),
         archivo: (f.filename_original as string | null) ?? (f.titulo as string | null) ?? "vídeo",
         recibido_at: String(f.recibido_at),
+        nuevo: !visto || Date.parse(String(f.recibido_at)) > Date.parse(visto),
         size: (f.size_bytes as number | null) ?? null,
         tipo: tipoVideoEfectivo(f.tipo_video as string | null, f.tipo as number | null),
         preview: h && b && previews.has(h) ? { poster: `${b}/previews/${h}.jpg`, video: `${b}/previews/${h}.mp4` } : null,

@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, exigirModelo, soloVisibles } from "@/lib/alcance";
 import { cambiarEdicionAuto } from "@/lib/edicionManual";
+import { marcarVistoEditar } from "@/lib/editarVistos";
+import { sesionPanelActual } from "@/lib/panelUsuarios";
 
 export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // POST { accion: "enviar", ids: [...] }              -> manda a EDICION esos videos en espera (de una o de varias modelos a la vez)
+// POST { accion: "vistos" }                        -> marca como vistos los que hay ahora (el numero del menu pasa a contar solo lo que llegue despues)
 // POST { accion: "modo", modelo_id, manual }         -> esa modelo: sus videos nuevos esperan aqui (manual, lo normal) o se editan solos (automatico)
 // POST { accion: "modo_todas", manual }              -> lo mismo para todas las modelos que ves
 export async function POST(req: NextRequest) {
@@ -30,6 +33,13 @@ export async function POST(req: NextRequest) {
     const { error } = await db.from("library_content").update({ estado: "editando", estado_procesamiento: "pendiente", reparto_at: ahora, updated_at: ahora }).in("id", buenos).eq("estado", "recibido");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, enviados: buenos.length });
+  }
+
+  if (b?.accion === "vistos") {
+    const sesion = await sesionPanelActual();
+    if (!sesion) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    await marcarVistoEditar(sesion.usuario);
+    return NextResponse.json({ ok: true });
   }
 
   if (b?.accion === "modo") {

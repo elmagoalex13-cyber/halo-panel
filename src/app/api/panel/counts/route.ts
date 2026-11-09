@@ -6,6 +6,7 @@ import { alcanceActual, soloVisibles } from "@/lib/alcance";
 import { resumenHistorias } from "@/lib/historiasIG";
 import { leerListasParaCuenta } from "@/lib/captacion";
 import { onboardingsSinRevisar } from "@/lib/onboardingAvisos";
+import { leerVistoEditar } from "@/lib/editarVistos";
 import { veModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
@@ -27,10 +28,14 @@ export async function GET() {
     // Fotos de historias nuevas (de las modelos que esta persona puede ver); si R2 falla, 0
     const alcance = await alcanceActual();
     const historias = sesion ? resumenHistorias(alcance, sesion.usuario).then((r) => r.reduce((n, x) => n + x.nuevas, 0)).catch(() => 0) : Promise.resolve(0);
+    const vistoEditar = sesion ? await leerVistoEditar(sesion.usuario) : null;
     const [approvalResult, editarResult, leadsResult, of, actividad, historiasNuevas] = await Promise.all([
       soloVisibles(supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "en_aprobacion"), alcance),
-      // Videos de las modelos esperando en «Editar videos» (los TikTok se guardan aparte y no cuentan)
-      soloVisibles(supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "recibido").eq("origen", "upload_manual").or("tipo.is.null,tipo.not.in.(3,5)"), alcance),
+      // Videos NUEVOS esperando en «Editar videos» desde la ultima vez que los marcaste como vistos (los TikTok se guardan aparte y no cuentan)
+      (() => {
+        const q = supabase.from("library_content").select("id", { count: "exact", head: true }).eq("estado", "recibido").eq("origen", "upload_manual").or("tipo.is.null,tipo.not.in.(3,5)");
+        return soloVisibles(vistoEditar ? q.gt("recibido_at", vistoEditar) : q, alcance);
+      })(),
       puedeLeads
         ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("estado", "nuevo")
         : Promise.resolve({ count: 0 }),

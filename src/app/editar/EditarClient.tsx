@@ -11,6 +11,7 @@ export type PiezaEditar = {
   id: string;
   archivo: string;
   recibido_at: string;
+  nuevo: boolean; // llego despues de la ultima vez que lo marcaste como visto
   size: number | null;
   tipo: string | null;
   preview: { poster: string; video: string } | null;
@@ -55,7 +56,8 @@ function Tarjeta({ p, elegida, onElegir, onVer }: { p: PiezaEditar; elegida: boo
           ✓
         </button>
       </div>
-      <p className="mt-1.5 truncate text-[11px] font-medium text-white/80" title={p.archivo}>
+      {p.nuevo ? <span className="mb-0.5 mt-1.5 inline-block rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide text-black">NUEVO</span> : null}
+      <p className={`${p.nuevo ? "" : "mt-1.5 "}truncate text-[11px] font-medium text-white/80`} title={p.archivo}>
         {p.archivo}
       </p>
       <p className="truncate text-[10px] text-white/40">
@@ -79,6 +81,7 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
 
   // Todo lo de la pantalla (contadores, tarjetas y ajustes) se calcula solo con las modelos del filtro elegido
   const delFiltro = useMemo(() => modelos.filter((m) => ambitoCoincide(filtro, ambitos[m.id])), [modelos, filtro, ambitos]);
+  const nuevos = useMemo(() => delFiltro.reduce((t, m) => t + m.piezas.filter((p) => p.nuevo).length, 0), [delFiltro]);
   const resumen = useMemo(
     () => ({
       espera: delFiltro.reduce((t, m) => t + m.piezas.length, 0),
@@ -157,6 +160,17 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
     }
   }
 
+  // «Marcar como vistos»: el numero del menu deja de contar lo que ya has visto (y los NUEVO se quitan); lo que suban despues vuelve a contar
+  async function marcarVistos() {
+    try {
+      await llamar({ accion: "vistos" });
+      setModelos((p) => p.map((m) => ({ ...m, piezas: m.piezas.map((x) => ({ ...x, nuevo: false })) })));
+      window.dispatchEvent(new Event("halo:contadores"));
+    } catch (e) {
+      setAviso({ ok: false, texto: e instanceof Error ? e.message : "No se pudo marcar" });
+    }
+  }
+
   const chip = "rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs";
   return (
     <div className="space-y-5 pb-24">
@@ -176,6 +190,11 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
             </Link>
           ) : null}
         </div>
+        {nuevos > 0 ? (
+          <button type="button" onClick={() => void marcarVistos()} className="rounded-xl border border-amber-400/50 bg-amber-400/15 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-400/25">
+            ✓ Marcar como vistos ({nuevos} {nuevos === 1 ? "nuevo" : "nuevos"})
+          </button>
+        ) : null}
         {conVideos.length > 1 ? (
           <div className="ml-auto flex items-center gap-2 text-xs">
             <button type="button" onClick={() => abrirTodas(true)} className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2 font-semibold text-white/70 transition hover:text-white">
@@ -216,6 +235,7 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
                       <span className="block truncate font-display text-lg font-semibold text-white">{m.nombre}</span>
                       <span className="block text-xs text-white/45">
                         {m.piezas.length} {m.piezas.length === 1 ? "vídeo esperando" : "vídeos esperando"}
+                        {m.piezas.some((p) => p.nuevo) ? ` · ${m.piezas.filter((p) => p.nuevo).length} nuevos` : ""}
                         {suyas.length ? ` · ${suyas.length} elegidos` : ""} · {m.enCaptacion ? "en captación" : m.manual ? "edición manual" : "edición automática"}
                         {m.enEdicion.pendiente + m.enEdicion.procesando ? ` · ${m.enEdicion.pendiente + m.enEdicion.procesando} en edición` : ""}
                         {m.enEdicion.error ? ` · ${m.enEdicion.error} con error` : ""}
