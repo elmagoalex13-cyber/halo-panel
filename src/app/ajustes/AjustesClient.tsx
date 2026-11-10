@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { GlassCard } from "@/components/GlassCard";
 import { UsuariosPanel } from "./UsuariosPanel";
 import { SistemaPanel } from "./SistemaPanel";
+import { BienvenidaPanel } from "./BienvenidaPanel";
 
 type Estado = {
   configurado: boolean;
@@ -79,6 +80,7 @@ export function AjustesClient({ esDueno = false }: { esDueno?: boolean }) {
           ))}
         </ul>
       </GlassCard>
+      {esDueno ? <BienvenidaPanel /> : null}
       {esDueno ? <SistemaPanel /> : null}
       {esDueno ? <UsuariosPanel /> : null}
     </div>

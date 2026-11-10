@@ -8,7 +8,7 @@ import { ambitoDe } from "@/lib/contratoAmbito";
 import { enviarCopiaFirmada } from "@/lib/contratos";
 import { encolarTelegram } from "@/lib/telegramCola";
 import { crearPortalTrasFirma } from "@/lib/contratoPortal";
-import { registrarEspejo } from "@/lib/espejoVideos";
+import { espejoActivo, registrarEspejo } from "@/lib/espejoVideos";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const portal = await crearPortalTrasFirma({ id: c.id as string, nombre: c.nombre as string, porcentajeAgencia: porcentajeAgenciaDe(variante), ambito }, nombreFirmante);
   const creado = portal && "slug" in portal ? portal : null;
   // Modelo nueva con portal: recibira los ultimos 40 videos asignados a las demas y los que se asignen a partir de ahora (lo hace el editor en un minuto)
-  const espejo = creado ? await registrarEspejo(creado.modelo_id).catch(() => false) : false;
+  const espejo = creado && (await espejoActivo()) ? await registrarEspejo(creado.modelo_id).catch(() => false) : false; // apagado en Ajustes: no se le asigna nada
   await encolarTelegram("contrato_firmado", null, {
     ambito, // privado: el aviso va solo al chat privado del dueño, no al grupo
     nombre: c.nombre,

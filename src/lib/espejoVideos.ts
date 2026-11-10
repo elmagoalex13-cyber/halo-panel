@@ -56,3 +56,20 @@ export async function registrarEspejo(modeloId: string, minutos = RETRASO_MIN): 
 export async function quitarEspejo(modeloId: string): Promise<boolean> {
   return cambiar((l) => (l.some((e) => e.id === modeloId && !e.hecho_at) ? l.filter((e) => !(e.id === modeloId && !e.hecho_at)) : null));
 }
+
+const CLAVE_ACTIVO = "espejo_activo";
+
+/** ¿Se asignan los ultimos 40 videos a una modelo nueva al firmar el contrato? Por defecto si; el dueño lo puede apagar en Ajustes. */
+export async function espejoActivo(): Promise<boolean> {
+  try {
+    const { data } = await createAdminClient().from("panel_config").select("value").eq("key", CLAVE_ACTIVO).maybeSingle();
+    return (data?.value as { activo?: boolean } | null)?.activo !== false;
+  } catch {
+    return true;
+  }
+}
+
+export async function fijarEspejoActivo(activo: boolean): Promise<boolean> {
+  const { error } = await createAdminClient().from("panel_config").upsert({ key: CLAVE_ACTIVO, value: { activo }, updated_at: new Date().toISOString() });
+  return !error;
+}
