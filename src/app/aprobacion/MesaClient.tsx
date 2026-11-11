@@ -402,6 +402,8 @@ export function MesaClient({
   const [captionError, setCaptionError] = useState<string | null>(null);
   const [quickLoadingId, setQuickLoadingId] = useState<string | null>(null);
   const [quickRehacer, setQuickRehacer] = useState<{ row: VideoRow; nota: string } | null>(null);
+  // «Rehacer varios»: la MISMA instruccion (velocidad y/o nota) para todos los vídeos elegidos
+  const [bulk, setBulk] = useState<{ filas: VideoRow[]; velocidad: number | null; nota: string } | null>(null);
 
   useEffect(() => {
     setSeleccion(new Set());
@@ -599,6 +601,7 @@ export function MesaClient({
   }, [abiertoGesto, frasesMusica]);
 
   const puedeMarcar = currentEstado === "aprobado" || currentEstado === "publicado";
+  const puedeSeleccionar = puedeMarcar || currentEstado === "en_aprobacion"; // en «En aprobación» tambien se pueden elegir varios (para rehacerlos de golpe)
   const seleccionVisible = filteredRows.filter((row) => seleccion.has(row.id));
 
   function alternarSeleccion(id: string) {
@@ -628,20 +631,24 @@ export function MesaClient({
     setQuickRehacer({ row, nota: "" });
   }
 
-  async function rehacerVarios(filas: VideoRow[]) {
+  // Manda a rehacer varios vídeos con la MISMA instruccion: velocidad (solo se aplica a los hablados) y/o una nota (p. ej. «inicio +0.5»)
+  async function rehacerVarios(filas: VideoRow[], velocidad: number | null = null, nota = "") {
     if (!filas.length) return;
-    if (!confirm(`¿Mandar ${filas.length} vídeos a rehacer? Volverán a la cola del editor y aparecerán en «En aprobación» cuando estén listos.${avisoProgramados(filas)}`)) return;
+    setBulk(null);
     setPublicando(true);
     let fallos = 0;
+    const idsOk = new Set<string>();
     for (const row of filas) {
-      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, accion: "rehacer", caption: row.caption, correcciones: "", frase_quemada: row.frase_quemada }) });
-      if (!res.ok) fallos++;
+      const cuerpo: Record<string, unknown> = { id: row.id, accion: "rehacer", caption: row.caption, correcciones: nota, frase_quemada: row.frase_quemada };
+      if (velocidad !== null && row.tipo_video === "tipo1") cuerpo.velocidad = velocidad;
+      const res = await fetch("/api/aprobacion/accion", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+      if (res.ok) idsOk.add(row.id);
+      else fallos++;
     }
-    const idsOk = new Set(filas.map((r) => r.id));
-    setRows((prev) => (fallos ? prev : prev.filter((r) => !idsOk.has(r.id))));
+    setRows((prev) => prev.filter((r) => !idsOk.has(r.id)));
     setSeleccion(new Set());
     setPublicando(false);
-    setActionMessage(fallos ? `${filas.length - fallos} enviados a rehacer; ${fallos} no se pudieron enviar.` : `${filas.length} vídeos enviados a rehacer.`);
+    setActionMessage(fallos ? `${filas.length - fallos} enviados a rehacer; ${fallos} no se pudieron enviar.` : `${filas.length} vídeos enviados a rehacer${velocidad !== null ? ` a ${textoVelocidad(velocidad)}` : ""}.`);
     router.refresh();
   }
 
@@ -861,7 +868,7 @@ export function MesaClient({
           </div>
         ) : null}
 
-        {puedeMarcar && filteredRows.length ? (
+        {puedeSeleccionar && filteredRows.length ? (
           <div className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2">
             <label className="flex cursor-pointer items-center gap-2 text-xs text-white/60">
               <input
@@ -872,6 +879,7 @@ export function MesaClient({
               />
               Seleccionar todos ({filteredRows.length})
             </label>
+            {puedeMarcar ? (
             <button
               type="button"
               disabled={publicando || seleccionVisible.length === 0}
@@ -888,6 +896,7 @@ export function MesaClient({
                   ? `✓ Marcar ${seleccionVisible.length || ""} como publicados`.replace("  ", " ")
                   : `↺ Volver ${seleccionVisible.length || ""} a aprobados`.replace("  ", " ")}
             </button>
+            ) : null}
             <button
               type="button"
               disabled={seleccionVisible.filter((row) => videoEditado(row)).length === 0}
@@ -896,16 +905,17 @@ export function MesaClient({
             >
               {`↓ Descargar ${seleccionVisible.filter((row) => videoEditado(row)).length || ""} vídeos`.replace("  ", " ")}
             </button>
-            {currentEstado === "aprobado" ? (
+            {currentEstado === "aprobado" || currentEstado === "en_aprobacion" ? (
               <button
                 type="button"
                 disabled={publicando || seleccionVisible.length === 0}
-                onClick={() => void rehacerVarios(seleccionVisible)}
+                onClick={() => setBulk({ filas: seleccionVisible, velocidad: null, nota: "" })}
                 className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-40"
               >
                 {`↺ Rehacer ${seleccionVisible.length || ""} vídeos`.replace("  ", " ")}
               </button>
             ) : null}
+            {puedeMarcar ? (
             <button
               type="button"
               disabled={borrandoArchivos || seleccionVisible.length === 0}
@@ -914,6 +924,7 @@ export function MesaClient({
             >
               {borrandoArchivos ? "Eliminando…" : `🗑 Eliminar ${seleccionVisible.length || ""} vídeos`.replace("  ", " ")}
             </button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -937,7 +948,7 @@ export function MesaClient({
                 className="group grid w-full grid-cols-[58px_1fr] gap-3 border-b border-white/[0.06] p-3 text-left transition-all duration-150 last:border-b-0 hover:border-[#8B5CF6]/35 hover:bg-white/[0.055] sm:grid-cols-[68px_1fr_auto] sm:gap-4 sm:p-4"
               >
                 <div className="relative h-24 w-[54px] sm:h-28 sm:w-[63px]">
-                {puedeMarcar ? (
+                {puedeSeleccionar ? (
                   <label className="absolute left-1 top-1 z-10 grid h-6 w-6 cursor-pointer place-items-center rounded-md bg-black/70 ring-1 ring-white/25">
                     <input
                       type="checkbox"
@@ -1467,6 +1478,77 @@ export function MesaClient({
                   </button>
                 ) : null}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {bulk ? (
+        <div className="sin-blur fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true">
+          <div className="glass-card max-h-[90dvh] w-full max-w-lg overflow-y-auto p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-display text-lg font-semibold text-white">Rehacer {bulk.filas.length} {bulk.filas.length === 1 ? "vídeo" : "vídeos"}</p>
+                <p className="mt-1 text-xs text-white/45">La misma instrucción para todos. Vuelven a la cola del editor y salen otra vez en «En aprobación» cuando estén listos.</p>
+              </div>
+              <button type="button" onClick={() => setBulk(null)} className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-white/45 hover:text-white" aria-label="Cerrar">
+                x
+              </button>
+            </div>
+
+            <p className="mt-4 text-[10px] font-semibold uppercase tracking-widest text-white/35">Velocidad</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setBulk((b) => (b ? { ...b, velocidad: null } : b))}
+                aria-pressed={bulk.velocidad === null}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${bulk.velocidad === null ? "border-amber-400/60 bg-amber-400/20 text-amber-100" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white"}`}
+              >
+                No cambiar
+              </button>
+              {OPCIONES_VELOCIDAD.filter((v) => v > 1).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setBulk((b) => (b ? { ...b, velocidad: v } : b))}
+                  aria-pressed={bulk.velocidad === v}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${bulk.velocidad === v ? "border-amber-400/60 bg-amber-400/20 text-amber-100" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white"}`}
+                >
+                  {textoVelocidad(v)}
+                </button>
+              ))}
+            </div>
+            {bulk.velocidad !== null ? (
+              <p className="mt-2 text-xs text-white/45">
+                La velocidad se aplica a los vídeos <b className="text-white/70">hablados</b> ({bulk.filas.filter((r) => r.tipo_video === "tipo1").length} de {bulk.filas.length}); los demás se rehacen sin cambiarla.
+              </p>
+            ) : null}
+
+            <label className="mt-4 block text-[10px] font-semibold uppercase tracking-widest text-white/35">
+              Nota para todos <span className="font-normal normal-case text-white/20">(opcional)</span>
+            </label>
+            <textarea
+              value={bulk.nota}
+              onChange={(e) => setBulk((b) => (b ? { ...b, nota: e.target.value } : b))}
+              rows={3}
+              className="input-base mt-2 w-full resize-none text-sm"
+              placeholder="Para ajustar el recorte de todos: inicio +1.5 / fin -0.5"
+            />
+            {avisoProgramados(bulk.filas) ? <p className="mt-3 whitespace-pre-line text-xs text-amber-200/80">{avisoProgramados(bulk.filas).trim()}</p> : null}
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => setBulk(null)} className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07]">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={publicando}
+                onClick={() => void rehacerVarios(bulk.filas, bulk.velocidad, bulk.nota.trim())}
+                className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400 disabled:opacity-40"
+              >
+                ↺ Rehacer {bulk.filas.length} {bulk.filas.length === 1 ? "vídeo" : "vídeos"}
+                {bulk.velocidad !== null ? ` a ${textoVelocidad(bulk.velocidad)}` : ""}
+              </button>
             </div>
           </div>
         </div>
