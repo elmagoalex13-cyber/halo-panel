@@ -159,7 +159,8 @@ export async function spoofearTrial(entrada, salida, p) {
       "-t", duracion.toFixed(3),
       "-vf", filtroTrial(p),
       "-af", `volume=${p.audio}dB`,
-      ...ENCODE_VIDEO_ARGS.map((a, i, arr) => (arr[i - 1] === "-crf" ? String(p.crf) : a)),
+      // preset veryfast: las versiones de trial reel salen ~2x mas rapido que con "fast" y a esta calidad no se nota
+      ...ENCODE_VIDEO_ARGS.map((a, i, arr) => (arr[i - 1] === "-crf" ? String(p.crf) : arr[i - 1] === "-preset" ? "veryfast" : a)),
       "-g", String(p.gop),
       "-bsf:v", "filter_units=remove_types=6", // quita el SEI de x264 (la «huella» del codificador con sus opciones)
       ...ENCODE_AUDIO_ARGS,
