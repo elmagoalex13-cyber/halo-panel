@@ -206,6 +206,10 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
    {
     "tipo": "li",
     "texto": "Notificar con antelación cualquier situación personal que pueda afectar a la producción de contenido o disponibilidad."
+   },
+   {
+    "tipo": "p",
+    "texto": "Todo el contenido que la Creadora produzca y entregue, incluido el contenido explícito y el contenido inicial al que se refiere esta cláusula, se realizará siempre dentro de los límites de lo que la Creadora esté dispuesta a hacer. La Creadora decide en todo momento qué contenido produce y la Agencia respetará dichos límites."
    }
   ]
  },
@@ -223,13 +227,13 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
    },
    {
     "tipo": "p",
-    "negrita": "Cuentas de monetización (OnlyFans, Skrill, Cosmo y similares):",
-    "texto": "Son creadas y gestionadas por la Agencia, quien mantiene el control total sobre las mismas en todo momento. La Agencia podrá, a su exclusiva discreción, compartir acceso parcial con la Creadora cuando lo considere necesario para el desarrollo de la actividad. A la finalización de la relación contractual, la Agencia entregará todas las credenciales de estas cuentas a la Creadora en un plazo máximo de 7 días hábiles."
+    "negrita": "Cuentas de monetización (OnlyFans, Skrill, Cosmo, cuentas bancarias y similares):",
+    "texto": "La cuenta de OnlyFans y las cuentas de cobro (Skrill, Cosmo, cuentas bancarias y similares) son propiedad de la Creadora y están a su nombre. La Creadora concede a la Agencia acceso a estas cuentas durante la vigencia del contrato, con la única finalidad de poder trabajarlas y gestionarlas conforme a lo pactado. A la finalización del contrato, la Agencia dejará de tener acceso a dichas cuentas."
    },
    {
     "tipo": "p",
     "negrita": "Cuentas de tráfico (Instagram, TikTok, Telegram y cualquier red social):",
-    "texto": "Son creadas, desarrolladas y mantenidas íntegramente por la Agencia y constituyen activos permanentes de la misma. En ningún caso serán transferidas ni se entregarán las credenciales a la Creadora, ni durante la vigencia del contrato ni tras su finalización. La Agencia retiene la titularidad absoluta e indefinida sobre estas cuentas. A la finalización del contrato, la Agencia procederá a la eliminación progresiva del contenido de la Creadora en dichas cuentas, en el plazo y forma que la Agencia considere técnicamente adecuados para preservar la integridad y operatividad de las cuentas, sin que exista una fecha límite fija para dicho proceso."
+    "texto": "Son creadas, desarrolladas y mantenidas íntegramente por la Agencia y constituyen activos permanentes de la misma. En ningún caso serán transferidas ni se entregarán las credenciales a la Creadora, ni durante la vigencia del contrato ni tras su finalización. La Agencia retiene la titularidad absoluta e indefinida sobre estas cuentas. A la finalización del contrato, la Agencia procederá a la eliminación progresiva del contenido de la Creadora en dichas cuentas, en el plazo y forma que la Agencia considere técnicamente adecuados para preservar la integridad y operatividad de las cuentas, sin que exista una fecha límite fija para dicho proceso. Esta retirada se realiza de forma progresiva porque eliminar una gran cantidad de contenido de golpe puede provocar el baneo de la cuenta de Instagram."
    }
   ]
  },
@@ -365,6 +369,46 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
  },
  {
   "n": 11,
+  "titulo": "PROTECCIÓN DE DATOS PERSONALES",
+  "bloques": [
+   {
+    "tipo": "p",
+    "texto": "Ambas partes se comprometen a cumplir el Reglamento (UE) 2016/679 del Parlamento Europeo y del Consejo, de 27 de abril de 2016 (RGPD), y la Ley Orgánica 3/2018, de 5 de diciembre, de Protección de Datos Personales y garantía de los derechos digitales (LOPDGDD), en el tratamiento de los datos personales vinculados a este contrato."
+   },
+   {
+    "tipo": "p",
+    "negrita": "Responsable y finalidad:",
+    "texto": "La Agencia tratará los datos personales de la Creadora (identificación, contacto, datos de pago y cobro, imagen, contenido y datos de sus cuentas) como responsable del tratamiento, con la finalidad de ejecutar este contrato, prestar los servicios descritos, gestionar los pagos y liquidaciones y cumplir las obligaciones legales aplicables."
+   },
+   {
+    "tipo": "p",
+    "negrita": "Base jurídica:",
+    "texto": "La ejecución del presente contrato, en el que la Creadora es parte, el cumplimiento de obligaciones legales y, cuando proceda, el consentimiento de la Creadora, que podrá retirar en cualquier momento."
+   },
+   {
+    "tipo": "p",
+    "negrita": "Acceso a las cuentas de la Creadora:",
+    "texto": "El acceso de la Agencia a las cuentas de OnlyFans y de cobro de la Creadora, que son de su titularidad, se limita a lo necesario para prestar los servicios y se mantiene únicamente mientras dure el contrato. La Agencia tratará las credenciales y los datos a los que acceda solo con esa finalidad, aplicará medidas técnicas y organizativas adecuadas para protegerlos, no los cederá a terceros salvo obligación legal o proveedores necesarios para prestar el servicio (con los que se haya suscrito el correspondiente contrato de encargado del tratamiento) y dejará de acceder a ellos al finalizar el contrato."
+   },
+   {
+    "tipo": "p",
+    "negrita": "Conservación:",
+    "texto": "Los datos se conservarán mientras dure la relación contractual y, después, durante los plazos legales aplicables (por ejemplo, obligaciones fiscales y plazos de prescripción de acciones), tras los cuales se suprimirán o se anonimizarán."
+   },
+   {
+    "tipo": "p",
+    "negrita": "Derechos:",
+    "texto": "La Creadora puede ejercer los derechos de acceso, rectificación, supresión, oposición, limitación del tratamiento y portabilidad, así como retirar su consentimiento, mediante comunicación escrita a la Agencia, y puede presentar una reclamación ante la Agencia Española de Protección de Datos (www.aepd.es)."
+   },
+   {
+    "tipo": "p",
+    "negrita": "Seguridad y confidencialidad:",
+    "texto": "Las personas que accedan a los datos por cuenta de la Agencia están sujetas a un deber de confidencialidad. La Agencia comunicará a la Creadora, sin dilaciones indebidas, cualquier brecha de seguridad que afecte a sus datos cuando la normativa lo exija. La Creadora se compromete a facilitar datos veraces y a comunicar cualquier modificación."
+   }
+  ]
+ },
+ {
+  "n": 12,
   "titulo": "INDEMNIZACIÓN",
   "bloques": [
    {
@@ -374,7 +418,7 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   ]
  },
  {
-  "n": 12,
+  "n": 13,
   "titulo": "LIMITACIÓN DE RESPONSABILIDAD",
   "bloques": [
    {
@@ -383,20 +427,20 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
    },
    {
     "tipo": "p",
-    "texto": "En ningún caso la responsabilidad total de la Agencia frente a la Creadora podrá exceder el importe de las comisiones efectivamente abonadas a la Creadora durante el mes (1) anterior al hecho que origine la reclamación."
-   },
-   {
-    "tipo": "p",
     "texto": "Queda expresamente excluida cualquier reclamación por lucro cesante, daños indirectos, pérdida de oportunidades o cualquier otro daño que no sea directo y debidamente acreditado."
    },
    {
     "tipo": "p",
-    "texto": "Cualquier reclamación deberá formularse por escrito en un plazo máximo de 30 días naturales desde que la Creadora tenga conocimiento del hecho que la motiva. Transcurrido dicho plazo, se entenderá que la Creadora renuncia a cualquier acción derivada de dicho hecho."
+    "texto": "Las cantidades correspondientes a liquidaciones ya pagadas y cobradas por ambas partes no podrán ser reclamadas con posterioridad."
+   },
+   {
+    "tipo": "p",
+    "texto": "Se exceptúan de lo anterior los errores de cálculo debidamente acreditados y los supuestos de dolo o fraude."
    }
   ]
  },
  {
-  "n": 13,
+  "n": 14,
   "titulo": "CONDICIONES OPERATIVAS Y RESPONSABILIDAD",
   "bloques": [
    {
@@ -410,7 +454,7 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   ]
  },
  {
-  "n": 14,
+  "n": 15,
   "titulo": "JURISDICCIÓN Y LEY APLICABLE",
   "bloques": [
    {
@@ -424,7 +468,7 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   ]
  },
  {
-  "n": 15,
+  "n": 16,
   "titulo": "ACUERDO COMPLETO",
   "bloques": [
    {

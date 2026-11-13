@@ -6,7 +6,7 @@ export const RESUMEN_ESENCIAL: Array<{ icono: string; titulo: string; texto: str
   { icono: "🤝", titulo: "Qué hacemos por ti", texto: "Abrimos y gestionamos tus cuentas, editamos tu contenido, hacemos la publicidad y te damos soporte por WhatsApp." },
   { icono: "💶", titulo: "Cómo se reparte lo que se gana", texto: "Los primeros 6 meses desde tu inicio efectivo, 70 % para la agencia y 30 % para ti. Desde el mes 7, pasa a 60 % agencia y 40 % para ti. Sobre lo que se cobra de verdad (tras las comisiones de la plataforma y los gastos que apruebes). Te pagamos los días 1 y 15, con un resumen de ingresos." },
   { icono: "🎬", titulo: "Qué haces tú", texto: "Entregas el contenido inicial en un máximo de 2 semanas desde la firma (como mínimo 30 reels, 4 scripts y 5 packs de fotos de contenido explícito, y 30 posts para OnlyFans), sigues las directrices y respondes en tiempos razonables. Mientras dure el contrato, no trabajas con otra agencia." },
-  { icono: "🔑", titulo: "Tus cuentas", texto: "Tienes acceso a tus cuentas de OnlyFans y de cobro (Skrill, banco…) durante todo el contrato, y al terminar te entregamos todas sus credenciales. Las redes sociales (Instagram, TikTok, Telegram…) las gestiona y son de la agencia." },
+  { icono: "🔑", titulo: "Tus cuentas", texto: "Tu cuenta de OnlyFans y tus cuentas de cobro (Skrill, Cosmo, banco…) son tuyas y están a tu nombre. La agencia tiene acceso solo mientras dure el contrato, para poder trabajarlas, y al terminar deja de tenerlo. Las redes sociales (Instagram, TikTok, Telegram…) las gestiona y son de la agencia." },
   { icono: "🚪", titulo: "Si quieres salir", texto: "Sin permanencia: cualquiera de las dos partes puede terminar el contrato avisando por escrito con 14 días." },
 ];
 
@@ -30,7 +30,7 @@ export const PREGUNTAS_FRECUENTES: GrupoPreguntas[] = [
       },
       {
         p: "¿Puedo ver lo que se va generando?",
-        r: "Sí. Tienes acceso a tu cuenta de OnlyFans durante todo el contrato y ves ahí los ingresos y el movimiento. Además, con cada pago recibes el resumen de ingresos.",
+        r: "Sí. Tu cuenta de OnlyFans es tuya y está a tu nombre, así que ves ahí los ingresos y el movimiento. Además, con cada pago recibes el resumen de ingresos.",
       },
       {
         p: "¿Me pueden cobrar gastos sin avisar?",
@@ -60,15 +60,23 @@ export const PREGUNTAS_FRECUENTES: GrupoPreguntas[] = [
     preguntas: [
       {
         p: "¿Qué pasa con mis cuentas de OnlyFans y de cobro?",
-        r: "Las tienes a tu disposición durante todo el contrato y, al terminar, la agencia te entrega todas las credenciales en un máximo de 7 días hábiles.",
+        r: "Son tuyas y están a tu nombre. Das acceso a la agencia mientras dure el contrato, solo para poder trabajarlas, y al terminar la agencia deja de tener acceso.",
       },
       {
         p: "¿Y con las cuentas de Instagram, TikTok o Telegram?",
-        r: "Son de la agencia: las crea, las desarrolla y las mantiene ella, y siguen siendo suyas siempre; no se transfieren ni se entregan sus accesos, ni durante el contrato ni después. Al terminar, tu contenido se va eliminando de ellas poco a poco, sin una fecha fija.",
+        r: "Son de la agencia: las crea, las desarrolla y las mantiene ella, y siguen siendo suyas siempre; no se transfieren ni se entregan sus accesos, ni durante el contrato ni después. Al terminar, tu contenido se va eliminando de ellas poco a poco, sin una fecha fija, porque borrar mucho contenido de golpe puede provocar el baneo de la cuenta de Instagram.",
       },
       {
         p: "¿De quién es el contenido que grabo?",
         r: "Le das a la agencia permiso de uso y publicación (no exclusivo) sobre el contenido que grabes durante el contrato, solo en las plataformas acordadas. La agencia no puede usarlo para otros fines sin tu consentimiento por escrito. Al terminar, lo que ya esté publicado en las plataformas donde cobras puede seguir ahí, salvo que pidas su retirada por escrito.",
+      },
+      {
+        p: "¿Me pueden obligar a hacer contenido con el que no me siento cómoda?",
+        r: "No. Todo el contenido, también el explícito y el contenido inicial, lo haces siempre dentro de lo que tú estés dispuesta a hacer. Tú decides qué contenido produces y la agencia respeta esos límites.",
+      },
+      {
+        p: "¿Qué pasa con mis datos personales?",
+        r: "La agencia los trata conforme al RGPD y a la LOPDGDD: solo para ejecutar el contrato, pagarte y prestar el servicio. Su acceso a tus cuentas se limita a lo necesario y termina con el contrato. Puedes ejercer tus derechos (acceso, rectificación, supresión, oposición, limitación y portabilidad) por escrito y reclamar ante la Agencia Española de Protección de Datos.",
       },
       {
         p: "¿Puedo publicar por mi cuenta o trabajar con otra agencia?",
@@ -93,7 +101,7 @@ export const PREGUNTAS_FRECUENTES: GrupoPreguntas[] = [
       },
       {
         p: "¿Y si hay un problema o una reclamación?",
-        r: "Si incumples el contrato o usas indebidamente contenido, cuentas o material protegido y eso causa una reclamación o un daño, respondes por ello. Si la reclamación es contra la agencia, lo máximo que podría exigirse es lo que se te haya abonado en el mes anterior al hecho, y no se cubren el lucro cesante ni los daños indirectos. Cualquier reclamación debe hacerse por escrito en un máximo de 30 días desde que sepas del hecho.",
+        r: "Si incumples el contrato o usas indebidamente contenido, cuentas o material protegido y eso causa una reclamación o un daño, respondes por ello. Si la reclamación es contra la agencia, no se cubren el lucro cesante ni los daños indirectos. Y las cantidades de las liquidaciones ya pagadas y cobradas por las dos partes no se pueden reclamar después (salvo error de cálculo acreditado o fraude).",
       },
       {
         p: "¿Qué es confidencial?",
