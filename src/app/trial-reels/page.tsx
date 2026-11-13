@@ -64,7 +64,7 @@ export default async function TrialReelsPage() {
         <p className="text-sm text-[color:var(--text-secondary)]">Instagram</p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-white">Trial reels</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/45">
-          De cada vídeo viral que apruebes en Instagram → Virales propios sacamos hasta 3 versiones con pequeños retoques (un poco de zoom por la izquierda, la derecha o el centro, brillo, saturación, tono, un filtro suave y sin metadatos) para que no sean exactamente el mismo vídeo. Las descargas y las programas tú. Siempre se generan a partir del vídeo original (el que guardó el buscador o el que subas tú), nunca de una copia.
+          De cada vídeo viral que apruebes en Instagram → Virales propios sacamos hasta 3 versiones con pequeños retoques (un poco de zoom por la izquierda, la derecha o el centro, brillo, saturación, tono, un filtro suave y sin metadatos) para que no sean exactamente el mismo vídeo. Las descargas y las programas tú. Siempre se generan a partir del vídeo original (el que guardó el buscador, el que subas tú o el contenido de las modelos que mandes desde Editar vídeos), nunca de una copia.
         </p>
       </div>
       <TrialReelsClient virales={virales} pedidos={pedidos} copias={copias} guardados={guardados} esDueno={esDueno} ambitos={porModelo} cuentas={cuentas} />

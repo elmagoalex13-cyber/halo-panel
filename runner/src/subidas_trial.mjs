@@ -51,6 +51,25 @@ async function descargarTrozo(clave, destino) {
   });
 }
 
+/**
+ * Un video de una modelo elegido en «Editar videos» → «Crear trial reels» (marca [trial=N] en notas_editor): cuando el editor termina de editarlo,
+ * el video EDITADO se da de alta como original de Trial reels (viral propio aprobado, codigo sub-…) y se piden sus N versiones. Devuelve el id del viral.
+ */
+export async function trialDesdeEditado(sb, pieza, claveEditado, cantidad) {
+  const { data: p } = await sb.from("library_content").select("titulo, filename_original").eq("id", pieza.id).maybeSingle();
+  const ahora = new Date().toISOString();
+  const codigo = `sub-${randomUUID().replace(/-/g, "").slice(0, 10)}`;
+  const { data: viral, error } = await sb
+    .from("virales_propios")
+    .insert({ cuenta_id: pieza.cuenta_id, modelo_id: pieza.modelo_id, codigo, video_key: claveEditado, descripcion: p?.filename_original ?? p?.titulo ?? null, vistas: 0, likes: 0, comentarios: 0, compartidos: 0, fecha_publicacion: ahora, estado: "aprobado", aprobado_at: ahora })
+    .select("id")
+    .single();
+  if (error) throw new Error(`no se pudo dar de alta el original para trial: ${error.message}`);
+  const ok = await cambiarLista(sb, CLAVE_PEDIDOS, "pedidos", (l) => [...l, { id: randomUUID(), viral_id: viral.id, modelo_id: pieza.modelo_id, cantidad: Math.min(3, Math.max(1, Number(cantidad) || 3)), estado: "pendiente", at: new Date().toISOString(), por: "Editar vídeos", variantes: [] }]);
+  if (!ok) throw new Error("no se pudo pedir las versiones de trial");
+  return viral.id;
+}
+
 let ocupado = false;
 let ultimaLimpieza = 0;
 

@@ -4,6 +4,7 @@ import { publicUrl } from "./r2.mjs";
 import { procesarTipo } from "./tipos.mjs";
 import { asignarFrase } from "./frases.mjs";
 import { audioDeFraseDePieza } from "./frases_referencia.mjs";
+import { trialDesdeEditado } from "./subidas_trial.mjs";
 
 export const supabase = createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: false } });
 
@@ -89,10 +90,23 @@ export async function procesarPieza(pieza) {
       `pieza ${pieza.id}`,
     );
     const ahora = new Date().toISOString();
+    // «Crear trial reels» desde Editar videos: el video editado no pasa por Aprobacion; pasa a ser el original de Trial reels y se piden sus versiones.
+    // Si eso falla, el video sigue su camino normal (Aprobacion) para no perder el trabajo de edicion.
+    let aTrial = false;
+    const marcaTrial = /\[trial=([1-3])\]/.exec(pieza.notas_editor ?? "");
+    if (marcaTrial && pieza.cuenta_id) {
+      try {
+        await trialDesdeEditado(supabase, pieza, outKey, Number(marcaTrial[1]));
+        aTrial = true;
+        console.log(`[runner] ${pieza.id}: enviado a Trial reels (${marcaTrial[1]} versiones)`);
+      } catch (e) {
+        console.error(`[runner] ${pieza.id}: no se pudo mandar a Trial reels (${e.message}); pasa a Aprobacion`);
+      }
+    }
     const { error } = await supabase
       .from("library_content")
       .update({
-        estado: "en_aprobacion",
+        estado: aTrial ? "archivado" : "en_aprobacion",
         estado_procesamiento: "listo",
         // ?v=...: el archivo se sobreescribe en cada rehacer y sin esto el navegador (y la Mesa) siguen ensenando el video anterior
         video_procesado_url: `${publicUrl(outKey)}?v=${Date.now()}`,
