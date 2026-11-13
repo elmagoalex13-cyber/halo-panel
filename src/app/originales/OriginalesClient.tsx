@@ -32,7 +32,7 @@ export type Original = {
   piezas: PiezaDeOriginal[];
 };
 
-type EstadoClave = "error" | "editando" | "revisar" | "aprobado" | "publicado" | "descartado";
+type EstadoClave = "error" | "editando" | "revisar" | "aprobado" | "publicado" | "trial" | "descartado";
 
 const ESTADOS: Record<EstadoClave, { label: string; clase: string }> = {
   error: { label: "Error al editar", clase: "border-red-500/40 bg-red-500/10 text-red-300" },
@@ -40,6 +40,7 @@ const ESTADOS: Record<EstadoClave, { label: string; clase: string }> = {
   revisar: { label: "Para revisar", clase: "border-amber-500/40 bg-amber-500/10 text-amber-300" },
   aprobado: { label: "Aprobado", clase: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" },
   publicado: { label: "Publicado", clase: "border-violet-500/40 bg-violet-500/10 text-violet-300" },
+  trial: { label: "En Trial reels", clase: "border-cyan-500/40 bg-cyan-500/10 text-cyan-300" },
   descartado: { label: "Descartado", clase: "border-white/15 bg-white/[0.04] text-white/45" },
 };
 
@@ -48,18 +49,19 @@ function estadoPieza(p: PiezaDeOriginal): EstadoClave {
   if (p.estado === "publicado") return "publicado";
   if (p.estado === "aprobado") return "aprobado";
   if (p.estado === "en_aprobacion") return "revisar";
+  if (p.estado === "archivado") return "trial"; // su version editada ya es el original de un trial reel
   if (p.estado === "rechazado" || p.estado === "descartado") return "descartado";
   return "editando";
 }
 
 // Prioridad al mostrar el estado de un original que tiene varias piezas: lo que pide atencion primero.
-const PRIORIDAD: EstadoClave[] = ["error", "editando", "revisar", "aprobado", "publicado", "descartado"];
+const PRIORIDAD: EstadoClave[] = ["error", "editando", "revisar", "aprobado", "publicado", "trial", "descartado"];
 const estadoOriginal = (o: Original): EstadoClave => {
   const todos = o.piezas.map(estadoPieza);
   return PRIORIDAD.find((e) => todos.includes(e)) ?? "editando";
 };
 // "Resuelto" = ya no hace falta el original para nada (nadie lo va a rehacer): lo normal es borrarlo.
-const RESUELTOS: EstadoClave[] = ["aprobado", "publicado", "descartado"];
+const RESUELTOS: EstadoClave[] = ["aprobado", "publicado", "trial", "descartado"];
 
 function tamano(bytes: number | null) {
   if (!bytes) return null;
@@ -148,6 +150,8 @@ export function OriginalesClient({
   const [confirmando, setConfirmando] = useState(false);
   const [borrando, setBorrando] = useState(false);
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [trial, setTrial] = useState<{ cantidad: number } | null>(null); // ventana «Crear trial reels»
+  const [creandoTrial, setCreandoTrial] = useState(false);
 
   // Si el modelo elegido ya no tiene videos, el filtro vuelve solo a "todas".
   const modeloActivo = modelo !== "todas" && !lista.some((o) => o.modelo_id === modelo) ? "todas" : modelo;
@@ -217,6 +221,31 @@ export function OriginalesClient({
     }
   }
 
+  // Trial reels a partir del archivo ORIGINAL de los videos elegidos (cualquier estado): se editan de nuevo y sus versiones salen en Trial reels
+  async function crearTrial(cantidad: number) {
+    const ids = elegidosVivos;
+    if (!ids.length || creandoTrial) return;
+    setCreandoTrial(true);
+    setTrial(null);
+    setMensaje(null);
+    try {
+      const res = await fetch("/api/originales/trial", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, cantidad }) });
+      const j = (await res.json().catch(() => ({}))) as { error?: string; creados?: number; sinCuenta?: number; yaEnMarcha?: number; sinOriginal?: number; tiktok?: number };
+      if (!res.ok) throw new Error(j.error ?? "No se pudo crear");
+      const extra = [j.sinCuenta ? `${j.sinCuenta} sin cuenta de Instagram` : "", j.yaEnMarcha ? `${j.yaEnMarcha} ya se estaban preparando` : "", j.sinOriginal ? `${j.sinOriginal} sin archivo original` : "", j.tiktok ? `${j.tiktok} TikTok` : ""].filter(Boolean);
+      setMensaje({
+        ok: true,
+        texto: `${j.creados} ${j.creados === 1 ? "vídeo mandado" : "vídeos mandados"} a editar para trial reels (${cantidad} ${cantidad === 1 ? "versión" : "versiones"} de cada uno). Cuando estén listos saldrán en Trial reels.${extra.length ? ` No se han mandado: ${extra.join(", ")}.` : ""}`,
+      });
+      setElegidos([]);
+      router.refresh();
+    } catch (e) {
+      setMensaje({ ok: false, texto: e instanceof Error ? e.message : "No se pudo crear" });
+    } finally {
+      setCreandoTrial(false);
+    }
+  }
+
   const chip = (activo: boolean) =>
     `rounded-full border px-3 py-1.5 text-xs font-semibold transition ${activo ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/20 text-white" : "border-white/[0.08] bg-white/[0.03] text-white/50 hover:text-white/80"}`;
 
@@ -265,7 +294,7 @@ export function OriginalesClient({
         <span>
           {elegidosVivos.length
             ? `${elegidosVivos.length} elegido${elegidosVivos.length === 1 ? "" : "s"} · ${tamano(totalBytes(objetos)) ?? "0 MB"}`
-            : "Marca los videos que quieras borrar con la casilla de cada tarjeta."}
+            : "Marca con la casilla de cada tarjeta los videos que quieras borrar o convertir en trial reels."}
         </span>
         <button
           onClick={() => setElegidos(Array.from(new Set([...elegidosVivos, ...resueltosVisibles.map((o) => o.id)])))}
@@ -281,8 +310,16 @@ export function OriginalesClient({
               Quitar selección
             </button>
             <button
+              onClick={() => setTrial({ cantidad: 3 })}
+              disabled={creandoTrial}
+              title="Editar de nuevo el archivo original y crear sus versiones de trial reels"
+              className="ml-auto flex items-center gap-1.5 rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-40"
+            >
+              🧪 Crear trial reels ({elegidosVivos.length})
+            </button>
+            <button
               onClick={() => setConfirmando(true)}
-              className="ml-auto flex items-center gap-1.5 rounded-lg border border-red-900/50 bg-red-950/40 px-3 py-1.5 font-semibold text-red-300 transition hover:bg-red-950/70"
+              className="flex items-center gap-1.5 rounded-lg border border-red-900/50 bg-red-950/40 px-3 py-1.5 font-semibold text-red-300 transition hover:bg-red-950/70"
             >
               <Trash2 className="h-3.5 w-3.5" /> Borrar {elegidosVivos.length} original{elegidosVivos.length === 1 ? "" : "es"}
             </button>
@@ -366,6 +403,43 @@ export function OriginalesClient({
         Las descargas son el archivo tal cual está guardado, sin recomprimir. Para revisar, aprobar o rehacer las versiones editadas ve a{" "}
         <Link href="/aprobacion" className="text-[#A78BFA] hover:underline">Aprobación</Link>.
       </p>
+
+      {trial ? (
+        <div className="sin-blur fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" role="dialog" aria-modal="true">
+          <GlassCard className="w-full max-w-md space-y-4 p-5">
+            <h3 className="font-display text-lg font-semibold text-white">
+              Crear trial reels de {elegidosVivos.length} {elegidosVivos.length === 1 ? "vídeo" : "vídeos"}
+            </h3>
+            <p className="text-sm text-white/55">
+              Se parte del <strong className="text-white/80">archivo original</strong>: se edita de nuevo (subtítulos, recorte…) y, cuando esté listo, se generan solas sus versiones de trial. Las verás en <strong className="text-white/80">Trial reels</strong>, listas para descargar y programar. No pasan por Aprobación y lo que ya tienen editado, aprobado o publicado no se toca.
+            </p>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-white/35">Versiones de cada vídeo</p>
+              <div className="mt-2 flex gap-2">
+                {[1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={trial.cantidad === n}
+                    onClick={() => setTrial({ cantidad: n })}
+                    className={`h-10 w-12 rounded-xl border text-sm font-bold transition ${trial.cantidad === n ? "border-cyan-400 bg-cyan-500/25 text-cyan-50" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white"}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setTrial(null)} className="btn-secondary px-4 py-2 text-sm">
+                Cancelar
+              </button>
+              <button onClick={() => void crearTrial(trial.cantidad)} disabled={creandoTrial} className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-cyan-400 disabled:opacity-50">
+                🧪 Crear con {trial.cantidad} {trial.cantidad === 1 ? "versión" : "versiones"}
+              </button>
+            </div>
+          </GlassCard>
+        </div>
+      ) : null}
 
       {confirmando ? (
         <div className="sin-blur fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" role="dialog" aria-modal="true">

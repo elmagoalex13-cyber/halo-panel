@@ -78,7 +78,6 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
   const [visor, setVisor] = useState<PiezaEditar | null>(null);
   const [verAjustes, setVerAjustes] = useState(false);
   const [filtro, setFiltro] = useState<FiltroAmbito>("todas"); // mis modelos / las que comparto con mi socio
-  const [trial, setTrial] = useState<{ ids: string[]; cantidad: number } | null>(null); // ventana «Crear trial reels»
 
   // Todo lo de la pantalla (contadores, tarjetas y ajustes) se calcula solo con las modelos del filtro elegido
   const delFiltro = useMemo(() => modelos.filter((m) => ambitoCoincide(filtro, ambitos[m.id])), [modelos, filtro, ambitos]);
@@ -145,30 +144,6 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
       router.refresh();
     } catch (e) {
       setAviso({ ok: false, texto: e instanceof Error ? e.message : "No se pudo mandar a editar" });
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  // «Crear trial reels»: se editan como siempre y, al terminar, salen en Trial reels con sus versiones (no pasan por Aprobacion)
-  async function crearTrial(ids: string[], cantidad: number) {
-    if (!ids.length || ocupado) return;
-    setTrial(null);
-    setOcupado(true);
-    setAviso(null);
-    try {
-      const j = await llamar({ accion: "trial", ids, cantidad });
-      const enviados = new Set(ids);
-      const quedan = new Set(j.sinCuentaIds ?? []); // los que no se han podido mandar siguen esperando
-      setModelos((p) => p.map((m) => ({ ...m, piezas: m.piezas.filter((x) => !enviados.has(x.id) || quedan.has(x.id)) })));
-      setElegidas(new Set());
-      setAviso({
-        ok: true,
-        texto: `${j.enviados} ${j.enviados === 1 ? "vídeo mandado" : "vídeos mandados"} a editar para trial reels (${cantidad} ${cantidad === 1 ? "versión" : "versiones"} de cada uno). Cuando estén editados, saldrán en Trial reels.${j.sinCuenta ? ` ${j.sinCuenta} no se han mandado porque su modelo no tiene cuenta de Instagram activa.` : ""}`,
-      });
-      router.refresh();
-    } catch (e) {
-      setAviso({ ok: false, texto: e instanceof Error ? e.message : "No se pudo crear" });
     } finally {
       setOcupado(false);
     }
@@ -279,15 +254,6 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
                     >
                       ✂ Mandar a editar{suyas.length ? ` (${suyas.length})` : ""}
                     </button>
-                    <button
-                      type="button"
-                      disabled={!suyas.length || ocupado}
-                      onClick={() => setTrial({ ids: suyas.map((p) => p.id), cantidad: 3 })}
-                      title="Editarlos y crear sus versiones de trial reels"
-                      className="rounded-lg border border-[#06B6D4]/50 bg-[#06B6D4]/10 px-3 py-1.5 font-semibold text-cyan-100 transition hover:bg-[#06B6D4]/20 disabled:opacity-35"
-                    >
-                      🧪 Crear trial reels{suyas.length ? ` (${suyas.length})` : ""}
-                    </button>
                   </div>
                 </div>
                 {abierta ? (
@@ -360,47 +326,9 @@ export function EditarClient({ modelos: iniciales, esDueno, ambitos }: { modelos
             <button type="button" disabled={ocupado} onClick={() => void enviar([...elegidas])} className="rounded-lg bg-[#8B5CF6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#7C3AED] disabled:opacity-40">
               {ocupado ? "Mandando…" : "✂ Mandar a editar"}
             </button>
-            <button type="button" disabled={ocupado} onClick={() => setTrial({ ids: [...elegidas], cantidad: 3 })} className="rounded-lg border border-[#06B6D4]/50 bg-[#06B6D4]/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-[#06B6D4]/20 disabled:opacity-40">
-              🧪 Crear trial reels
-            </button>
             <button type="button" onClick={() => setElegidas(new Set())} className="text-xs font-semibold text-white/50 transition hover:text-white">
               Quitar selección
             </button>
-          </div>
-        </div>
-      ) : null}
-
-      {trial ? (
-        <div className="sin-blur fixed inset-0 z-[70] grid place-items-center bg-black/80 p-4" role="dialog" aria-modal="true">
-          <div className="glass-card w-full max-w-md p-5">
-            <p className="font-display text-lg font-semibold text-white">
-              Crear trial reels de {trial.ids.length} {trial.ids.length === 1 ? "vídeo" : "vídeos"}
-            </p>
-            <p className="mt-2 text-sm text-white/55">
-              Se editan como siempre (subtítulos, recorte…) y, cuando estén listos, se generan solas las versiones de trial de cada uno. Las verás en <b className="text-white/80">Trial reels</b>, listas para descargar y programar. No pasan por Aprobación.
-            </p>
-            <p className="mt-4 text-[10px] font-semibold uppercase tracking-widest text-white/35">Versiones de cada vídeo</p>
-            <div className="mt-2 flex gap-2">
-              {[1, 2, 3].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  aria-pressed={trial.cantidad === n}
-                  onClick={() => setTrial((t) => (t ? { ...t, cantidad: n } : t))}
-                  className={`h-10 w-12 rounded-xl border text-sm font-bold transition ${trial.cantidad === n ? "border-[#06B6D4] bg-[#06B6D4]/25 text-cyan-50" : "border-white/10 bg-white/[0.04] text-white/55 hover:text-white"}`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-            <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              <button type="button" onClick={() => setTrial(null)} className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07]">
-                Cancelar
-              </button>
-              <button type="button" disabled={ocupado} onClick={() => void crearTrial(trial.ids, trial.cantidad)} className="rounded-xl bg-[#06B6D4] px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-[#22D3EE] disabled:opacity-40">
-                🧪 Crear con {trial.cantidad} {trial.cantidad === 1 ? "versión" : "versiones"}
-              </button>
-            </div>
           </div>
         </div>
       ) : null}
