@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { PanelLayout } from "@/components/PanelLayout";
-import { listarClavesR2 } from "@/lib/r2";
+import { hashesPreviewsListos } from "@/lib/previewsListas";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { alcanceActual, ambitosModelos, soloVisibles } from "@/lib/alcance";
 import { versionesFotos } from "@/lib/fotosModelos";
@@ -43,12 +43,7 @@ async function cargar(): Promise<{ modelos: ModeloEditar[] }> {
     ]);
 
     // Que vistas previas ya existen (las genera el servidor por cada original)
-    let previews = new Set<string>();
-    try {
-      previews = new Set((await listarClavesR2("previews/", 50000)).filter((k) => k.endsWith(".mp4")).map((k) => k.slice("previews/".length, -4)));
-    } catch {
-      /* sin R2: se enseña sin vista previa */
-    }
+    const previews = await hashesPreviewsListos();
     const b = baseR2();
 
     const porModelo = new Map<string, ModeloEditar>();

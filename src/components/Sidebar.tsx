@@ -234,7 +234,7 @@ export function Sidebar({ pendingAprobacion = 0, pendingLeads = 0 }: SidebarProp
     }
 
     loadCounts();
-    const interval = window.setInterval(loadCounts, 30000);
+    const interval = window.setInterval(loadCounts, 60000);
     window.addEventListener("focus", loadCounts);
     window.addEventListener("halo:contadores", loadCounts); // p. ej. al abrir unas historias, para que el aviso se quite al momento
 

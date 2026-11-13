@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
-import { BUCKET_FOTOS } from "@/lib/fotosModelos";
+import { BUCKET_FOTOS, refrescarVersionesFotos } from "@/lib/fotosModelos";
 import { exigirModelo } from "@/lib/alcance";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +54,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       upsert: true,
     });
     if (error) throw new Error(error.message);
+    refrescarVersionesFotos(); // que la foto nueva se vea al momento (la lista de fotos se guarda un minuto)
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo guardar la foto" }, { status: 500 });
   }

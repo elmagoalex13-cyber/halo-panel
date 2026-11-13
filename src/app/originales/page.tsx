@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { PanelLayout } from "@/components/PanelLayout";
-import { listarClavesR2 } from "@/lib/r2";
+import { hashesPreviewsListos } from "@/lib/previewsListas";
 import { canUseSupabase, createAdminClient } from "@/lib/supabase/server";
 import { versionesFotos } from "@/lib/fotosModelos";
 import { tipoVideoEfectivo } from "@/lib/tipoVideo";
@@ -35,14 +35,7 @@ const baseR2 = (process.env.R2_PUBLIC_URL ?? process.env.NEXT_PUBLIC_R2_PUBLIC_U
 const hashOriginal = (clave: string) => createHash("sha1").update(clave).digest("hex").slice(0, 20);
 
 // Hashes de los originales que ya tienen vista previa (el runner las genera: miniatura + copia ligera H.264).
-async function vistasPreviasListas(): Promise<Set<string>> {
-  try {
-    const claves = await listarClavesR2("previews/");
-    return new Set(claves.filter((k) => k.endsWith(".mp4")).map((k) => k.slice("previews/".length, -4)));
-  } catch {
-    return new Set();
-  }
-}
+const vistasPreviasListas = hashesPreviewsListos;
 
 // Cada video que sube una modelo se guarda tal cual lo grabo (almacen privado) y NUNCA se borra: aqui estan
 // todos, con su estado, para poder verlos y descargarlos y editarlos a mano si la edicion automatica falla.

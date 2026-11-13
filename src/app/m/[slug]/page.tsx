@@ -18,7 +18,7 @@ import type { ReferenciaVista } from "./GuiaOF";
 import { vistasFotosPerfil } from "@/lib/fotosPerfil";
 import { estadoTelegramModelo } from "@/lib/telegramModelo";
 import { createHash } from "node:crypto";
-import { listarClavesR2 } from "@/lib/r2";
+import { hashesPreviewsListos } from "@/lib/previewsListas";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mi portal" };
@@ -155,12 +155,7 @@ export default async function PortalPage({ params }: { params: Promise<{ slug: s
   // Cada reel se puede ver desde el portal: se usa la vista previa ligera (H.264) que genera el editor, que se reproduce en cualquier movil.
   // Las claves internas del almacen no llegan al navegador.
   {
-    let listas = new Set<string>();
-    try {
-      listas = new Set((await listarClavesR2("previews/", 50000)).filter((k) => k.endsWith(".mp4")).map((k) => k.slice("previews/".length, -4)));
-    } catch {
-      /* sin R2: se muestran sin vista previa */
-    }
+    const listas = await hashesPreviewsListos();
     const base = (process.env.R2_PUBLIC_URL ?? process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/$/, "");
     entregas = (entregas as Array<Entrega & { r2_key?: string | null; r2_key_original?: string | null }>).map(({ r2_key, r2_key_original, ...resto }) => {
       const clave = r2_key_original ?? r2_key ?? "";

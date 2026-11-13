@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
-import { listarClavesR2 } from "@/lib/r2";
+import { hashesPreviewsListos } from "@/lib/previewsListas";
 import { urlR2 } from "@/lib/media";
 
 // Reels de una modelo en fase de captacion que estan EN ESPERA (estado "recibido", sin editar) para que la agencia los revise,
@@ -43,12 +43,7 @@ export async function piezasEnEspera(modeloId: string): Promise<{ piezas: PiezaE
   const filas = (r.data ?? []) as unknown as Array<Record<string, unknown>>;
 
   // Que vistas previas ya existen (las genera el editor por cada original)
-  let listas = new Set<string>();
-  try {
-    listas = new Set((await listarClavesR2("previews/", 50000)).filter((k) => k.endsWith(".mp4")).map((k) => k.slice("previews/".length, -4)));
-  } catch {
-    /* sin R2: se muestra sin vista previa */
-  }
+  const listas = await hashesPreviewsListos();
   const b = base();
 
   const { count } = await db
@@ -91,12 +86,7 @@ export async function tiktoksDeModelo(modeloId: string): Promise<TikTokGuardado[
     .order("recibido_at", { ascending: false })
     .limit(500);
   const filas = (data ?? []) as unknown as Array<Record<string, unknown>>;
-  let listas = new Set<string>();
-  try {
-    listas = new Set((await listarClavesR2("previews/", 50000)).filter((k) => k.endsWith(".mp4")).map((k) => k.slice("previews/".length, -4)));
-  } catch {
-    /* sin R2: se muestra sin vista previa */
-  }
+  const listas = await hashesPreviewsListos();
   const b = base();
   return filas.map((f) => {
     const clave = String(f.r2_key_original ?? f.r2_key ?? "");

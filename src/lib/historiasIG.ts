@@ -45,7 +45,7 @@ export const invalidarHistorias = () => {
 };
 
 async function objetosHistorias() {
-  if (cacheObjetos && Date.now() - cacheObjetos.at < 20000) return cacheObjetos.objetos;
+  if (cacheObjetos && Date.now() - cacheObjetos.at < 90000) return cacheObjetos.objetos;
   const objetos = (await listarObjetosOF("historias/", 50000)).filter((o) => !esMiniatura(o.key));
   cacheObjetos = { at: Date.now(), objetos };
   return objetos;

@@ -250,7 +250,7 @@ export function OriginalesClient({
     `rounded-full border px-3 py-1.5 text-xs font-semibold transition ${activo ? "border-[#8B5CF6]/60 bg-[#8B5CF6]/20 text-white" : "border-white/[0.08] bg-white/[0.03] text-white/50 hover:text-white/80"}`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <p className="text-sm text-white/50">
         {lista.length} original{lista.length === 1 ? "" : "es"} guardado{lista.length === 1 ? "" : "s"} · {tamano(totalBytes(lista)) ?? "0 MB"} ocupados
       </p>
@@ -309,23 +309,36 @@ export function OriginalesClient({
             <button onClick={() => setElegidos([])} className="hover:text-white hover:underline">
               Quitar selección
             </button>
+          </>
+        ) : null}
+      </div>
+      {/* Barra flotante: se queda fija abajo mientras haces scroll, para borrar o crear trial reels sin volver arriba */}
+      {elegidosVivos.length ? (
+        <div className="fixed inset-x-0 bottom-16 z-30 flex justify-center px-3 md:bottom-4 md:left-56">
+          <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/20 bg-[#14111f] px-4 py-3 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.9)]">
+            <span className="text-sm text-white">
+              <b>{elegidosVivos.length}</b> elegido{elegidosVivos.length === 1 ? "" : "s"} · {tamano(totalBytes(objetos)) ?? "0 MB"}
+            </span>
             <button
               onClick={() => setTrial({ cantidad: 3 })}
               disabled={creandoTrial}
               title="Editar de nuevo el archivo original y crear sus versiones de trial reels"
-              className="ml-auto flex items-center gap-1.5 rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-40"
             >
-              🧪 Crear trial reels ({elegidosVivos.length})
+              🧪 Crear trial reels
             </button>
             <button
               onClick={() => setConfirmando(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-red-900/50 bg-red-950/40 px-3 py-1.5 font-semibold text-red-300 transition hover:bg-red-950/70"
+              className="flex items-center gap-1.5 rounded-lg border border-red-900/50 bg-red-950/60 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-950/80"
             >
-              <Trash2 className="h-3.5 w-3.5" /> Borrar {elegidosVivos.length} original{elegidosVivos.length === 1 ? "" : "es"}
+              <Trash2 className="h-3.5 w-3.5" /> Borrar
             </button>
-          </>
-        ) : null}
-      </div>
+            <button onClick={() => setElegidos([])} className="text-xs font-semibold text-white/50 transition hover:text-white">
+              Quitar selección
+            </button>
+          </div>
+        </div>
+      ) : null}
       {mensaje ? (
         <p className={`rounded-xl border px-3 py-2 text-xs ${mensaje.ok ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-red-500/25 bg-red-500/10 text-red-300"}`}>{mensaje.texto}</p>
       ) : null}
