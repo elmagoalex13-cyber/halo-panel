@@ -219,21 +219,13 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   "bloques": [
    {
     "tipo": "p",
-    "texto": "Todas las multicuentas de Instagram, cuentas secundarias, cuentas temáticas, cuentas de tráfico, Telegrams u otros activos digitales creados y gestionados por la Agencia durante la vigencia del contrato serán propiedad exclusiva de la Agencia."
-   },
-   {
-    "tipo": "p",
-    "texto": "La Agencia conservará la titularidad y control operativo de dichos activos digitales, incluyendo accesos, estrategia, seguidores, material promocional y estructura de crecimiento asociada."
-   },
-   {
-    "tipo": "p",
     "negrita": "Cuentas de monetización (OnlyFans, Skrill, Cosmo, cuentas bancarias y similares):",
     "texto": "La cuenta de OnlyFans y las cuentas de cobro (Skrill, Cosmo, cuentas bancarias y similares) son propiedad de la Creadora y están a su nombre. La Creadora concede a la Agencia acceso a estas cuentas durante la vigencia del contrato, con la única finalidad de poder trabajarlas y gestionarlas conforme a lo pactado. A la finalización del contrato, la Agencia dejará de tener acceso a dichas cuentas."
    },
    {
     "tipo": "p",
-    "negrita": "Cuentas de tráfico (Instagram, TikTok, Telegram y cualquier red social):",
-    "texto": "Son creadas, desarrolladas y mantenidas íntegramente por la Agencia y constituyen activos permanentes de la misma. En ningún caso serán transferidas ni se entregarán las credenciales a la Creadora, ni durante la vigencia del contrato ni tras su finalización. La Agencia retiene la titularidad absoluta e indefinida sobre estas cuentas. A la finalización del contrato, la Agencia procederá a la eliminación progresiva del contenido de la Creadora en dichas cuentas, en el plazo y forma que la Agencia considere técnicamente adecuados para preservar la integridad y operatividad de las cuentas, sin que exista una fecha límite fija para dicho proceso. Esta retirada se realiza de forma progresiva porque eliminar una gran cantidad de contenido de golpe puede provocar el baneo de la cuenta de Instagram."
+    "negrita": "Cuentas de tráfico (Instagram, TikTok, Telegram, multicuentas y demás cuentas de promoción):",
+    "texto": "Las crea y gestiona la Agencia y son de su propiedad, junto con sus accesos, seguidores y material promocional; sus credenciales no se entregan a la Creadora. Al finalizar el contrato, la Agencia retirará el contenido de la Creadora de estas cuentas de forma progresiva y sin fecha límite fija, porque eliminar una gran cantidad de contenido de golpe puede provocar el baneo de la cuenta de Instagram."
    }
   ]
  },
@@ -243,7 +235,7 @@ export const CONTRATO_CLAUSULAS: ClausulaContrato[] = [
   "bloques": [
    {
     "tipo": "p",
-    "texto": "La Creadora cede a la Agencia, de forma no exclusiva, los derechos de uso y explotación del contenido audiovisual producido durante la vigencia de este contrato, exclusivamente para su publicación y promoción en las plataformas acordadas."
+    "texto": "La Creadora cede a la Agencia, de forma exclusiva y con ámbito mundial, los derechos de uso y explotación del contenido audiovisual producido durante la vigencia de este contrato, incluida su imagen y su voz tal como aparecen en el mismo, exclusivamente para su publicación y promoción en las plataformas acordadas. La exclusividad implica que la Creadora no cederá ni explotará dicho contenido por su cuenta ni a través de terceros, salvo su publicación en su propia cuenta de OnlyFans conforme a lo acordado con la Agencia."
    },
    {
     "tipo": "p",

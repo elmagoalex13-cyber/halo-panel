@@ -64,11 +64,11 @@ export const PREGUNTAS_FRECUENTES: GrupoPreguntas[] = [
       },
       {
         p: "¿Y con las cuentas de Instagram, TikTok o Telegram?",
-        r: "Son de la agencia: las crea, las desarrolla y las mantiene ella, y siguen siendo suyas siempre; no se transfieren ni se entregan sus accesos, ni durante el contrato ni después. Al terminar, tu contenido se va eliminando de ellas poco a poco, sin una fecha fija, porque borrar mucho contenido de golpe puede provocar el baneo de la cuenta de Instagram.",
+        r: "Son de la agencia, que las crea y las gestiona, y no se te entregan sus accesos. Al terminar, tu contenido se retira de ellas poco a poco y sin fecha fija, porque borrar mucho de golpe puede provocar el baneo de la cuenta de Instagram.",
       },
       {
         p: "¿De quién es el contenido que grabo?",
-        r: "Le das a la agencia permiso de uso y publicación (no exclusivo) sobre el contenido que grabes durante el contrato, solo en las plataformas acordadas. La agencia no puede usarlo para otros fines sin tu consentimiento por escrito. Al terminar, lo que ya esté publicado en las plataformas donde cobras puede seguir ahí, salvo que pidas su retirada por escrito.",
+        r: "Le cedes a la agencia, en exclusiva, el uso y la publicación del contenido que grabes durante el contrato (incluida tu imagen y tu voz), solo en las plataformas acordadas. Eso significa que no lo cedes ni lo explotas por tu cuenta ni a través de terceros, salvo en tu propia cuenta de OnlyFans. La agencia no puede usarlo para otros fines sin tu consentimiento por escrito. Al terminar, lo que ya esté publicado en las plataformas donde cobras puede seguir ahí, salvo que pidas su retirada por escrito.",
       },
       {
         p: "¿Me pueden obligar a hacer contenido con el que no me siento cómoda?",
